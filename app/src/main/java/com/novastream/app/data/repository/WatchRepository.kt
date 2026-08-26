@@ -32,20 +32,26 @@ class WatchRepository(context: Context) {
         positionMs: Long,
         durationMs: Long
     ) {
-        val key = "$slug-$season-$episode"
-        progressDao.upsert(
-            WatchProgress(
-                episodeKey = key,
-                slug = slug,
-                seriesTitle = seriesTitle,
-                coverUrl = coverUrl,
-                season = season,
-                episode = episode,
-                episodeTitle = episodeTitle,
-                positionMs = positionMs,
-                durationMs = durationMs
+        try {
+            val key = "$slug-$season-$episode"
+            progressDao.upsert(
+                WatchProgress(
+                    episodeKey = key,
+                    slug = slug,
+                    seriesTitle = seriesTitle,
+                    coverUrl = coverUrl,
+                    season = season,
+                    episode = episode,
+                    episodeTitle = episodeTitle,
+                    positionMs = positionMs,
+                    durationMs = durationMs
+                )
             )
-        )
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.e("WatchRepository", "saveProgress failed", e)
+            }
+        }
     }
 
     /** Lädt den Fortschritt einer bestimmten Episode. */

@@ -18,9 +18,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,7 +56,7 @@ import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.components.ShimmerRow
 import com.novastream.app.ui.theme.*
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onSeriesClick: (String) -> Unit,
@@ -63,11 +65,18 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
 
-    LazyColumn(
-        Modifier
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = { vm.refresh() },
+        modifier = Modifier
             .fillMaxSize()
             .background(BgPure)
     ) {
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .background(BgPure)
+        ) {
         // Hero Banner Karussell
         item {
             if (state.loading && state.popular.isEmpty()) {
@@ -199,6 +208,7 @@ fun HomeScreen(
 
         // Bottom spacing for BottomBar
         item { Spacer(Modifier.height(80.dp)) }
+        }
     }
 }
 

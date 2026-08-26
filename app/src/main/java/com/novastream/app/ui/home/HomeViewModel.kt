@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val loading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val popular: List<Series> = emptyList(),
     val newest: List<Series> = emptyList(),
     val continueWatching: List<WatchProgress> = emptyList(),
@@ -68,6 +69,7 @@ class HomeViewModel(
                         _state.update {
                             it.copy(
                                 loading = false,
+                                isRefreshing = false,
                                 popular = popular,
                                 newest = newest,
                                 error = null
@@ -75,13 +77,19 @@ class HomeViewModel(
                         }
                     }
                     is NovaStreamRepository.RepoResult.Error ->
-                        _state.update { it.copy(loading = false, error = res.message) }
+                        _state.update { it.copy(loading = false, isRefreshing = false, error = res.message) }
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "load error", e)
-                _state.update { it.copy(loading = false, error = "Fehler beim Laden") }
+                _state.update { it.copy(loading = false, isRefreshing = false, error = "Fehler beim Laden") }
             }
         }
+    }
+
+    /** Pull-to-refresh: lädt Daten neu ohne loading state (zeigt nur refresh indicator) */
+    fun refresh() {
+        _state.update { it.copy(isRefreshing = true, error = null) }
+        load()
     }
 
     fun removeContinueWatching(episodeKey: String) {

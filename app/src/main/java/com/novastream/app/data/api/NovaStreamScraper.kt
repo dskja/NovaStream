@@ -266,8 +266,8 @@ object NovaStreamScraper {
             val onclick = row.attr("onclick")
             val m = epUrlPattern.matcher(onclick)
             if (m.find()) {
-                val season = m.group(1).toIntOrNull() ?: 1
-                val epNum = m.group(2).toIntOrNull() ?: continue
+                val season = m.group(1).toIntOrNull()?.takeIf { it > 0 } ?: 1
+                val epNum = m.group(2).toIntOrNull()?.takeIf { it > 0 } ?: continue
                 val epUrl = m.group(0)
 
                 val title = row.selectFirst(".episode-title-ger")?.text()?.trim()?.ifBlank { null }
