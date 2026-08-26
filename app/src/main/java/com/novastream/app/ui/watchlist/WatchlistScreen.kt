@@ -42,8 +42,16 @@ import kotlinx.coroutines.launch
 
 data class WatchlistUiState(
     val items: List<WatchlistItem> = emptyList(),
-    val loading: Boolean = true
+    val loading: Boolean = true,
+    val sortOption: SortOption = SortOption.ADDED_DESC
 )
+
+enum class SortOption(val label: String) {
+    ADDED_DESC("Zuletzt hinzugefügt"),
+    ADDED_ASC("Älteste zuerst"),
+    TITLE_ASC("Titel A-Z"),
+    TITLE_DESC("Titel Z-A")
+}
 
 class WatchlistViewModel(application: Application) : AndroidViewModel(application) {
     private val watchRepo = WatchRepository(application)
@@ -55,7 +63,8 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { items ->
-                    _state.update { it.copy(items = items, loading = false) }
+                    val sorted = sortItems(items, _state.value.sortOption)
+                    _state.update { it.copy(items = sorted, loading = false) }
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
@@ -67,6 +76,19 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
     fun remove(slug: String) {
         viewModelScope.launch { watchRepo.removeFromWatchlist(slug) }
     }
+
+    fun setSortOption(option: SortOption) {
+        _state.update { it.copy(sortOption = option) }
+    }
+
+    private fun sortItems(items: List<WatchlistItem>, option: SortOption): List<WatchlistItem> {
+        return when (option) {
+            SortOption.ADDED_DESC -> items.sortedByDescending { it.addedAt }
+            SortOption.ADDED_ASC -> items.sortedBy { it.addedAt }
+            SortOption.TITLE_ASC -> items.sortedBy { it.title.lowercase() }
+            SortOption.TITLE_DESC -> items.sortedByDescending { it.title.lowercase() }
+        }
+    }
 }
 
 @Composable
@@ -76,6 +98,7 @@ fun WatchlistScreen(
     val vm: WatchlistViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     var pendingRemove by remember { mutableStateOf<WatchlistItem?>(null) }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     // Confirmation dialog for removal
     pendingRemove?.let { item ->
@@ -144,6 +167,40 @@ fun WatchlistScreen(
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
                     )
+                }
+                Spacer(Modifier.weight(1f))
+                // Sort button
+                Box {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(BgSurfaceElevated)
+                            .clickable { showSortMenu = true }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            state.sortOption.label,
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showSortMenu,
+                        onDismissRequest = { showSortMenu = false },
+                        modifier = Modifier.background(BgSurface)
+                    ) {
+                        SortOption.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label, color = if (state.sortOption == option) Primary else TextPrimary) },
+                                onClick = {
+                                    vm.setSortOption(option)
+                                    showSortMenu = false
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
