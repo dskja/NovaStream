@@ -249,12 +249,27 @@ private fun DetailContent(
                             .clickable { onSelectSeason(i) }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Text(
-                            "Staffel ${season.number}",
-                            color = if (selected) Color.White else TextSecondary,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.labelLarge
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Staffel ${season.number}",
+                                color = if (selected) Color.White else TextSecondary,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            if (season.episodes.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "${season.episodes.size}",
+                                    color = if (selected) Color.White.copy(alpha = 0.7f) else TextTertiary,
+                                    fontWeight = FontWeight.Medium,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (selected) Color.White.copy(alpha = 0.15f) else Color(0x15FFFFFF))
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -272,7 +287,14 @@ private fun DetailContent(
                 }
             }
         } else if (season != null && season.episodes.isNotEmpty()) {
-            item { SectionHeader("Episoden") }
+            item { SectionHeader("Episoden", trailing = {
+                Text(
+                    "${season.episodes.size} Folgen",
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }) }
             items(season.episodes, key = { it.number }) { ep ->
                 val epProgress = state.episodeProgress["$slug-${season.number}-${ep.number}"]
                 PremiumEpisodeRow(

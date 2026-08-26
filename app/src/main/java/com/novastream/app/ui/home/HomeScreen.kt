@@ -237,8 +237,8 @@ private fun HeroCarousel(
             modifier = Modifier.fillMaxSize()
         ) { page ->
             val s = series[page]
-            var isLoading by remember { mutableStateOf(true) }
-            var isError by remember { mutableStateOf(false) }
+            var isLoading by remember(s.id) { mutableStateOf(true) }
+            var isError by remember(s.id) { mutableStateOf(false) }
 
             Box(
                 Modifier

@@ -94,6 +94,7 @@ class DetailViewModel(
 
     fun selectSeason(index: Int) {
         if (_state.value.loadingSeason) return  // Prevent concurrent loads
+        if (index < 0 || index >= _state.value.seasons.size) return  // Validate index
         _state.update { it.copy(selectedSeasonIndex = index) }
         val season = _state.value.seasons.getOrNull(index)
         if (season != null && season.episodes.isEmpty()) {

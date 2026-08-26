@@ -28,7 +28,12 @@ class VoeWebViewResolver {
     @SuppressLint("SetJavaScriptEnabled")
     suspend fun resolve(hosterPageUrl: String, hosterName: String): List<StreamSource> = withContext(Dispatchers.Main) {
         val capturedUrl = AtomicReference<String?>(null)
-        val context = currentContext ?: return@withContext emptyList()
+        val context = currentContext ?: run {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w("VoeWebViewResolver", "Context is null - VOE resolution skipped")
+            }
+            return@withContext emptyList()
+        }
 
         val webView = WebView(context)
         webView.settings.apply {

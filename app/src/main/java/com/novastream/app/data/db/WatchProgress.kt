@@ -1,13 +1,17 @@
 package com.novastream.app.data.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * Speichert den Wiedergabefortschritt einer Episode.
  * Wird für "Continue Watching" verwendet.
  */
-@Entity(tableName = "watch_progress")
+@Entity(
+    tableName = "watch_progress",
+    indices = [Index(value = ["slug", "season", "episode"])]
+)
 data class WatchProgress(
     @PrimaryKey
     val episodeKey: String,          // "{slug}-{season}-{episode}" z.B. "reacher-1-1"
