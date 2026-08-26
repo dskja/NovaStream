@@ -32,7 +32,11 @@ class PlayerViewModel(
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug"))
     private val season: Int = checkNotNull(savedStateHandle.get<String>("season")).toInt()
     private val episode: Int = checkNotNull(savedStateHandle.get<String>("episode")).toInt()
-    private val title: String = savedStateHandle.get<String>("title") ?: "Episode $episode"
+    private val title: String = run {
+        val raw = savedStateHandle.get<String>("title") ?: ""
+        // URL-Dekodierung: Navigation gibt query-Parameter bei StringType nicht dekodiert zurück
+        try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }
+    }.ifBlank { "Episode $episode" }
 
     private val repo = NovaStreamRepository()
 
@@ -42,6 +46,7 @@ class PlayerViewModel(
     init { load() }
 
     private fun load() {
+        android.util.Log.d("PlayerViewModel", "load: slug=$slug season=$season episode=$episode title=$title")
         viewModelScope.launch {
             // 1. Hosters der Episode laden (Episoden-Seite fetchen)
             val ep = Episode(
