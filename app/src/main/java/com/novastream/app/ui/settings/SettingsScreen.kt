@@ -170,15 +170,13 @@ fun SettingsScreen() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 StatCard(
-                    icon = Icons.Default.PlayCircle,
                     label = "Weitersehen",
-                    count = state.continueWatchingCount,
+                    value = state.continueWatchingCount,
                     modifier = Modifier.weight(1f)
                 )
                 StatCard(
-                    icon = Icons.Default.Star,
                     label = "Watchlist",
-                    count = state.watchlistCount,
+                    value = state.watchlistCount,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -457,37 +455,6 @@ private fun TechBadge(label: String) {
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium
         )
-    }
-}
-
-@Composable
-private fun StatCard(
-    icon: ImageVector,
-    label: String,
-    count: Int,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(BgSurface)
-            .padding(16.dp)
-    ) {
-        Column {
-            Icon(icon, null, tint = Primary, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "$count",
-                color = TextPrimary,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                label,
-                color = TextTertiary,
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
     }
 }
 
