@@ -23,14 +23,19 @@ import kotlinx.coroutines.withContext
  */
 class HosterResolver(
     private val client: okhttp3.OkHttpClient = NetworkModule.okHttpClient,
-    private val voeWebViewResolver: VoeWebViewResolver = VoeWebViewResolver()
+    private val voeWebViewResolver: VoeWebViewResolver = VoeWebViewResolver(),
+    private val baseUrl: String = NovaStreamConfig.BASE_URL
 ) {
+
+    /** Macht eine relative URL absolut basierend auf der Provider-Base-URL. */
+    private fun absUrl(path: String): String =
+        if (path.startsWith("http")) path else baseUrl + path
 
     suspend fun resolve(hosterName: String, redirectUrl: String): List<StreamSource> {
         return try {
             // 1. Redirect-URL absolut machen und Seite laden (auf IO-Thread!)
             // OkHttp folgt HTTP-302 Redirects automatisch (followRedirects=true)
-            val absoluteUrl = NovaStreamConfig.abs(redirectUrl)
+            val absoluteUrl = absUrl(redirectUrl)
             val redirectHtml = kotlinx.coroutines.withTimeoutOrNull(15000L) {
                 withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
             } ?: return emptyList()
@@ -90,7 +95,7 @@ class HosterResolver(
         val req = Request.Builder()
             .url(url)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
-            .header("Referer", NovaStreamConfig.BASE_URL + "/")
+            .header("Referer", baseUrl + "/")
             .header("Accept", "text/html,application/xhtml+xml,*/*")
             .build()
         return client.newCall(req).execute().use { resp ->

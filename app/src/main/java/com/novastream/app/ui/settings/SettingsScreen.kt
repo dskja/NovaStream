@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -60,6 +62,8 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val watchlistCount: Int = 0,
     val continueWatchingCount: Int = 0,
+    val activeProviderId: String = "serienstream",
+    val availableProviders: List<com.novastream.app.data.provider.ProviderInfo> = emptyList(),
     val message: String? = null
 )
 
@@ -75,6 +79,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             watchRepo.watchProgress().collect { list -> _state.update { it.copy(continueWatchingCount = list.size) } }
+        }
+        // Load available providers
+        _state.update {
+            it.copy(
+                availableProviders = com.novastream.app.data.provider.ProviderManager.getProviderInfos(),
+                activeProviderId = com.novastream.app.data.provider.ActiveProvider.id
+            )
+        }
+        // Watch active provider changes
+        viewModelScope.launch {
+            com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
+                com.novastream.app.data.provider.ActiveProvider.setById(providerId)
+                _state.update { it.copy(activeProviderId = providerId) }
+            }
         }
     }
 
@@ -105,6 +123,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun showUrlError() {
         _state.update { it.copy(message = "Link konnte nicht geöffnet werden") }
+    }
+
+    fun setProvider(providerId: String) {
+        viewModelScope.launch {
+            com.novastream.app.data.provider.ProviderManager.setActiveProvider(getApplication(), providerId)
+            com.novastream.app.data.provider.ActiveProvider.setById(providerId)
+            val name = com.novastream.app.data.provider.ProviderManager.getProvider(providerId).displayName
+            _state.update { it.copy(message = "Provider gewechselt zu $name") }
+        }
     }
 }
 
@@ -180,6 +207,65 @@ fun SettingsScreen() {
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            // Section: Streaming Provider
+            SettingsSectionHeader("Streaming Provider")
+            state.availableProviders.forEach { providerInfo ->
+                val isSelected = providerInfo.id == state.activeProviderId
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setProvider(providerInfo.id) }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isSelected) Primary.copy(alpha = 0.15f) else BgSurface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (isSelected) Icons.Default.Check else Icons.Default.Stream,
+                            contentDescription = null,
+                            tint = if (isSelected) Primary else TextTertiary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            providerInfo.displayName,
+                            color = TextPrimary,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            providerInfo.baseUrl,
+                            color = TextTertiary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    if (isSelected) {
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Primary.copy(alpha = 0.15f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "Aktiv",
+                                color = Primary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             // Section: Datenverwaltung
             SettingsSectionHeader("Datenverwaltung")
