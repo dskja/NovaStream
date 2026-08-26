@@ -24,11 +24,22 @@ object Routes {
     const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val DETAIL = "detail/{slug}"
-    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}"
+    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}"
 
     fun detail(slug: String) = "detail/$slug"
-    fun player(slug: String, season: Int, episode: Int, title: String) =
-        "player/$slug/$season/$episode?title=${java.net.URLEncoder.encode(title, "UTF-8")}"
+    fun player(
+        slug: String,
+        season: Int,
+        episode: Int,
+        title: String,
+        seriesTitle: String = "",
+        coverUrl: String? = null
+    ): String {
+        val t = java.net.URLEncoder.encode(title, "UTF-8")
+        val st = java.net.URLEncoder.encode(seriesTitle, "UTF-8")
+        val cu = coverUrl?.let { java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
+        return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu"
+    }
 }
 
 @Composable
@@ -97,8 +108,8 @@ fun NovaStreamNavHost() {
             ) {
                 DetailScreen(
                     onBack = { nav.popBackStack() },
-                    onPlay = { slug, season, episode, title ->
-                        nav.navigate(Routes.player(slug, season, episode, title))
+                    onPlay = { slug, season, episode, title, seriesTitle, coverUrl ->
+                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl))
                     }
                 )
             }
@@ -109,10 +120,22 @@ fun NovaStreamNavHost() {
                     navArgument("slug") { type = NavType.StringType },
                     navArgument("season") { type = NavType.StringType },
                     navArgument("episode") { type = NavType.StringType },
-                    navArgument("title") { type = NavType.StringType; defaultValue = "" }
+                    navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("seriesTitle") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" }
                 )
             ) {
-                PlayerScreen(onBack = { nav.popBackStack() })
+                val slugArg = it.arguments?.getString("slug") ?: ""
+                val seriesTitleArg = it.arguments?.getString("seriesTitle") ?: ""
+                val coverUrlArg = it.arguments?.getString("coverUrl")?.takeIf { c -> c.isNotBlank() }
+                PlayerScreen(
+                    onBack = { nav.popBackStack() },
+                    onNextEpisode = { season, episode, title ->
+                        nav.navigate(Routes.player(slugArg, season, episode, title, seriesTitleArg, coverUrlArg)) {
+                            popUpTo(Routes.PLAYER) { inclusive = true }
+                        }
+                    }
+                )
             }
         }
     }

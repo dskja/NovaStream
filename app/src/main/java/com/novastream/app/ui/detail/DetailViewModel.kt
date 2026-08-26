@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
@@ -22,7 +23,9 @@ data class DetailUiState(
     val selectedSeasonIndex: Int = 0,
     val loadingSeason: Boolean = false,
     val error: String? = null,
-    val inWatchlist: Boolean = false
+    val inWatchlist: Boolean = false,
+    val episodeProgress: Map<String, WatchProgress> = emptyMap(),
+    val currentProgress: WatchProgress? = null
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -33,7 +36,7 @@ class DetailViewModel(
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
-    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug"))
+    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
     private val repo = NovaStreamRepository()
     private val watchRepo = WatchRepository(application)
 
@@ -45,6 +48,16 @@ class DetailViewModel(
         viewModelScope.launch {
             watchRepo.isInWatchlist(slug).collect { inList ->
                 _state.update { it.copy(inWatchlist = inList) }
+            }
+        }
+        // Watch all progress for this series
+        viewModelScope.launch {
+            watchRepo.watchProgress().collect { progressList ->
+                val progressMap = progressList.associateBy { it.episodeKey }
+                val current = progressList
+                    .filter { it.slug == slug && !it.isCompleted }
+                    .maxByOrNull { it.updatedAt }
+                _state.update { it.copy(episodeProgress = progressMap, currentProgress = current) }
             }
         }
         load()
@@ -88,6 +101,10 @@ class DetailViewModel(
                 watchRepo.addToWatchlist(series.id, series.title, series.coverUrl)
             }
         }
+    }
+
+    fun removeProgress(episodeKey: String) {
+        viewModelScope.launch { watchRepo.removeProgress(episodeKey) }
     }
 
     private fun loadSeasonEpisodes(seasonNum: Int) {

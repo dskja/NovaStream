@@ -275,6 +275,14 @@ object NovaStreamScraper {
                     ?: row.selectFirst(".episode-title-cell")?.text()?.trim()?.ifBlank { null }
                     ?: "Folge $epNum"
 
+                // Episode-Thumbnail: suche nach Bild in der Zeile
+                val thumbImg = row.selectFirst("img[data-src]") ?: row.selectFirst("img[src]")
+                val thumbnail = thumbImg?.let { img ->
+                    val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
+                        .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
+                    if (src.isNotBlank() && !src.contains("data:image") && src.contains("/media/")) src else null
+                }
+
                 // Hoster-Icons in der Zeile (nur Anzeige, nicht klickbar hier)
                 val hosterIcons = row.select("img.watch-link")
                 val hosters = hosterIcons.mapIndexed { idx, img ->
@@ -288,7 +296,8 @@ object NovaStreamScraper {
                     hosters = hosters,
                     slug = slug,
                     season = season,
-                    episodeUrl = epUrl
+                    episodeUrl = epUrl,
+                    thumbnailUrl = thumbnail
                 ))
             }
         }

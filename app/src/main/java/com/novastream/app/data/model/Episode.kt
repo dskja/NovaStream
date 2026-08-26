@@ -7,7 +7,8 @@ data class Episode(
     val hosters: List<HosterLink> = emptyList(),
     val slug: String = "",          // Serien-Slug
     val season: Int = 1,
-    val episodeUrl: String = ""     // z.B. /serie/breaking-bad/staffel-1/episode-1
+    val episodeUrl: String = "",    // z.B. /serie/breaking-bad/staffel-1/episode-1
+    val thumbnailUrl: String? = null // Episoden-Thumbnail
 )
 
 /**

@@ -8,10 +8,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -29,13 +32,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.ui.theme.*
 
 /**
  * Karte für "Continue Watching" – zeigt Cover, Titel, Episode und Fortschrittsbalken.
+ * Zeigt das tatsächliche Cover-Bild der Serie (nicht grauer Placeholder).
  */
 @Composable
 fun ContinueWatchingCard(
@@ -46,6 +49,26 @@ fun ContinueWatchingCard(
 ) {
     val context = LocalContext.current
     var isError by remember(progress.episodeKey) { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("Entfernen?") },
+            text = { Text("Möchtest du '${progress.seriesTitle} - ${progress.episodeTitle}' aus Weitersehen entfernen?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemove()
+                    showConfirmDialog = false
+                }) { Text("Entfernen", color = Primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("Abbrechen")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -89,7 +112,7 @@ fun ContinueWatchingCard(
             // Dark gradient overlay at bottom
             Box(
                 Modifier.fillMaxSize().background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                    Brush.verticalGradient(
                         0.5f to Color.Transparent,
                         1f to Color(0xE6000000)
                     )
@@ -114,7 +137,7 @@ fun ContinueWatchingCard(
                 )
             }
 
-            // Remove button (top-right)
+            // Remove button (top-right) - shows confirmation dialog
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
@@ -122,7 +145,7 @@ fun ContinueWatchingCard(
                     .size(28.dp)
                     .clip(CircleShape)
                     .background(GlassMedium)
-                    .clickable(onClick = onRemove),
+                    .clickable { showConfirmDialog = true },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
