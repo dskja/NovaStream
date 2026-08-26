@@ -72,7 +72,8 @@ fun DetailScreen(
                 onPlay = onPlay,
                 onToggleWatchlist = vm::toggleWatchlist,
                 onRemoveProgress = vm::removeProgress,
-                onToggleWatched = vm::toggleEpisodeWatched
+                onToggleWatched = vm::toggleEpisodeWatched,
+                onMarkSeasonWatched = vm::markSeasonAsWatched
             )
         }
     }
@@ -90,7 +91,8 @@ private fun DetailContent(
     onPlay: (String, Int, Int, String, String, String?) -> Unit,
     onToggleWatchlist: () -> Unit,
     onRemoveProgress: (String) -> Unit,
-    onToggleWatched: (Int, Int, String) -> Unit
+    onToggleWatched: (Int, Int, String) -> Unit,
+    onMarkSeasonWatched: (Int) -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -341,12 +343,22 @@ private fun DetailContent(
             }
         } else if (season != null && season.episodes.isNotEmpty()) {
             item { SectionHeader("Episoden", trailing = {
-                Text(
-                    "${season.episodes.size} Folgen",
-                    color = TextTertiary,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${season.episodes.size} Folgen",
+                        color = TextTertiary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Alle als gesehen markieren",
+                        color = Primary,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { onMarkSeasonWatched(season.number) }
+                    )
+                }
             }) }
             items(season.episodes, key = { it.number }) { ep ->
                 val epProgress = state.episodeProgress["$slug-${season.number}-${ep.number}"]
