@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
 private val android.content.Context.dataStore by preferencesDataStore("search_prefs")
@@ -87,6 +89,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         _state.update { it.copy(loading = true) }
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(450) // Debounce
+            currentCoroutineContext().ensureActive()
             if (_state.value.query != q) return@launch  // Veraltete Query
             when (val res = repo.search(q)) {
                 is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
@@ -241,10 +244,10 @@ fun SearchScreen(
                             }
                         }
                     } else {
-                        PremiumEmpty("Suche nach deiner Lieblingsserie")
+                        PremiumEmpty("Suche nach deiner Lieblingsserie", icon = Icons.Default.Search)
                     }
                 }
-                state.results.isEmpty() -> PremiumEmpty("Keine Treffer für '${state.query}'")
+                state.results.isEmpty() -> PremiumEmpty("Keine Treffer für '${state.query}'", icon = Icons.Default.Search)
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 130.dp),
                     contentPadding = PaddingValues(12.dp, bottom = 80.dp),

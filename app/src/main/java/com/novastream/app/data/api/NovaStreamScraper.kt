@@ -396,11 +396,9 @@ object NovaStreamScraper {
     }
 
     private fun extractSeasonNumber(url: String): Int? {
-        val m = Pattern.compile("/staffel-(\\d+)").finder(url)
+        val m = Pattern.compile("/staffel-(\\d+)").matcher(url)
         return if (m.find()) m.group(1)?.toIntOrNull() else null
     }
-
-    private fun Pattern.finder(input: String): java.util.regex.Matcher = matcher(input)
 
     private fun slugToTitle(slug: String): String =
         slug.replace('-', ' ').replaceFirstChar { it.uppercase() }

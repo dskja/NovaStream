@@ -110,6 +110,8 @@ fun SettingsScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var pendingActionTitle by remember { mutableStateOf("") }
 
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -183,19 +185,28 @@ fun SettingsScreen() {
                 icon = Icons.Default.PlayCircle,
                 title = "Weitersehen leeren",
                 subtitle = "Entfernt alle gespeicherten Wiedergabefortschritte",
-                onClick = { vm.clearContinueWatching() }
+                onClick = {
+                    pendingActionTitle = "Weitersehen leeren?"
+                    pendingAction = { vm.clearContinueWatching() }
+                }
             )
             SettingsItem(
                 icon = Icons.Default.CleaningServices,
                 title = "Abgeschlossene Episoden entfernen",
                 subtitle = "Löscht Episoden die zu >90% geschaut wurden",
-                onClick = { vm.clearCompleted() }
+                onClick = {
+                    pendingActionTitle = "Abgeschlossene Episoden entfernen?"
+                    pendingAction = { vm.clearCompleted() }
+                }
             )
             SettingsItem(
                 icon = Icons.Default.DeleteSweep,
                 title = "Watchlist leeren",
                 subtitle = "Entfernt alle Serien aus deiner Watchlist",
-                onClick = { vm.clearWatchlist() }
+                onClick = {
+                    pendingActionTitle = "Watchlist leeren?"
+                    pendingAction = { vm.clearWatchlist() }
+                }
             )
 
             Spacer(Modifier.height(24.dp))
@@ -369,6 +380,31 @@ fun SettingsScreen() {
 
             Spacer(Modifier.height(80.dp))
         }
+    }
+
+    // Confirmation Dialog for destructive actions
+    if (pendingAction != null) {
+        AlertDialog(
+            onDismissRequest = { pendingAction = null },
+            title = { Text(pendingActionTitle, color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Diese Aktion kann nicht rückgängig gemacht werden.", color = TextSecondary) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingAction?.invoke()
+                        pendingAction = null
+                    }
+                ) { Text("Bestätigen", color = Primary, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingAction = null }) {
+                    Text("Abbrechen", color = TextTertiary)
+                }
+            },
+            containerColor = BgSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
     }
 }
 

@@ -77,6 +77,16 @@ fun PlayerScreen(
     LaunchedEffect(currentSource?.url) {
         showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
+
+        val episodeEndListener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    vm.onEpisodeFinished()
+                    showNextEpisodeOverlay = true
+                }
+            }
+        }
+
         // Reuse existing player if possible, else create new
         val existing = exoPlayer
         if (existing != null) {
@@ -88,6 +98,8 @@ fun PlayerScreen(
             if (state.resumePositionMs > 0) existing.seekTo(state.resumePositionMs)
             existing.prepare()
             existing.playWhenReady = true
+            // Re-add listener in case it was removed
+            existing.addListener(episodeEndListener)
             playerVisible = true
             showHosters = false
         } else {
@@ -102,15 +114,8 @@ fun PlayerScreen(
                 if (state.resumePositionMs > 0) {
                     seekTo(state.resumePositionMs)
                 }
-                addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_ENDED) {
-                            vm.onEpisodeFinished()
-                            showNextEpisodeOverlay = true
-                        }
-                    }
-                })
             }
+            player.addListener(episodeEndListener)
             exoPlayer = player
             playerVisible = true
             showHosters = false
@@ -151,9 +156,11 @@ fun PlayerScreen(
         }
     }
 
-    val navBarHeightDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val density = LocalDensity.current
-    val navBarHeightPx = with(density) { navBarHeightDp.toPx() }.toInt()
+    val navBarHeightDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBarHeightPx = remember(density, navBarHeightDp) {
+        with(density) { navBarHeightDp.toPx() }.toInt()
+    }
 
     Box(
         Modifier
