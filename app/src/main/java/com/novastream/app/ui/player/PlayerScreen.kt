@@ -1,6 +1,11 @@
 package com.novastream.app.ui.player
 
 import android.view.ViewGroup
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +16,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,10 +50,14 @@ fun PlayerScreen(onBack: () -> Unit) {
 
     val currentSource = state.currentSource
     var exoPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
+    var showHosters by remember { mutableStateOf(true) }
+    var playerVisible by remember { mutableStateOf(false) }
 
+    // Hide hosters automatically once the stream starts playing
     LaunchedEffect(currentSource?.url) {
         exoPlayer?.release()
         exoPlayer = null
+        playerVisible = false
         val src = currentSource ?: return@LaunchedEffect
         val player = ExoPlayer.Builder(context).build().apply {
             val mediaItem = MediaItem.Builder()
@@ -58,6 +69,8 @@ fun PlayerScreen(onBack: () -> Unit) {
             playWhenReady = true
         }
         exoPlayer = player
+        playerVisible = true
+        showHosters = false  // Auto-hide hosters when video starts
     }
 
     DisposableEffect(Unit) {
@@ -81,18 +94,25 @@ fun PlayerScreen(onBack: () -> Unit) {
                         )
                         useController = true
                         this.player = player
+                        // Hide controller when hosters are shown
+                        if (showHosters) {
+                            hideController()
+                        }
                     }
                 },
-                update = { it.player = player },
+                update = { pv ->
+                    pv.player = player
+                    if (showHosters) pv.hideController() else pv.showController()
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else if (state.loading) {
             PremiumLoading(label = "Stream wird aufgelöst…")
-        } else if (state.error != null) {
+        } else if (state.error != null && state.hosters.isEmpty()) {
             PremiumError(state.error!!)
         }
 
-        // Top overlay: Back button + Episode title
+        // Top overlay: Back button + Episode title (always visible)
         Row(
             Modifier
                 .align(Alignment.TopStart)
@@ -138,72 +158,92 @@ fun PlayerScreen(onBack: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+            // Toggle hosters button (only when video is playing)
+            if (playerVisible && state.hosters.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(GlassMedium)
+                        .clickable { showHosters = !showHosters },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (showHosters) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
+                        "Hoster",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
         }
 
-        // Bottom overlay: Hoster pills (compact, only when hosters available)
-        if (state.hosters.isNotEmpty()) {
+        // Bottom overlay: Hoster pills (collapsible, only when hosters available)
+        AnimatedVisibility(
+            visible = showHosters && state.hosters.isNotEmpty(),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart)
+        ) {
             Column(
                 Modifier
-                    .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
                             0f to Color.Transparent,
-                            0.3f to Color(0xCC000000),
-                            1f to Color(0xE6000000)
+                            0.2f to Color(0xAA000000),
+                            1f to Color(0xF0000000)
                         )
                     )
                     .padding(
                         start = 12.dp,
                         end = 12.dp,
-                        top = 24.dp,
+                        top = 32.dp,
                         bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp
                     )
             ) {
-                if (state.hosters.isNotEmpty()) {
-                    Text(
-                        "Hoster",
-                        color = Color.White.copy(0.6f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-                    )
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        itemsIndexed(state.hosters) { i, h ->
-                            val selected = i == state.selectedHosterIndex
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(
-                                        if (selected) PrimaryGradient
-                                        else Brush.linearGradient(listOf(Color(0x33FFFFFF), Color(0x22FFFFFF)))
-                                    )
-                                    .clickable { vm.selectHoster(i) }
-                                    .padding(horizontal = 14.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    h.name,
-                                    color = if (selected) Color.White else Color.White.copy(0.85f),
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp
+                Text(
+                    "Hoster",
+                    color = Color.White.copy(0.6f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(state.hosters) { i, h ->
+                        val selected = i == state.selectedHosterIndex
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (selected) PrimaryGradient
+                                    else Brush.linearGradient(listOf(Color(0x33FFFFFF), Color(0x22FFFFFF)))
                                 )
-                                if (h.language.isNotBlank()) {
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        h.language,
-                                        color = if (selected) Color.White.copy(0.7f) else Color.White.copy(0.5f),
-                                        fontSize = 10.sp
-                                    )
-                                }
+                                .clickable { vm.selectHoster(i) }
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                h.name,
+                                color = if (selected) Color.White else Color.White.copy(0.85f),
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                            if (h.language.isNotBlank()) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    h.language,
+                                    color = if (selected) Color.White.copy(0.7f) else Color.White.copy(0.5f),
+                                    fontSize = 10.sp
+                                )
                             }
                         }
                     }
                 }
                 // Loading indicator while resolving
-                if (state.loading && state.hosters.isNotEmpty()) {
+                if (state.loading) {
                     Spacer(Modifier.height(8.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
