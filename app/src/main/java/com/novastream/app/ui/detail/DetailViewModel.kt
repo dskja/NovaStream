@@ -142,6 +142,30 @@ class DetailViewModel(
         }
     }
 
+    /** Markiert alle Episoden einer Staffel als gesehen. */
+    fun markSeasonAsWatched(season: Int) {
+        val seasonObj = _state.value.seasons.find { it.number == season } ?: return
+        val series = _state.value.series ?: return
+        viewModelScope.launch {
+            seasonObj.episodes.forEach { ep ->
+                val key = "$slug-$season-${ep.number}"
+                val existing = _state.value.episodeProgress[key]
+                if (existing == null || !existing.isCompleted) {
+                    watchRepo.saveProgress(
+                        slug = slug,
+                        seriesTitle = series.title,
+                        coverUrl = series.coverUrl,
+                        season = season,
+                        episode = ep.number,
+                        episodeTitle = ep.title,
+                        positionMs = 1L,
+                        durationMs = 1L
+                    )
+                }
+            }
+        }
+    }
+
     private fun loadSeasonEpisodes(seasonNum: Int) {
         _state.update { it.copy(loadingSeason = true) }
         viewModelScope.launch {

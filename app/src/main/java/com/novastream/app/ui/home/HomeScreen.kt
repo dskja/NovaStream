@@ -227,6 +227,7 @@ private fun HeroCarousel(
         try {
             while (true) {
                 kotlinx.coroutines.delay(5000)
+                kotlinx.coroutines.yield()
                 // Skip auto-scroll if user is currently interacting
                 if (pagerState.isScrollInProgress) continue
                 val next = (pagerState.currentPage + 1) % series.size

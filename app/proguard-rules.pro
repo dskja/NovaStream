@@ -42,3 +42,15 @@
 
 # ─── Keep BuildConfig ──────────────────────────────────────────────────
 -keep class com.novastream.app.BuildConfig { *; }
+
+# ─── WebView JavaScript Interface ──────────────────────────────────────
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keep class com.novastream.app.util.VoeWebViewResolver { *; }
+-keepclassmembers class com.novastream.app.util.VoeWebViewResolver$* { *; }
+
+# ─── Kotlin Coroutines ─────────────────────────────────────────────────
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-dontwarn kotlinx.coroutines.**

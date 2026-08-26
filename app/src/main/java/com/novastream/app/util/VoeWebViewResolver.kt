@@ -119,15 +119,15 @@ class VoeWebViewResolver {
                 capturedUrl.get()
             }
         } finally {
-            // WebView immer aufräumen, auch bei Exceptions/Timeout
-            try {
-                webView.stopLoading()
-                webView.removeJavascriptInterface("AndroidVoe")
-                webView.destroy()
-            } catch (e: Exception) {
-                if (com.novastream.app.BuildConfig.DEBUG) {
-                    android.util.Log.w("VoeWebViewResolver", "WebView cleanup failed", e)
-                }
+            // WebView immer aufräumen - jede Operation einzeln wrappen
+            try { webView.stopLoading() } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("VoeWebViewResolver", "stopLoading failed", e)
+            }
+            try { webView.removeJavascriptInterface("AndroidVoe") } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("VoeWebViewResolver", "removeJSInterface failed", e)
+            }
+            try { webView.destroy() } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("VoeWebViewResolver", "destroy failed", e)
             }
         }
 
