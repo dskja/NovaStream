@@ -45,20 +45,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.novastream.app.data.model.Series
-import com.novastream.app.ui.components.PremiumEmpty
+import com.novastream.app.ui.components.ContinueWatchingCard
 import com.novastream.app.ui.components.PremiumError
-import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
-import com.novastream.app.ui.components.ShimmerPoster
 import com.novastream.app.ui.components.ShimmerRow
 import com.novastream.app.ui.theme.*
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
-    onSeriesClick: (String) -> Unit
+    onSeriesClick: (String) -> Unit,
+    onContinueWatchingClick: (slug: String, season: Int, episode: Int, title: String) -> Unit
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -83,6 +82,35 @@ fun HomeScreen(
             }
         }
 
+        // Continue Watching Section
+        if (state.continueWatching.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(8.dp))
+                SectionHeader("Weitersehen")
+            }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(state.continueWatching, key = { it.episodeKey }) { progress ->
+                        ContinueWatchingCard(
+                            progress = progress,
+                            onClick = {
+                                onContinueWatchingClick(
+                                    progress.slug,
+                                    progress.season,
+                                    progress.episode,
+                                    progress.episodeTitle
+                                )
+                            },
+                            onRemove = { vm.removeContinueWatching(progress.episodeKey) }
+                        )
+                    }
+                }
+            }
+        }
+
         // Loading State
         if (state.loading && state.popular.isEmpty()) {
             item {
@@ -99,7 +127,7 @@ fun HomeScreen(
         if (state.error != null && state.popular.isEmpty()) {
             item {
                 PremiumError(
-                    message = state.error!!,
+                    message = state.error ?: "Unbekannter Fehler",
                     onRetry = vm::load,
                     modifier = Modifier.fillParentMaxSize()
                 )

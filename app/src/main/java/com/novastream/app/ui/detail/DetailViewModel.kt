@@ -1,12 +1,14 @@
 package com.novastream.app.ui.detail
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.repository.NovaStreamRepository
+import com.novastream.app.data.repository.WatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,23 +21,34 @@ data class DetailUiState(
     val seasons: List<Season> = emptyList(),
     val selectedSeasonIndex: Int = 0,
     val loadingSeason: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val inWatchlist: Boolean = false
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
 }
 
 class DetailViewModel(
+    application: Application,
     savedStateHandle: SavedStateHandle
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug"))
     private val repo = NovaStreamRepository()
+    private val watchRepo = WatchRepository(application)
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
-    init { load() }
+    init {
+        // Watch watchlist state
+        viewModelScope.launch {
+            watchRepo.isInWatchlist(slug).collect { inList ->
+                _state.update { it.copy(inWatchlist = inList) }
+            }
+        }
+        load()
+    }
 
     private fun load() {
         viewModelScope.launch {
@@ -63,6 +76,17 @@ class DetailViewModel(
         val season = _state.value.seasons.getOrNull(index)
         if (season != null && season.episodes.isEmpty()) {
             loadSeasonEpisodes(season.number)
+        }
+    }
+
+    fun toggleWatchlist() {
+        val series = _state.value.series ?: return
+        viewModelScope.launch {
+            if (_state.value.inWatchlist) {
+                watchRepo.removeFromWatchlist(series.id)
+            } else {
+                watchRepo.addToWatchlist(series.id, series.title, series.coverUrl)
+            }
         }
     }
 

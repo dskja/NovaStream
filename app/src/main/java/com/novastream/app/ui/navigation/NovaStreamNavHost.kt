@@ -15,10 +15,14 @@ import com.novastream.app.ui.detail.DetailScreen
 import com.novastream.app.ui.home.HomeScreen
 import com.novastream.app.ui.player.PlayerScreen
 import com.novastream.app.ui.search.SearchScreen
+import com.novastream.app.ui.settings.SettingsScreen
+import com.novastream.app.ui.watchlist.WatchlistScreen
 
 object Routes {
     const val HOME = "home"
+    const val WATCHLIST = "watchlist"
     const val SEARCH = "search"
+    const val SETTINGS = "settings"
     const val DETAIL = "detail/{slug}"
     const val PLAYER = "player/{slug}/{season}/{episode}?title={title}"
 
@@ -33,7 +37,7 @@ fun NovaStreamNavHost() {
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
-    val showBottomBar = currentRoute in listOf(Routes.HOME, Routes.SEARCH)
+    val showBottomBar = currentRoute in listOf(Routes.HOME, Routes.WATCHLIST, Routes.SEARCH, Routes.SETTINGS)
 
     androidx.compose.material3.Scaffold(
         bottomBar = {
@@ -60,7 +64,18 @@ fun NovaStreamNavHost() {
         ) {
             composable(Routes.HOME) {
                 HomeScreen(
-                    onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) }
+                    onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) },
+                    onContinueWatchingClick = { slug, season, episode, title ->
+                        nav.navigate(Routes.player(slug, season, episode, title))
+                    }
+                )
+            }
+
+            composable(Routes.WATCHLIST) {
+                WatchlistScreen(
+                    onSeriesClick = { slug ->
+                        nav.navigate(Routes.detail(slug)) { launchSingleTop = true }
+                    }
                 )
             }
 
@@ -70,6 +85,10 @@ fun NovaStreamNavHost() {
                         nav.navigate(Routes.detail(slug)) { launchSingleTop = true }
                     }
                 )
+            }
+
+            composable(Routes.SETTINGS) {
+                SettingsScreen()
             }
 
             composable(

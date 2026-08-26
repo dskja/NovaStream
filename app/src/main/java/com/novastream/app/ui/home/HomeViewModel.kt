@@ -1,9 +1,13 @@
 package com.novastream.app.ui.home
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.novastream.app.data.db.WatchProgress
+import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.repository.NovaStreamRepository
+import com.novastream.app.data.repository.WatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,17 +18,35 @@ data class HomeUiState(
     val loading: Boolean = false,
     val popular: List<Series> = emptyList(),
     val newest: List<Series> = emptyList(),
+    val continueWatching: List<WatchProgress> = emptyList(),
+    val watchlist: List<WatchlistItem> = emptyList(),
     val error: String? = null
 )
 
 class HomeViewModel(
-    private val repo: NovaStreamRepository = NovaStreamRepository()
-) : ViewModel() {
+    application: Application
+) : AndroidViewModel(application) {
+
+    private val repo = NovaStreamRepository()
+    private val watchRepo = WatchRepository(application)
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
-    init { load() }
+    init {
+        // Collect continue watching + watchlist reactively
+        viewModelScope.launch {
+            watchRepo.watchProgress().collect { progress ->
+                _state.update { it.copy(continueWatching = progress.filter { p -> !p.isCompleted }) }
+            }
+        }
+        viewModelScope.launch {
+            watchRepo.watchlist().collect { list ->
+                _state.update { it.copy(watchlist = list) }
+            }
+        }
+        load()
+    }
 
     fun load() {
         _state.update { it.copy(loading = true, error = null) }
@@ -32,9 +54,6 @@ class HomeViewModel(
             when (val res = repo.loadHome()) {
                 is NovaStreamRepository.RepoResult.Success -> {
                     val series = res.data
-                    // Popular = erste 15 (hero + popular row)
-                    // Newest = letzte 20 (neu hinzugefügt section)
-                    // Dedupliziert durch linkedMapOf im Scraper
                     _state.update {
                         it.copy(
                             loading = false,
@@ -48,5 +67,9 @@ class HomeViewModel(
                     _state.update { it.copy(loading = false, error = res.message) }
             }
         }
+    }
+
+    fun removeContinueWatching(episodeKey: String) {
+        viewModelScope.launch { watchRepo.removeProgress(episodeKey) }
     }
 }

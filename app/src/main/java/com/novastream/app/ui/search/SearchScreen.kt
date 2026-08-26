@@ -120,7 +120,7 @@ fun SearchScreen(
                         items(6) { ShimmerPoster(Modifier.width(130.dp)) }
                     }
                 }
-                state.error != null -> PremiumError(state.error!!)
+                state.error != null -> PremiumError(state.error ?: "Unbekannter Fehler")
                 state.query.isBlank() -> PremiumEmpty("Suchbegriff eingeben")
                 state.results.isEmpty() -> PremiumEmpty("Keine Treffer für „${state.query}“")
                 else -> LazyVerticalGrid(

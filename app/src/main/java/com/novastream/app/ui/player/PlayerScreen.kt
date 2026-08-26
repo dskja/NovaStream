@@ -35,6 +35,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -68,14 +69,43 @@ fun PlayerScreen(onBack: () -> Unit) {
             setMediaItem(mediaItem)
             prepare()
             playWhenReady = true
+            // Restore position
+            if (state.resumePositionMs > 0) {
+                seekTo(state.resumePositionMs)
+            }
         }
         exoPlayer = player
         playerVisible = true
-        showHosters = false  // Auto-hide hosters when video starts
+        showHosters = false
     }
 
+    // Save progress periodically while playing
+    LaunchedEffect(exoPlayer) {
+        val player = exoPlayer ?: return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(5000) // Save every 5 seconds
+            val pos = player.currentPosition
+            val dur = player.duration
+            if (dur > 0 && pos > 0) {
+                vm.saveProgress(pos, dur)
+            }
+        }
+    }
+
+    // Save progress on dispose
     DisposableEffect(Unit) {
-        onDispose { exoPlayer?.release(); exoPlayer = null }
+        onDispose {
+            val player = exoPlayer
+            if (player != null) {
+                val pos = player.currentPosition
+                val dur = player.duration
+                if (dur > 0 && pos > 0) {
+                    vm.saveProgress(pos, dur)
+                }
+            }
+            player?.release()
+            exoPlayer = null
+        }
     }
 
     val navBarHeightDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -99,12 +129,8 @@ fun PlayerScreen(onBack: () -> Unit) {
                         )
                         useController = true
                         this.player = player
-                        // Push controller above system nav bar
                         setPadding(0, 0, 0, navBarHeightPx)
-                        // Hide controller when hosters are shown
-                        if (showHosters) {
-                            hideController()
-                        }
+                        if (showHosters) hideController()
                     }
                 },
                 update = { pv ->
@@ -117,10 +143,10 @@ fun PlayerScreen(onBack: () -> Unit) {
         } else if (state.loading) {
             PremiumLoading(label = "Stream wird aufgelöst…")
         } else if (state.error != null && state.hosters.isEmpty()) {
-            PremiumError(state.error!!)
+            PremiumError(state.error ?: "Unbekannter Fehler")
         }
 
-        // Top overlay: Back button + Episode title (always visible)
+        // Top overlay: Back button + Episode title
         Row(
             Modifier
                 .align(Alignment.TopStart)
@@ -139,7 +165,6 @@ fun PlayerScreen(onBack: () -> Unit) {
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Back button
             Box(
                 Modifier
                     .size(40.dp)
@@ -156,7 +181,6 @@ fun PlayerScreen(onBack: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(12.dp))
-            // Episode title
             Text(
                 state.episodeTitle,
                 color = Color.White,
@@ -166,7 +190,6 @@ fun PlayerScreen(onBack: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            // Toggle hosters button (only when video is playing)
             if (playerVisible && state.hosters.isNotEmpty()) {
                 Box(
                     Modifier
@@ -186,7 +209,7 @@ fun PlayerScreen(onBack: () -> Unit) {
             }
         }
 
-        // Bottom overlay: Hoster pills (collapsible, only when hosters available)
+        // Bottom overlay: Hoster pills (collapsible)
         AnimatedVisibility(
             visible = showHosters && state.hosters.isNotEmpty(),
             enter = slideInVertically { it } + fadeIn(),
@@ -250,7 +273,6 @@ fun PlayerScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                // Loading indicator while resolving
                 if (state.loading) {
                     Spacer(Modifier.height(8.dp))
                     Row(
@@ -273,7 +295,7 @@ fun PlayerScreen(onBack: () -> Unit) {
             }
         }
 
-        // Error overlay (only if no hosters at all)
+        // Error overlay
         if (state.error != null && state.hosters.isEmpty() && !state.loading) {
             Box(
                 Modifier
@@ -282,7 +304,7 @@ fun PlayerScreen(onBack: () -> Unit) {
                     .background(Color(0xE6000000))
                     .padding(24.dp)
             ) {
-                PremiumError(state.error!!)
+                PremiumError(state.error ?: "Unbekannter Fehler")
             }
         }
     }
