@@ -47,7 +47,7 @@ object Routes {
 fun NovaStreamNavHost() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
-    val currentRoute = backStack?.destination?.route
+    val currentRoute = backStack?.destination?.route?.substringBefore("?")
 
     val showBottomBar = currentRoute in listOf(Routes.HOME, Routes.WATCHLIST, Routes.SEARCH, Routes.SETTINGS)
 
