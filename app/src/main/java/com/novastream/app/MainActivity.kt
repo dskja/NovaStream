@@ -11,10 +11,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.novastream.app.ui.navigation.SerienStreamNavHost
 import com.novastream.app.ui.theme.SerienStreamTheme
+import com.novastream.app.util.VoeWebViewResolver
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        VoeWebViewResolver.setContext(this)
         enableEdgeToEdge()
         setContent {
             SerienStreamTheme {

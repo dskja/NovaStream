@@ -11,16 +11,17 @@ class SerienStreamApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .okHttpClient(NetworkModule.okHttpClient)
-            .crossfade(true)
+            .crossfade(200)
+            .respectCacheHeaders(false)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.25)
+                    .maxSizePercent(0.30)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(100L * 1024 * 1024) // 100 MB
+                    .maxSizeBytes(200L * 1024 * 1024)
                     .build()
             }
             .build()

@@ -7,6 +7,8 @@ import com.novastream.app.data.model.StreamSource
 import okhttp3.Request
 import org.jsoup.Jsoup
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Löst eine Hoster-URL zu einer abspielbaren Stream-URL auf.
@@ -20,24 +22,36 @@ import java.util.concurrent.TimeUnit
  * var source='...' eingebettet. Wir versuchen mehrere Strategien.
  */
 class HosterResolver(
-    private val client: okhttp3.OkHttpClient = NetworkModule.okHttpClient
+    private val client: okhttp3.OkHttpClient = NetworkModule.okHttpClient,
+    private val voeWebViewResolver: VoeWebViewResolver = VoeWebViewResolver()
 ) {
 
     suspend fun resolve(hosterName: String, redirectUrl: String): List<StreamSource> {
         return try {
-            // 1. Redirect-URL absolut machen und Seite laden (KEIN auto-redirect – JS-basiert!)
+            // 1. Redirect-URL absolut machen und Seite laden (auf IO-Thread!)
+            // OkHttp folgt HTTP-302 Redirects automatisch (followRedirects=true)
             val absoluteUrl = SerienStreamConfig.abs(redirectUrl)
-            val redirectHtml = fetchHtml(absoluteUrl)
+            val redirectHtml = withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
 
-            // 2. JS-Redirect-URL aus dem HTML extrahieren
-            val hosterPageUrl = extractJsRedirect(redirectHtml)
-            if (hosterPageUrl.isBlank()) return emptyList()
+            // 2. JS-Redirect-URL aus dem HTML extrahieren (falls vorhanden)
+            val hosterPageUrl = extractJsRedirect(redirectHtml).ifBlank {
+                // Kein JS-Redirect → OkHttp ist bereits zum Hoster gefolgt
+                absoluteUrl
+            }
 
-            // 3. Hoster-Seite laden
-            val html = fetchHtml(hosterPageUrl)
+            // 3. VOE: Nutze WebView-Resolver (Bot-Detection + obfuskiertes JS)
+            // WebView muss auf dem Main-Thread laufen
+            if (hosterName.contains("voe", ignoreCase = true)) {
+                val voeResult = voeWebViewResolver.resolve(hosterPageUrl, hosterName)
+                if (voeResult.isNotEmpty()) return voeResult
+                // Fallback: versuche HTTP-Extraktion
+            }
+
+            // 4. Andere Hoster: HTML laden (auf IO-Thread!) und Stream-URLs extrahieren
+            val html = withContext(Dispatchers.IO) { fetchHtml(hosterPageUrl) }
             if (html.isBlank()) return emptyList()
 
-            // 4. Stream-URLs extrahieren (hoster-spezifisch)
+            // 5. Stream-URLs extrahieren (hoster-spezifisch)
             extractStreamUrls(html, hosterName, hosterPageUrl)
         } catch (e: Exception) {
             android.util.Log.e("HosterResolver", "resolve failed for $hosterName", e)
