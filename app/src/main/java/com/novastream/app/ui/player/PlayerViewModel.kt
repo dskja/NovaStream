@@ -107,7 +107,7 @@ class PlayerViewModel(
     }
 
     fun selectHoster(index: Int) {
-        _state.update { it.copy(selectedHosterIndex = index, sources = emptyList(), loading = true) }
+        _state.update { it.copy(selectedHosterIndex = index, sources = emptyList(), loading = true, error = null) }
         viewModelScope.launch { resolveHoster(index) }
     }
 

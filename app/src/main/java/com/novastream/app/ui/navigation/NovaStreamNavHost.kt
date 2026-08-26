@@ -1,10 +1,19 @@
 package com.novastream.app.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -52,7 +61,30 @@ fun NovaStreamNavHost() {
 
     val showBottomBar = currentRoute in listOf(Routes.HOME, Routes.WATCHLIST, Routes.SEARCH, Routes.SETTINGS)
 
+    // Double-back to exit on home screen
+    val snackbarHostState = remember { SnackbarHostState() }
+    var backPressedTime by remember { mutableLongStateOf(0L) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    BackHandler(enabled = currentRoute == Routes.HOME) {
+        val now = System.currentTimeMillis()
+        if (now - backPressedTime < 2000L) {
+            // Exit app
+            (context as? android.app.Activity)?.finish()
+        } else {
+            backPressedTime = now
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "Nochmal zurück drücken zum Beenden",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
+
     androidx.compose.material3.Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
                 PremiumBottomBar(
