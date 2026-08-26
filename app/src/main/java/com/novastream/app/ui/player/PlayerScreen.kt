@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,6 +78,10 @@ fun PlayerScreen(onBack: () -> Unit) {
         onDispose { exoPlayer?.release(); exoPlayer = null }
     }
 
+    val navBarHeightDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val density = LocalDensity.current
+    val navBarHeightPx = with(density) { navBarHeightDp.toPx() }.toInt()
+
     Box(
         Modifier
             .fillMaxSize()
@@ -94,6 +99,8 @@ fun PlayerScreen(onBack: () -> Unit) {
                         )
                         useController = true
                         this.player = player
+                        // Push controller above system nav bar
+                        setPadding(0, 0, 0, navBarHeightPx)
                         // Hide controller when hosters are shown
                         if (showHosters) {
                             hideController()
@@ -102,6 +109,7 @@ fun PlayerScreen(onBack: () -> Unit) {
                 },
                 update = { pv ->
                     pv.player = player
+                    pv.setPadding(0, 0, 0, navBarHeightPx)
                     if (showHosters) pv.hideController() else pv.showController()
                 },
                 modifier = Modifier.fillMaxSize()
