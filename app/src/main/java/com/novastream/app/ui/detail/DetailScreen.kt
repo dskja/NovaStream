@@ -174,7 +174,7 @@ private fun DetailContent(
 
         // Title + Description
         item {
-            var expanded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+            var expanded by androidx.compose.runtime.saveable.rememberSaveable(slug) { mutableStateOf(false) }
             Column(Modifier.padding(20.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

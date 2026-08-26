@@ -211,12 +211,14 @@ private fun HeroCarousel(
     val pagerState = rememberPagerState(pageCount = { series.size })
     val context = LocalContext.current
 
-    // Auto-scroll - wird automatisch gecancelt wenn Composable disposed wird
+    // Auto-scroll - pausiert wenn User swipet, wird automatisch gecancelt wenn Composable disposed wird
     LaunchedEffect(pagerState, series.size) {
         if (series.size <= 1) return@LaunchedEffect
         try {
             while (true) {
                 kotlinx.coroutines.delay(5000)
+                // Skip auto-scroll if user is currently interacting
+                if (pagerState.isScrollInProgress) continue
                 val next = (pagerState.currentPage + 1) % series.size
                 pagerState.animateScrollToPage(next, animationSpec = tween(800))
             }
