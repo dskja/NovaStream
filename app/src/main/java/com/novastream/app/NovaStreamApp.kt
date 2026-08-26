@@ -11,7 +11,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .okHttpClient(NetworkModule.okHttpClient)
-            .crossfade(false)
+            .crossfade(150)
             .respectCacheHeaders(false)
             .allowHardware(true)
             .memoryCache {

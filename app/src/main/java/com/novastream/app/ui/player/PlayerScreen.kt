@@ -156,10 +156,14 @@ fun PlayerScreen(
         onDispose {
             val player = exoPlayer
             if (player != null) {
-                val pos = player.currentPosition
-                val dur = player.duration
-                if (dur > 0 && pos > 0) {
-                    vm.saveProgress(pos, dur)
+                try {
+                    val pos = player.currentPosition
+                    val dur = player.duration
+                    if (dur > 0 && pos > 0) {
+                        vm.saveProgress(pos, dur)
+                    }
+                } catch (e: Exception) {
+                    // Ignore save errors - must release player
                 }
                 player.release()
             }
