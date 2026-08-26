@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.CircleShape
@@ -94,6 +95,7 @@ fun PremiumBottomBar(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { if (!selected) onNavigate(item.route) }
+                        .focusable()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Icon(

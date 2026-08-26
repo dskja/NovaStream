@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.novastream.app.ui.navigation.NovaStreamNavHost
 import com.novastream.app.ui.theme.NovaStreamTheme
+import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.util.VoeWebViewResolver
 
 class MainActivity : ComponentActivity() {

@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +105,7 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
     }
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun WatchlistScreen(
     onSeriesClick: (String) -> Unit
@@ -241,6 +243,7 @@ fun WatchlistScreen(
                 }
                 else -> {
                     LazyVerticalGrid(
+                        modifier = Modifier.focusRestorer(),
                         columns = GridCells.Adaptive(minSize = 130.dp),
                         contentPadding = PaddingValues(12.dp, bottom = 80.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
