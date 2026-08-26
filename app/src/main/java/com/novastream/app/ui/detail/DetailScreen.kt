@@ -98,7 +98,7 @@ private fun DetailContent(
     val series = state.series ?: return
     val context = LocalContext.current
     var imageError by remember { mutableStateOf(false) }
-    var episodeFilter by remember(state.selectedSeasonIndex) { mutableStateOf("") }
+    var episodeFilter by remember(slug, state.selectedSeasonIndex) { mutableStateOf("") }
 
     LazyColumn(
         Modifier.fillMaxSize().background(BgPure)
@@ -356,6 +356,17 @@ private fun DetailContent(
 
             item { SectionHeader("Episoden", trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val watchedCount = state.selectedSeasonWatchedCount
+                    val totalCount = season.episodes.size
+                    if (watchedCount > 0) {
+                        Text(
+                            "$watchedCount/$totalCount gesehen",
+                            color = Accent,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    }
                     Text(
                         "${season.episodes.size} Folgen",
                         color = TextTertiary,
