@@ -50,6 +50,7 @@ import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
+import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.components.ShimmerPoster
 import com.novastream.app.ui.components.ShimmerRow
 import com.novastream.app.ui.theme.*
@@ -292,12 +293,4 @@ private fun HeroCarousel(
             }
         }
     }
-}
-
-@Composable
-private fun ShimmerBox(
-    modifier: Modifier = Modifier,
-    cornerRadius: Int = 8
-) {
-    com.novastream.app.ui.components.ShimmerBox(modifier, cornerRadius)
 }

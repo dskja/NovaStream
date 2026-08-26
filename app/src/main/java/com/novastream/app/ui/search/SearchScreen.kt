@@ -1,16 +1,19 @@
 package com.novastream.app.ui.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -37,6 +41,7 @@ fun SearchScreen(
 ) {
     val vm: SearchViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
 
     Column(
         Modifier
@@ -71,7 +76,7 @@ fun SearchScreen(
                 placeholder = { Text("Serie suchen…", color = TextTertiary) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { }),
+                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -81,8 +86,25 @@ fun SearchScreen(
                     focusedTextColor = TextPrimary,
                     unfocusedTextColor = TextPrimary
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             )
+            // Clear-Button
+            if (state.query.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .clickable { vm.onQueryChange(""); focusManager.clearFocus() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Löschen",
+                        tint = TextTertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         // Content

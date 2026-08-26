@@ -149,6 +149,7 @@ private fun DetailContent(
 
         // Title + Description
         item {
+            var expanded by remember { mutableStateOf(false) }
             Column(Modifier.padding(20.dp)) {
                 Text(
                     series.title,
@@ -164,9 +165,21 @@ private fun DetailContent(
                         desc,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
-                        maxLines = 5,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = if (expanded) Int.MAX_VALUE else 5,
+                        overflow = if (expanded) TextOverflow.Visible else TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { expanded = !expanded }
                     )
+                    if (!expanded && desc.length > 200) {
+                        Text(
+                            "Mehr anzeigen",
+                            color = Primary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { expanded = true }
+                        )
+                    }
                 }
             }
         }
@@ -309,5 +322,5 @@ private fun PremiumEpisodeRow(
             )
         }
     }
-    Divider(color = Divider, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 20.dp))
+    HorizontalDivider(color = Divider, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 20.dp))
 }

@@ -136,7 +136,9 @@ class VoeWebViewResolver {
         private var currentContext: android.content.Context? = null
 
         fun setContext(context: android.content.Context) {
-            currentContext = context.applicationContext
+            // WebView braucht einen Activity-Context, nicht applicationContext
+            // (applicationContext kann zu WebView-Crashes führen auf manchen Geräten)
+            currentContext = context
         }
     }
 }
