@@ -84,9 +84,11 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onQueryChange(q: String) {
-        _state.update { it.copy(query = q, error = null) }
+        // Limit query length to prevent issues with extremely long queries
+        val trimmed = q.take(100)
+        _state.update { it.copy(query = trimmed, error = null) }
         searchJob?.cancel()
-        if (q.isBlank()) {
+        if (trimmed.isBlank()) {
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
         }
@@ -94,8 +96,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(450) // Debounce
             currentCoroutineContext().ensureActive()
-            if (_state.value.query != q) return@launch  // Veraltete Query
-            when (val res = repo.search(q)) {
+            if (_state.value.query != trimmed) return@launch  // Veraltete Query
+            when (val res = repo.search(trimmed)) {
                 is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
                     _state.update { it.copy(loading = false, results = res.data, error = null) }
                 }

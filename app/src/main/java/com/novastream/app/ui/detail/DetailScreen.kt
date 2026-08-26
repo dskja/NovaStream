@@ -275,6 +275,12 @@ private fun DetailContent(
                 }
                 // Series stats: seasons and total episodes
                 val totalEpisodes = state.seasons.sumOf { it.episodes.size }
+                val watchedEpisodes = state.seasons.sumOf { season ->
+                    season.episodes.count { ep ->
+                        val key = "$slug-${season.number}-${ep.number}"
+                        state.episodeProgress[key]?.isCompleted == true
+                    }
+                }
                 if (state.seasons.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Row(
@@ -283,6 +289,10 @@ private fun DetailContent(
                         StatPill("${state.seasons.size} Staffeln")
                         if (totalEpisodes > 0) {
                             StatPill("$totalEpisodes Episoden")
+                        }
+                        if (watchedEpisodes > 0) {
+                            val percent = (watchedEpisodes * 100 / totalEpisodes).coerceIn(0, 100)
+                            StatPill("$watchedEpisodes gesehen ($percent%)")
                         }
                     }
                 }
