@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -97,6 +98,7 @@ private fun DetailContent(
     val series = state.series ?: return
     val context = LocalContext.current
     var imageError by remember { mutableStateOf(false) }
+    var episodeFilter by remember(state.selectedSeasonIndex) { mutableStateOf("") }
 
     LazyColumn(
         Modifier.fillMaxSize().background(BgPure)
@@ -342,6 +344,16 @@ private fun DetailContent(
                 }
             }
         } else if (season != null && season.episodes.isNotEmpty()) {
+            // Episode filter for seasons with many episodes
+            val filteredEpisodes = if (episodeFilter.isBlank()) {
+                season.episodes
+            } else {
+                season.episodes.filter { ep ->
+                    ep.title.contains(episodeFilter, ignoreCase = true) ||
+                    ep.number.toString() == episodeFilter
+                }
+            }
+
             item { SectionHeader("Episoden", trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -360,7 +372,45 @@ private fun DetailContent(
                     )
                 }
             }) }
-            items(season.episodes, key = { it.number }) { ep ->
+
+            // Filter field (only for seasons with >10 episodes)
+            if (season.episodes.size > 10) {
+                item {
+                    OutlinedTextField(
+                        value = episodeFilter,
+                        onValueChange = { episodeFilter = it },
+                        placeholder = { Text("Episoden filtern...", color = TextTertiary, style = MaterialTheme.typography.bodySmall) },
+                        leadingIcon = { Icon(Icons.Default.Search, null, tint = TextTertiary, modifier = Modifier.size(18.dp)) },
+                        trailingIcon = {
+                            if (episodeFilter.isNotEmpty()) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    "Löschen",
+                                    tint = TextTertiary,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clickable { episodeFilter = "" }
+                                )
+                            }
+                        },
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Primary,
+                            unfocusedBorderColor = Outline,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            cursorColor = Primary
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            items(filteredEpisodes, key = { it.number }) { ep ->
                 val epProgress = state.episodeProgress["$slug-${season.number}-${ep.number}"]
                 PremiumEpisodeRow(
                     episode = ep,
@@ -368,6 +418,18 @@ private fun DetailContent(
                     onPlay = { onPlay(slug, season.number, ep.number, ep.title, seriesTitle, coverUrl) },
                     onLongPress = { onToggleWatched(season.number, ep.number, ep.title) }
                 )
+            }
+
+            // No results from filter
+            if (filteredEpisodes.isEmpty() && episodeFilter.isNotBlank()) {
+                item {
+                    Box(
+                        Modifier.fillMaxWidth().padding(40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Keine Episoden gefunden für '$episodeFilter'", color = TextTertiary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
         } else if (season != null) {
             item {
