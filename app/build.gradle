@@ -99,6 +99,9 @@ dependencies {
     // DataStore (für Recent Searches)
     implementation 'androidx.datastore:datastore-preferences:1.1.1'
 
+    // Splash Screen API
+    implementation 'androidx.core:core-splashscreen:1.0.1'
+
     // Room Database
     implementation 'androidx.room:room-runtime:2.6.1'
     implementation 'androidx.room:room-ktx:2.6.1'

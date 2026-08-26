@@ -5,4 +5,10 @@
         <item name="android:windowBackground">@color/bs_dark</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
     </style>
+
+    <style name="Theme.NovaStream.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bs_dark</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.NovaStream</item>
+    </style>
 </resources>
