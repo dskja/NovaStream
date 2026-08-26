@@ -394,18 +394,24 @@ fun PlayerScreen(
         ) {
             val next = state.nextEpisode
             if (next != null) {
-                // Auto-play countdown (5 seconds)
+                // Auto-play countdown (5 seconds) - cancels if overlay dismissed
                 var countdown by remember { mutableStateOf(5) }
                 LaunchedEffect(showNextEpisodeOverlay, next) {
                     if (showNextEpisodeOverlay) {
                         countdown = 5
-                        while (countdown > 0) {
-                            kotlinx.coroutines.delay(1000)
-                            countdown--
-                        }
-                        if (showNextEpisodeOverlay) {
-                            showNextEpisodeOverlay = false
-                            onNextEpisode(next.season, next.episode, next.title)
+                        try {
+                            while (countdown > 0) {
+                                kotlinx.coroutines.delay(1000)
+                                kotlinx.coroutines.yield()
+                                countdown--
+                            }
+                            // Only auto-play if overlay is still showing
+                            if (showNextEpisodeOverlay) {
+                                showNextEpisodeOverlay = false
+                                onNextEpisode(next.season, next.episode, next.title)
+                            }
+                        } catch (_: kotlinx.coroutines.CancellationException) {
+                            // Overlay dismissed or screen left - countdown cancelled
                         }
                     }
                 }

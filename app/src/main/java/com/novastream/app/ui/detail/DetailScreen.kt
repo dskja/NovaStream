@@ -170,6 +170,42 @@ private fun DetailContent(
                     onRemove = { onRemoveProgress(progress.episodeKey) }
                 )
             }
+        } else {
+            // Play First Episode button (when no continue watching exists)
+            val firstSeason = state.seasons.firstOrNull { it.episodes.isNotEmpty() }
+            val firstEp = firstSeason?.episodes?.firstOrNull()
+            if (firstEp != null) {
+                item {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(PrimaryGradient)
+                            .clickable {
+                                onPlay(slug, firstSeason.number, firstEp.number, firstEp.title, seriesTitle, coverUrl)
+                            }
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "Erste Episode ansehen",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Title + Description
@@ -217,16 +253,29 @@ private fun DetailContent(
                         overflow = if (expanded) TextOverflow.Visible else TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { expanded = !expanded }
                     )
-                    if (!expanded && desc.length > 200) {
+                    if (desc.length > 200) {
                         Text(
-                            "Mehr anzeigen",
+                            if (expanded) "Weniger anzeigen" else "Mehr anzeigen",
                             color = Primary,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .padding(top = 4.dp)
-                                .clickable { expanded = true }
+                                .clickable { expanded = !expanded }
                         )
+                    }
+                }
+                // Series stats: seasons and total episodes
+                val totalEpisodes = state.seasons.sumOf { it.episodes.size }
+                if (state.seasons.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        StatPill("${state.seasons.size} Staffeln")
+                        if (totalEpisodes > 0) {
+                            StatPill("$totalEpisodes Episoden")
+                        }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -646,4 +695,21 @@ private fun formatRemaining(progress: WatchProgress): Int {
     if (progress.durationMs <= 0) return 0
     val remainingMs = progress.durationMs - progress.positionMs
     return (remainingMs / 60000).toInt().coerceAtLeast(0)
+}
+
+@Composable
+private fun StatPill(text: String) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgSurfaceElevated)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text,
+            color = TextSecondary,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
