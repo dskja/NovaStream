@@ -160,7 +160,7 @@ private fun DetailContent(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        "Zurück",
+                        "Zurück zur Übersicht",
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
