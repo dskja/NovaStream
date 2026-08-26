@@ -45,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.ui.components.ContinueWatchingCard
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SectionHeader
@@ -107,6 +108,27 @@ fun HomeScreen(
                                 )
                             },
                             onRemove = { vm.removeContinueWatching(progress.episodeKey) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Watchlist Preview Section (if user has watchlist items)
+        if (state.watchlist.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(28.dp))
+                SectionHeader("Meine Liste")
+            }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(state.watchlist.take(10), key = { it.slug }) { item ->
+                        SeriesPosterCard(
+                            series = item.toSeries(),
+                            onClick = { onSeriesClick(item.slug) }
                         )
                     }
                 }
@@ -310,7 +332,7 @@ private fun HeroCarousel(
             }
         }
 
-        // Page indicators
+        // Page indicators - animated
         Row(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -319,9 +341,14 @@ private fun HeroCarousel(
         ) {
             repeat(series.size) { i ->
                 val selected = pagerState.currentPage == i
+                val width by androidx.compose.animation.core.animateDpAsState(
+                    targetValue = if (selected) 24.dp else 8.dp,
+                    animationSpec = androidx.compose.animation.core.tween(300),
+                    label = "indicatorWidth"
+                )
                 Box(
                     Modifier
-                        .size(if (selected) 24.dp else 8.dp, 4.dp)
+                        .size(width, 4.dp)
                         .clip(CircleShape)
                         .background(if (selected) Primary else Color(0x66FFFFFF))
                 )

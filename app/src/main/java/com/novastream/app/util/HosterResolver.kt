@@ -31,7 +31,9 @@ class HosterResolver(
             // 1. Redirect-URL absolut machen und Seite laden (auf IO-Thread!)
             // OkHttp folgt HTTP-302 Redirects automatisch (followRedirects=true)
             val absoluteUrl = NovaStreamConfig.abs(redirectUrl)
-            val redirectHtml = withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
+            val redirectHtml = kotlinx.coroutines.withTimeoutOrNull(15000L) {
+                withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
+            } ?: return emptyList()
 
             // 2. JS-Redirect-URL aus dem HTML extrahieren (falls vorhanden)
             val hosterPageUrl = extractJsRedirect(redirectHtml).ifBlank {
@@ -48,7 +50,9 @@ class HosterResolver(
             }
 
             // 4. Andere Hoster: HTML laden (auf IO-Thread!) und Stream-URLs extrahieren
-            val html = withContext(Dispatchers.IO) { fetchHtml(hosterPageUrl) }
+            val html = kotlinx.coroutines.withTimeoutOrNull(15000L) {
+                withContext(Dispatchers.IO) { fetchHtml(hosterPageUrl) }
+            } ?: return emptyList()
             if (html.isBlank()) return emptyList()
 
             // 5. Stream-URLs extrahieren (hoster-spezifisch)

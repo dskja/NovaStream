@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -106,10 +107,7 @@ fun WatchlistScreen(
 
         Box(Modifier.fillMaxSize()) {
             when {
-                state.items.isEmpty() && !state.loading -> {
-                    PremiumEmpty("Deine Watchlist ist leer.\nFüge Serien hinzu die du schauen möchtest.")
-                }
-                state.items.isEmpty() -> {
+                state.items.isEmpty() && state.loading -> {
                     // Loading
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 130.dp),
@@ -121,6 +119,12 @@ fun WatchlistScreen(
                             com.novastream.app.ui.components.ShimmerPoster(Modifier.width(130.dp))
                         }
                     }
+                }
+                state.items.isEmpty() -> {
+                    PremiumEmpty(
+                        "Deine Watchlist ist leer.\nFüge Serien hinzu die du schauen möchtest.",
+                        icon = Icons.Filled.Bookmark
+                    )
                 }
                 else -> {
                     LazyVerticalGrid(

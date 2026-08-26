@@ -63,23 +63,31 @@ class DetailViewModel(
         load()
     }
 
+    fun retry() = load()
+
     private fun load() {
         viewModelScope.launch {
-            when (val res = repo.loadSeriesDetail(slug)) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    val (series, seasons) = res.data
-                    _state.update {
-                        it.copy(loading = false, series = series, seasons = seasons)
+            try {
+                when (val res = repo.loadSeriesDetail(slug)) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        val (series, seasons) = res.data
+                        _state.update {
+                            it.copy(loading = false, series = series, seasons = seasons, error = null)
+                        }
+                        val firstWithEps = seasons.indexOfFirst { it.episodes.isNotEmpty() }
+                        if (firstWithEps >= 0) {
+                            _state.update { it.copy(selectedSeasonIndex = firstWithEps) }
+                        } else if (seasons.isNotEmpty()) {
+                            _state.update { it.copy(selectedSeasonIndex = 0) }
+                            loadSeasonEpisodes(seasons.first().number)
+                        }
                     }
-                    val firstWithEps = seasons.indexOfFirst { it.episodes.isNotEmpty() }
-                    if (firstWithEps >= 0) {
-                        _state.update { it.copy(selectedSeasonIndex = firstWithEps) }
-                    } else if (seasons.isNotEmpty()) {
-                        loadSeasonEpisodes(seasons.first().number)
-                    }
+                    is NovaStreamRepository.RepoResult.Error ->
+                        _state.update { it.copy(loading = false, error = res.message) }
                 }
-                is NovaStreamRepository.RepoResult.Error ->
-                    _state.update { it.copy(loading = false, error = res.message) }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "load error", e)
+                _state.update { it.copy(loading = false, error = "Fehler beim Laden") }
             }
         }
     }
@@ -111,17 +119,22 @@ class DetailViewModel(
     private fun loadSeasonEpisodes(seasonNum: Int) {
         _state.update { it.copy(loadingSeason = true) }
         viewModelScope.launch {
-            when (val res = repo.loadSeason(slug, seasonNum)) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    _state.update { current ->
-                        val updated = current.seasons.map { s ->
-                            if (s.number == seasonNum) s.copy(episodes = res.data) else s
+            try {
+                when (val res = repo.loadSeason(slug, seasonNum)) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        _state.update { current ->
+                            val updated = current.seasons.map { s ->
+                                if (s.number == seasonNum) s.copy(episodes = res.data) else s
+                            }
+                            current.copy(seasons = updated, loadingSeason = false)
                         }
-                        current.copy(seasons = updated, loadingSeason = false)
                     }
+                    is NovaStreamRepository.RepoResult.Error ->
+                        _state.update { it.copy(loadingSeason = false, error = res.message) }
                 }
-                is NovaStreamRepository.RepoResult.Error ->
-                    _state.update { it.copy(loadingSeason = false, error = res.message) }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "loadSeason error", e)
+                _state.update { it.copy(loadingSeason = false, error = "Staffel konnte nicht geladen werden") }
             }
         }
     }

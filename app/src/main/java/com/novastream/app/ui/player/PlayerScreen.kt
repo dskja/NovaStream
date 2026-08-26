@@ -416,18 +416,5 @@ fun PlayerScreen(
                 }
             }
         }
-
-        // Error overlay
-        if (state.error != null && state.hosters.isEmpty() && !state.loading) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color(0xE6000000))
-                    .padding(24.dp)
-            ) {
-                PremiumError(state.error ?: "Unbekannter Fehler")
-            }
-        }
     }
 }

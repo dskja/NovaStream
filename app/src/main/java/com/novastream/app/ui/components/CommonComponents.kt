@@ -272,17 +272,33 @@ fun PremiumError(
 @Composable
 fun PremiumEmpty(
     text: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
 ) {
     Box(
         modifier.fillMaxSize().wrapContentSize(Alignment.Center),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text,
-            color = TextTertiary,
-            style = MaterialTheme.typography.bodyLarge
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = TextTertiary,
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+            Text(
+                text,
+                color = TextTertiary,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
     }
 }
 
