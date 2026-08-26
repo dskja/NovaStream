@@ -84,3 +84,5 @@ NovaStream ist ein inoffizieller Client und nicht mit serienstream.to affiliated
 ## License
 
 Dieses Projekt ist Open Source unter der MIT License.
+
+<!-- identity-check -->
