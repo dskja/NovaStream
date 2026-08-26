@@ -114,7 +114,15 @@ fun PlayerScreen(
             playerVisible = true
             showHosters = false
         } else {
-            val player = ExoPlayer.Builder(context).build().apply {
+            val player = ExoPlayer.Builder(context)
+                .setAudioAttributes(
+                    androidx.media3.common.AudioAttributes.Builder()
+                        .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                        .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                        .build(),
+                    true  // handleAudioFocus = true
+                )
+                .build().apply {
                 val mediaItem = MediaItem.Builder()
                     .setUri(src.url)
                     .setMimeType(src.mimeType)
@@ -165,6 +173,7 @@ fun PlayerScreen(
                 } catch (e: Exception) {
                     // Ignore save errors - must release player
                 }
+                player.removeListener(episodeEndListener)
                 player.release()
             }
             exoPlayer = null

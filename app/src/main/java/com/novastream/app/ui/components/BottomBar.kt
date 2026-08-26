@@ -93,7 +93,7 @@ fun PremiumBottomBar(
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { onNavigate(item.route) }
+                        .clickable { if (!selected) onNavigate(item.route) }
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Icon(

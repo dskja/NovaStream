@@ -108,8 +108,8 @@ fun SeriesPosterCard(
     cardWidth: Int = 130
 ) {
     val context = LocalContext.current
-    var isLoading by remember(series.id) { mutableStateOf(true) }
-    var isError by remember(series.id) { mutableStateOf(false) }
+    var isLoading by remember(series.id, series.coverUrl) { mutableStateOf(true) }
+    var isError by remember(series.id, series.coverUrl) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
