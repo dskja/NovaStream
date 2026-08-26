@@ -72,6 +72,16 @@ fun PlayerScreen(
     var showHosters by remember { mutableStateOf(true) }
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
+
+    // Back handler: close hoster panel or next-episode overlay first, then exit
+    androidx.activity.compose.BackHandler {
+        when {
+            showNextEpisodeOverlay -> showNextEpisodeOverlay = false
+            showHosters -> showHosters = false
+            else -> onBack()
+        }
+    }
+
     // Track listener to avoid adding duplicates on player reuse
     val episodeEndListener = remember {
         object : Player.Listener {
@@ -195,6 +205,24 @@ fun PlayerScreen(
             PremiumLoading(label = "Stream wird aufgelöst…")
         } else if (state.error != null && state.hosters.isEmpty()) {
             PremiumError(state.error ?: "Unbekannter Fehler")
+        }
+
+        // Loading overlay when switching hosters (player visible but loading new source)
+        if (playerVisible && state.loading && exoPlayer != null) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x99000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Primary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         // Top overlay: Back + Title + Hoster toggle
