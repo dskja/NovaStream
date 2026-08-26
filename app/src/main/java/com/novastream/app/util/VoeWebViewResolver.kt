@@ -120,9 +120,15 @@ class VoeWebViewResolver {
             }
         } finally {
             // WebView immer aufräumen, auch bei Exceptions/Timeout
-            webView.stopLoading()
-            webView.removeJavascriptInterface("AndroidVoe")
-            webView.destroy()
+            try {
+                webView.stopLoading()
+                webView.removeJavascriptInterface("AndroidVoe")
+                webView.destroy()
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) {
+                    android.util.Log.w("VoeWebViewResolver", "WebView cleanup failed", e)
+                }
+            }
         }
 
         val finalUrl = videoUrl

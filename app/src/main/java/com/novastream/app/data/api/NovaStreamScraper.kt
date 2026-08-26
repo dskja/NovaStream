@@ -219,7 +219,7 @@ object NovaStreamScraper {
         val seasonNumbers = mutableSetOf<Int>()
 
         for (a in seasonLinks) {
-            a.attr("data-season-pill").toIntOrNull()?.let { seasonNumbers.add(it) }
+            a.attr("data-season-pill").toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
         }
 
         // Fallback: aus href-Pattern extrahieren

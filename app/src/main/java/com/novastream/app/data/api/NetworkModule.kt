@@ -42,19 +42,22 @@ object NetworkModule {
         val bootstrap = listOf("1.1.1.1", "1.0.0.1").mapNotNull {
             try { java.net.InetAddress.getByName(it) } catch (_: Exception) { null }
         }
-        DnsOverHttps.Builder()
-            .client(
-                OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
-                    .readTimeout(10, TimeUnit.SECONDS)
-                    .build()
-            )
-            .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
-            .apply {
-                if (bootstrap.isNotEmpty()) bootstrapDnsHosts(bootstrap)
-            }
-            .includeIPv6(true)
-            .build()
+        if (bootstrap.isEmpty()) {
+            // Fallback to system DNS if bootstrap IPs fail
+            Dns.SYSTEM
+        } else {
+            DnsOverHttps.Builder()
+                .client(
+                    OkHttpClient.Builder()
+                        .connectTimeout(10, TimeUnit.SECONDS)
+                        .readTimeout(10, TimeUnit.SECONDS)
+                        .build()
+                )
+                .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
+                .bootstrapDnsHosts(bootstrap)
+                .includeIPv6(true)
+                .build()
+        }
     }
 
     val okHttpClient: OkHttpClient by lazy {

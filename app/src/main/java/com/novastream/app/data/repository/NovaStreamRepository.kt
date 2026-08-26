@@ -31,12 +31,15 @@ class NovaStreamRepository(
         onFailure = { RepoResult.Error("Startseite konnte nicht geladen werden", it) }
     )
 
-    suspend fun search(query: String): RepoResult<List<Series>> = runCatching {
-        NovaStreamScraper.parseSeriesList(api.search(query.trim()))
-    }.fold(
-        onSuccess = { RepoResult.Success(it) },
-        onFailure = { RepoResult.Error("Suche fehlgeschlagen", it) }
-    )
+    suspend fun search(query: String): RepoResult<List<Series>> {
+        if (query.trim().isBlank()) return RepoResult.Error("Leere Suche")
+        return runCatching {
+            NovaStreamScraper.parseSeriesList(api.search(query.trim()))
+        }.fold(
+            onSuccess = { RepoResult.Success(it) },
+            onFailure = { RepoResult.Error("Suche fehlgeschlagen", it) }
+        )
+    }
 
     suspend fun loadSeriesDetail(slug: String): RepoResult<Pair<Series, List<Season>>> = runCatching {
         NovaStreamScraper.parseSeriesDetail(api.seriesDetail(slug), slug)

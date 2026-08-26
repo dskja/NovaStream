@@ -102,6 +102,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearMessage() {
         _state.update { it.copy(message = null) }
     }
+
+    fun showUrlError() {
+        _state.update { it.copy(message = "Link konnte nicht geöffnet werden") }
+    }
 }
 
 @Composable
@@ -259,7 +263,7 @@ fun SettingsScreen() {
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    "Version 1.0.0",
+                                    "Version ${com.novastream.app.BuildConfig.VERSION_NAME}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextTertiary
                                 )
@@ -307,31 +311,31 @@ fun SettingsScreen() {
                 icon = Icons.Default.Code,
                 title = "Quellcode",
                 subtitle = "github.com/dskja/NovaStream",
-                onClick = { openUrl(context, "https://github.com/dskja/NovaStream") }
+                onClick = { openUrl(context, "https://github.com/dskja/NovaStream") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.BugReport,
                 title = "Fehler melden",
                 subtitle = "Issue auf GitHub erstellen",
-                onClick = { openUrl(context, "https://github.com/dskja/NovaStream/issues/new") }
+                onClick = { openUrl(context, "https://github.com/dskja/NovaStream/issues/new") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Star,
                 title = "Sterne vergeben",
                 subtitle = "Repo auf GitHub bewerten",
-                onClick = { openUrl(context, "https://github.com/dskja/NovaStream") }
+                onClick = { openUrl(context, "https://github.com/dskja/NovaStream") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Gavel,
                 title = "Lizenz",
                 subtitle = "MIT License - ansehen",
-                onClick = { openUrl(context, "https://github.com/dskja/NovaStream/blob/main/LICENSE") }
+                onClick = { openUrl(context, "https://github.com/dskja/NovaStream/blob/main/LICENSE") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Security,
                 title = "Datenschutz",
                 subtitle = "Keine Daten werden gesammelt",
-                onClick = { openUrl(context, "https://github.com/dskja/NovaStream#privacy") }
+                onClick = { openUrl(context, "https://github.com/dskja/NovaStream#privacy") { vm.showUrlError() } }
             )
 
             Spacer(Modifier.height(24.dp))
@@ -342,13 +346,13 @@ fun SettingsScreen() {
                 icon = Icons.Default.Code,
                 title = "dskja",
                 subtitle = "GitHub Profil",
-                onClick = { openUrl(context, "https://github.com/dskja") }
+                onClick = { openUrl(context, "https://github.com/dskja") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.OpenInNew,
                 title = "Alle Projekte",
                 subtitle = "Weitere Repositories ansehen",
-                onClick = { openUrl(context, "https://github.com/dskja?tab=repositories") }
+                onClick = { openUrl(context, "https://github.com/dskja?tab=repositories") { vm.showUrlError() } }
             )
 
             Spacer(Modifier.height(24.dp))
@@ -408,7 +412,7 @@ fun SettingsScreen() {
     }
 }
 
-private fun openUrl(context: android.content.Context, url: String) {
+private fun openUrl(context: android.content.Context, url: String, onError: () -> Unit = {}) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try {
         context.startActivity(intent)
@@ -416,6 +420,7 @@ private fun openUrl(context: android.content.Context, url: String) {
         if (com.novastream.app.BuildConfig.DEBUG) {
             android.util.Log.e("Settings", "Failed to open URL: $url", e)
         }
+        onError()
     }
 }
 
