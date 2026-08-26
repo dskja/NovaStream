@@ -22,30 +22,51 @@ data class PlayerUiState(
     val sources: List<StreamSource> = emptyList(),
     val error: String? = null,
     val episodeTitle: String = "",
+    val seriesTitle: String = "",
+    val coverUrl: String? = null,
     val resumePositionMs: Long = 0L,
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val isFinished: Boolean = false,
+    val nextEpisode: NextEpisodeInfo? = null
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(0)
 }
+
+data class NextEpisodeInfo(
+    val season: Int,
+    val episode: Int,
+    val title: String
+)
 
 class PlayerViewModel(
     application: Application,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
-    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug"))
+    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
     private val season: Int = savedStateHandle.get<String>("season")?.toIntOrNull() ?: 1
     private val episode: Int = savedStateHandle.get<String>("episode")?.toIntOrNull() ?: 1
     private val title: String = run {
         val raw = savedStateHandle.get<String>("title") ?: ""
         try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }
     }.ifBlank { "Episode $episode" }
+    private val seriesTitle: String = run {
+        val raw = savedStateHandle.get<String>("seriesTitle") ?: ""
+        try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }
+    }
+    private val coverUrl: String? = savedStateHandle.get<String>("coverUrl")?.let {
+        try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
+    }?.takeIf { it.isNotBlank() }
 
     private val repo = NovaStreamRepository()
     private val watchRepo = WatchRepository(application)
 
-    private val _state = MutableStateFlow(PlayerUiState(episodeTitle = title))
+    private val _state = MutableStateFlow(PlayerUiState(
+        episodeTitle = title,
+        seriesTitle = seriesTitle,
+        coverUrl = coverUrl
+    ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     init { load() }
@@ -95,8 +116,8 @@ class PlayerViewModel(
         viewModelScope.launch {
             watchRepo.saveProgress(
                 slug = slug,
-                seriesTitle = "", // wird vom Screen gesetzt via setSeriesInfo
-                coverUrl = null,
+                seriesTitle = seriesTitle,
+                coverUrl = coverUrl,
                 season = season,
                 episode = episode,
                 episodeTitle = title,
@@ -107,26 +128,63 @@ class PlayerViewModel(
         }
     }
 
-    /** Setzt Serien-Info für den Progress-Eintrag (Titel, Cover). */
-    fun updateSeriesInfo(seriesTitle: String, coverUrl: String?) {
+    /** Markiert die Episode als fertig und lädt die nächste Episode Info. */
+    fun onEpisodeFinished() {
+        _state.update { it.copy(isFinished = true) }
         viewModelScope.launch {
-            val existing = watchRepo.getProgress(slug, season, episode)
-            if (existing != null) {
-                watchRepo.saveProgress(
-                    slug = slug,
-                    seriesTitle = seriesTitle,
-                    coverUrl = coverUrl,
-                    season = season,
-                    episode = episode,
-                    episodeTitle = title,
-                    positionMs = existing.positionMs,
-                    durationMs = existing.durationMs
-                )
-            }
+            // Remove progress for this episode (it's completed)
+            watchRepo.removeProgress("$slug-$season-$episode")
+            // Load next episode info
+            loadNextEpisode()
         }
     }
 
-    /** Entfernt den Fortschritt (z.B. wenn Episode fertig geschaut). */
+    private suspend fun loadNextEpisode() {
+        // Try to find next episode in the same season
+        val nextEp = episode + 1
+        val nextEpUrl = "/serie/$slug/staffel-$season/episode-$nextEp"
+        val ep = Episode(
+            number = nextEp,
+            title = "",
+            slug = slug,
+            season = season,
+            episodeUrl = nextEpUrl
+        )
+        when (val h = repo.loadHosters(ep)) {
+            is NovaStreamRepository.RepoResult.Success -> {
+                if (h.data.isNotEmpty()) {
+                    // Next episode exists - get its title
+                    val titleResp = repo.loadSeriesDetail(slug)
+                    if (titleResp is NovaStreamRepository.RepoResult.Success) {
+                        val (_, seasons) = titleResp.data
+                        val currentSeason = seasons.find { it.number == season }
+                        val nextEpInfo = currentSeason?.episodes?.find { it.number == nextEp }
+                        if (nextEpInfo != null) {
+                            _state.update {
+                                it.copy(nextEpisode = NextEpisodeInfo(
+                                    season = season,
+                                    episode = nextEp,
+                                    title = nextEpInfo.title
+                                ))
+                            }
+                            return
+                        }
+                    }
+                    // Fallback - just set basic info
+                    _state.update {
+                        it.copy(nextEpisode = NextEpisodeInfo(
+                            season = season,
+                            episode = nextEp,
+                            title = "Episode $nextEp"
+                        ))
+                    }
+                }
+            }
+            else -> { /* No next episode in this season - could try next season */ }
+        }
+    }
+
+    /** Entfernt den Fortschritt. */
     fun clearProgress() {
         viewModelScope.launch {
             watchRepo.removeProgress("$slug-$season-$episode")

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -37,6 +38,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
+import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.model.Episode
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
@@ -47,7 +49,7 @@ import com.novastream.app.ui.theme.*
 @Composable
 fun DetailScreen(
     onBack: () -> Unit,
-    onPlay: (slug: String, season: Int, episode: Int, title: String) -> Unit
+    onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?) -> Unit
 ) {
     val vm: DetailViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -60,10 +62,13 @@ fun DetailScreen(
             series != null -> DetailContent(
                 state = state,
                 slug = series.id,
+                seriesTitle = series.title,
+                coverUrl = series.coverUrl,
                 onBack = onBack,
                 onSelectSeason = vm::selectSeason,
                 onPlay = onPlay,
-                onToggleWatchlist = vm::toggleWatchlist
+                onToggleWatchlist = vm::toggleWatchlist,
+                onRemoveProgress = vm::removeProgress
             )
         }
     }
@@ -74,10 +79,13 @@ fun DetailScreen(
 private fun DetailContent(
     state: DetailUiState,
     slug: String,
+    seriesTitle: String,
+    coverUrl: String?,
     onBack: () -> Unit,
     onSelectSeason: (Int) -> Unit,
-    onPlay: (String, Int, Int, String) -> Unit,
-    onToggleWatchlist: () -> Unit
+    onPlay: (String, Int, Int, String, String, String?) -> Unit,
+    onToggleWatchlist: () -> Unit,
+    onRemoveProgress: (String) -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -128,7 +136,7 @@ private fun DetailContent(
                     )
                 )
 
-                // Back button (glassmorphism) – mit Status Bar Inset
+                // Back button
                 Box(
                     Modifier
                         .padding(
@@ -144,10 +152,22 @@ private fun DetailContent(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         "Zurück",
-                        tint = TextPrimary,
+                        tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
                 }
+            }
+        }
+
+        // Continue Watching Banner (if there's a saved position)
+        val progress = state.currentProgress
+        if (progress != null && !progress.isCompleted) {
+            item {
+                ContinueWatchingBanner(
+                    progress = progress,
+                    onPlay = { onPlay(slug, progress.season, progress.episode, progress.episodeTitle, seriesTitle, coverUrl) },
+                    onRemove = { onRemoveProgress(progress.episodeKey) }
+                )
             }
         }
 
@@ -208,36 +228,34 @@ private fun DetailContent(
                         )
                     }
                 }
+                Spacer(Modifier.height(16.dp))
             }
         }
 
-        // Season Tabs
-        if (state.seasons.isNotEmpty()) {
-            item {
-                SectionHeader("Staffeln")
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(state.seasons) { i, season ->
-                        val selected = i == state.selectedSeasonIndex
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (selected) PrimaryGradient else Brush.linearGradient(listOf(BgSurfaceElevated, BgSurfaceElevated)))
-                                .clickable { onSelectSeason(i) }
-                                .padding(horizontal = 20.dp, vertical = 10.dp)
-                        ) {
-                            Text(
-                                if (season.number == 0) "Filme" else "Staffel ${season.number}",
-                                color = if (selected) Color.White else TextSecondary,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
+        // Seasons
+        item { SectionHeader("Staffeln") }
+        item {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(state.seasons) { i, season ->
+                    val selected = i == state.selectedSeasonIndex
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (selected) PrimaryGradient else Brush.linearGradient(listOf(Color(0x22FFFFFF), Color(0x11FFFFFF))))
+                            .clickable { onSelectSeason(i) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            "Staffel ${season.number}",
+                            color = if (selected) Color.White else TextSecondary,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            style = MaterialTheme.typography.labelLarge
+                        )
                     }
                 }
-                Spacer(Modifier.height(16.dp))
             }
         }
 
@@ -255,9 +273,11 @@ private fun DetailContent(
         } else if (season != null && season.episodes.isNotEmpty()) {
             item { SectionHeader("Episoden") }
             items(season.episodes, key = { it.number }) { ep ->
+                val epProgress = state.episodeProgress["$slug-${season.number}-${ep.number}"]
                 PremiumEpisodeRow(
                     episode = ep,
-                    onPlay = { onPlay(slug, season.number, ep.number, ep.title) }
+                    progress = epProgress,
+                    onPlay = { onPlay(slug, season.number, ep.number, ep.title, seriesTitle, coverUrl) }
                 )
             }
         } else if (season != null) {
@@ -276,40 +296,164 @@ private fun DetailContent(
 }
 
 @Composable
+private fun ContinueWatchingBanner(
+    progress: WatchProgress,
+    onPlay: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Brush.linearGradient(listOf(Primary.copy(alpha = 0.15f), BgSurface)))
+            .clickable(onClick = onPlay)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(PrimaryGradient),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PlayArrow, "Weitersehen", tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Weitersehen",
+                    color = Primary,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "S${progress.season} E${progress.episode} · ${progress.episodeTitle}",
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { progress.progressPercent / 100f },
+                    color = Primary,
+                    trackColor = BgSurfaceElevated,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun PremiumEpisodeRow(
     episode: Episode,
+    progress: WatchProgress? = null,
     onPlay: () -> Unit
 ) {
+    val context = LocalContext.current
+    var thumbError by remember(episode.episodeUrl) { mutableStateOf(false) }
+
     Row(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onPlay)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Episode number in a circle
+        // Episode thumbnail (16:9)
         Box(
             Modifier
-                .size(44.dp)
-                .clip(CircleShape)
+                .size(120.dp, 68.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(BgSurfaceElevated),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                "${episode.number}",
-                color = Accent,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            if (!episode.thumbnailUrl.isNullOrBlank() && !thumbError) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(episode.thumbnailUrl)
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = episode.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    onState = { thumbError = it is AsyncImagePainter.State.Error }
+                )
+            } else {
+                // Fallback: episode number
+                Box(
+                    Modifier.fillMaxSize().background(BgSurfaceElevated),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "E${episode.number}",
+                        color = Accent,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Progress overlay
+            if (progress != null) {
+                if (progress.isCompleted) {
+                    // Completed: green checkmark overlay
+                    Box(
+                        Modifier.fillMaxSize().background(Color(0x88000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            Modifier.size(28.dp).clip(CircleShape).background(Primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Check, "Gesehen", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                } else if (progress.positionMs > 0) {
+                    // Partially watched: progress bar at bottom of thumbnail
+                    LinearProgressIndicator(
+                        progress = { progress.progressPercent / 100f },
+                        color = Primary,
+                        trackColor = Color(0x44FFFFFF),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                    )
+                }
+            }
+
+            // Play icon overlay
+            Box(
+                Modifier.fillMaxSize().background(Color(0x33000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.PlayArrow,
+                    "Abspielen",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
+
         Spacer(Modifier.width(16.dp))
+
+        // Episode info
         Column(Modifier.weight(1f)) {
             Text(
-                episode.title,
+                "${episode.number}. ${episode.title}",
                 style = MaterialTheme.typography.titleMedium,
                 color = TextPrimary,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             if (episode.hosters.isNotEmpty()) {
@@ -333,7 +477,27 @@ private fun PremiumEpisodeRow(
                     }
                 }
             }
+            // Progress text
+            if (progress != null && !progress.isCompleted && progress.positionMs > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Noch ${formatRemaining(progress)} min",
+                    color = Primary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium
+                )
+            } else if (progress != null && progress.isCompleted) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Gesehen",
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
+
+        // Play button
         Box(
             Modifier
                 .size(36.dp)
@@ -350,4 +514,9 @@ private fun PremiumEpisodeRow(
         }
     }
     HorizontalDivider(color = Divider, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 20.dp))
+}
+
+private fun formatRemaining(progress: WatchProgress): Int {
+    val remainingMs = progress.durationMs - progress.positionMs
+    return (remainingMs / 60000).toInt().coerceAtLeast(0)
 }

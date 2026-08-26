@@ -1,5 +1,7 @@
 package com.novastream.app.ui.player
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -18,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,21 +49,37 @@ import com.novastream.app.ui.theme.*
 
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerScreen(onBack: () -> Unit) {
+fun PlayerScreen(
+    onBack: () -> Unit,
+    onNextEpisode: (Int, Int, String) -> Unit = { _, _, _ -> }
+) {
     val vm: PlayerViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val activity = context as? Activity
+
+    // Lock to landscape orientation while in player
+    DisposableEffect(Unit) {
+        val originalOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     val currentSource = state.currentSource
     var exoPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
     var showHosters by remember { mutableStateOf(true) }
     var playerVisible by remember { mutableStateOf(false) }
+    var showNextEpisodeOverlay by remember { mutableStateOf(false) }
 
-    // Hide hosters automatically once the stream starts playing
+    // Create player when source changes
     LaunchedEffect(currentSource?.url) {
+        // Release old player first
         exoPlayer?.release()
         exoPlayer = null
         playerVisible = false
+        showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
         val player = ExoPlayer.Builder(context).build().apply {
             val mediaItem = MediaItem.Builder()
@@ -69,21 +89,28 @@ fun PlayerScreen(onBack: () -> Unit) {
             setMediaItem(mediaItem)
             prepare()
             playWhenReady = true
-            // Restore position
             if (state.resumePositionMs > 0) {
                 seekTo(state.resumePositionMs)
             }
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_ENDED) {
+                        vm.onEpisodeFinished()
+                        showNextEpisodeOverlay = true
+                    }
+                }
+            })
         }
         exoPlayer = player
         playerVisible = true
         showHosters = false
     }
 
-    // Save progress periodically while playing
+    // Save progress periodically
     LaunchedEffect(exoPlayer) {
         val player = exoPlayer ?: return@LaunchedEffect
         while (true) {
-            kotlinx.coroutines.delay(5000) // Save every 5 seconds
+            kotlinx.coroutines.delay(5000)
             val pos = player.currentPosition
             val dur = player.duration
             if (dur > 0 && pos > 0) {
@@ -92,7 +119,7 @@ fun PlayerScreen(onBack: () -> Unit) {
         }
     }
 
-    // Save progress on dispose
+    // Save progress on dispose and release player
     DisposableEffect(Unit) {
         onDispose {
             val player = exoPlayer
@@ -102,8 +129,8 @@ fun PlayerScreen(onBack: () -> Unit) {
                 if (dur > 0 && pos > 0) {
                     vm.saveProgress(pos, dur)
                 }
+                player.release()
             }
-            player?.release()
             exoPlayer = null
         }
     }
@@ -117,7 +144,7 @@ fun PlayerScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Player fills the entire screen
+        // Player
         val player = exoPlayer
         if (player != null && currentSource != null) {
             AndroidView(
@@ -146,7 +173,7 @@ fun PlayerScreen(onBack: () -> Unit) {
             PremiumError(state.error ?: "Unbekannter Fehler")
         }
 
-        // Top overlay: Back button + Episode title
+        // Top overlay: Back + Title + Hoster toggle
         Row(
             Modifier
                 .align(Alignment.TopStart)
@@ -181,15 +208,26 @@ fun PlayerScreen(onBack: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Text(
-                state.episodeTitle,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Column(Modifier.weight(1f)) {
+                if (state.seriesTitle.isNotBlank()) {
+                    Text(
+                        state.seriesTitle,
+                        color = Color.White.copy(0.6f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    state.episodeTitle,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (playerVisible && state.hosters.isNotEmpty()) {
                 Box(
                     Modifier
@@ -288,6 +326,74 @@ fun PlayerScreen(onBack: () -> Unit) {
                         Text(
                             "Hoster wird aufgelöst…",
                             color = Color.White.copy(0.6f),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Next Episode overlay (shown when episode ends)
+        AnimatedVisibility(
+            visible = showNextEpisodeOverlay && state.nextEpisode != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            val next = state.nextEpisode
+            if (next != null) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0xE6000000))
+                        .clickable {
+                            showNextEpisodeOverlay = false
+                            onNextEpisode(next.season, next.episode, next.title)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Nächste Folge",
+                            color = Color.White.copy(0.6f),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "S${next.season} E${next.episode} · ${next.title}",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(PrimaryGradient)
+                                .clickable {
+                                    showNextEpisodeOverlay = false
+                                    onNextEpisode(next.season, next.episode, next.title)
+                                }
+                                .padding(horizontal = 32.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.SkipNext, "Nächste", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Weiter",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Tippen um fortzufahren",
+                            color = Color.White.copy(0.4f),
                             fontSize = 12.sp
                         )
                     }

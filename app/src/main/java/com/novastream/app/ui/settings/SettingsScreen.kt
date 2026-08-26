@@ -13,10 +13,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,17 +57,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         viewModelScope.launch {
-            watchRepo.watchlist().collect { _state.update { it.copy(watchlistCount = it.watchlistCount) } }
+            watchRepo.watchlist().collect { list -> _state.update { it.copy(watchlistCount = list.size) } }
         }
         viewModelScope.launch {
-            watchRepo.watchProgress().collect { _state.update { it.copy(continueWatchingCount = it.continueWatchingCount) } }
+            watchRepo.watchProgress().collect { list -> _state.update { it.copy(continueWatchingCount = list.size) } }
         }
     }
 
     fun clearContinueWatching() {
         viewModelScope.launch {
             watchRepo.clearAllProgress()
-            _state.update { it.copy(message = "Continue Watching wurde geleert") }
+            _state.update { it.copy(message = "Weitersehen wurde geleert") }
         }
     }
 
@@ -140,11 +141,32 @@ fun SettingsScreen() {
                 )
             }
 
-            // Section: Daten
+            // Stats Cards
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatCard(
+                    icon = Icons.Default.PlayCircle,
+                    label = "Weitersehen",
+                    count = state.continueWatchingCount,
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    icon = Icons.Default.Star,
+                    label = "Watchlist",
+                    count = state.watchlistCount,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Section: Datenverwaltung
             SettingsSectionHeader("Datenverwaltung")
             SettingsItem(
                 icon = Icons.Default.PlayCircle,
-                title = "Continue Watching leeren",
+                title = "Weitersehen leeren",
                 subtitle = "Entfernt alle gespeicherten Wiedergabefortschritte",
                 onClick = { vm.clearContinueWatching() }
             )
@@ -163,20 +185,66 @@ fun SettingsScreen() {
 
             Spacer(Modifier.height(24.dp))
 
-            // Section: Über
+            // Section: Über NovaStream
             SettingsSectionHeader("Über NovaStream")
             SettingsInfoItem(
                 icon = Icons.Default.Info,
                 title = "Version",
-                subtitle = "1.0"
+                subtitle = "NovaStream 1.0"
             )
             SettingsInfoItem(
-                icon = Icons.Default.BugReport,
+                icon = Icons.Default.Code,
                 title = "Quellcode",
                 subtitle = "github.com/dskja/NovaStream"
             )
+            SettingsInfoItem(
+                icon = Icons.Default.BugReport,
+                title = "Fehler melden",
+                subtitle = "github.com/dskja/NovaStream/issues"
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            // Footer
+            Text(
+                "NovaStream ist ein inoffizieller Client.\nNur für Bildungszwecke. Verwende auf eigene Verantwortung.",
+                color = TextTertiary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
 
             Spacer(Modifier.height(80.dp))
+        }
+    }
+}
+
+@Composable
+private fun StatCard(
+    icon: ImageVector,
+    label: String,
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(BgSurface)
+            .padding(16.dp)
+    ) {
+        Column {
+            Icon(icon, null, tint = Primary, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "$count",
+                color = TextPrimary,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                label,
+                color = TextTertiary,
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }
