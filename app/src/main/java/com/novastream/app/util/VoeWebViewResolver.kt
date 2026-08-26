@@ -105,17 +105,20 @@ class VoeWebViewResolver {
         // Seite laden
         webView.loadUrl(hosterPageUrl)
 
-        // Warten bis URL gefunden oder Timeout (20s)
-        val videoUrl = withTimeoutOrNull(20000L) {
-            while (capturedUrl.get() == null) {
-                kotlinx.coroutines.delay(500)
+        // Warten bis URL gefunden oder Timeout (20s) - mit try-finally für Cleanup
+        val videoUrl = try {
+            withTimeoutOrNull(20000L) {
+                while (capturedUrl.get() == null) {
+                    kotlinx.coroutines.delay(500)
+                }
+                capturedUrl.get()
             }
-            capturedUrl.get()
+        } finally {
+            // WebView immer aufräumen, auch bei Exceptions/Timeout
+            webView.stopLoading()
+            webView.removeJavascriptInterface("AndroidVoe")
+            webView.destroy()
         }
-
-        // WebView aufräumen
-        webView.stopLoading()
-        webView.destroy()
 
         val finalUrl = videoUrl
         if (finalUrl != null) {

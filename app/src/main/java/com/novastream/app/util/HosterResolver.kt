@@ -88,6 +88,12 @@ class HosterResolver(
             .header("Accept", "text/html,application/xhtml+xml,*/*")
             .build()
         return client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                if (com.novastream.app.BuildConfig.DEBUG) {
+                    android.util.Log.e("HosterResolver", "HTTP ${resp.code} for $url")
+                }
+                return ""
+            }
             resp.body?.string() ?: ""
         }
     }
@@ -145,7 +151,11 @@ class HosterResolver(
                             isHls = urlMatch.value.contains(".m3u8")))
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) {
+                    android.util.Log.w("HosterResolver", "Base64 decode failed: ${e.message}")
+                }
+            }
         }
 
         // Strategie 3: Direct m3u8/mp4 URLs in the page

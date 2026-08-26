@@ -36,13 +36,21 @@ class HomeViewModel(
     init {
         // Collect continue watching + watchlist reactively
         viewModelScope.launch {
-            watchRepo.watchProgress().collect { progress ->
-                _state.update { it.copy(continueWatching = progress.filter { p -> !p.isCompleted }) }
+            try {
+                watchRepo.watchProgress().collect { progress ->
+                    _state.update { it.copy(continueWatching = progress.filter { p -> !p.isCompleted }) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchProgress flow error", e)
             }
         }
         viewModelScope.launch {
-            watchRepo.watchlist().collect { list ->
-                _state.update { it.copy(watchlist = list) }
+            try {
+                watchRepo.watchlist().collect { list ->
+                    _state.update { it.copy(watchlist = list) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchlist flow error", e)
             }
         }
         load()

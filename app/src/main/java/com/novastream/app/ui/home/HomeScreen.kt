@@ -187,13 +187,17 @@ private fun HeroCarousel(
     val pagerState = rememberPagerState(pageCount = { series.size })
     val context = LocalContext.current
 
-    // Auto-scroll
+    // Auto-scroll - wird automatisch gecancelt wenn Composable disposed wird
     LaunchedEffect(pagerState, series.size) {
         if (series.size <= 1) return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(5000)
-            val next = (pagerState.currentPage + 1) % series.size
-            pagerState.animateScrollToPage(next, animationSpec = tween(800))
+        try {
+            while (true) {
+                kotlinx.coroutines.delay(5000)
+                val next = (pagerState.currentPage + 1) % series.size
+                pagerState.animateScrollToPage(next, animationSpec = tween(800))
+            }
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // Expected when navigating away
         }
     }
 
@@ -235,7 +239,7 @@ private fun HeroCarousel(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            s.title.take(2).uppercase(),
+                            s.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
                             color = Accent,
                             fontSize = 42.sp,
                             fontWeight = FontWeight.Black

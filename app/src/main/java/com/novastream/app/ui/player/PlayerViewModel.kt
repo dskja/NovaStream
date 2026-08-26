@@ -93,7 +93,11 @@ class PlayerViewModel(
                         _state.update { it.copy(loading = false, error = "Keine Hoster gefunden") }
                         return@launch
                     }
-                    _state.update { it.copy(hosters = hosters, loading = false) }
+                    // Deutsche Hoster priorisieren: sortiere so dass "Deutsch" zuerst kommt
+                    val sorted = hosters.sortedWith(
+                        compareByDescending { it.language.contains("Deutsch", ignoreCase = true) }
+                    )
+                    _state.update { it.copy(hosters = sorted, loading = false) }
                     resolveHoster(0)
                 }
                 is NovaStreamRepository.RepoResult.Error ->
