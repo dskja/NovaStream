@@ -12,7 +12,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SerienStreamApp"
+        android:theme="@style/Theme.NovaStream"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
@@ -20,7 +20,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
-            android:theme="@style/Theme.SerienStreamApp">
+            android:theme="@style/Theme.NovaStream">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

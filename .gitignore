@@ -22,3 +22,5 @@ scr_*.png
 
 # Logs
 *.log
+
+.commit_msg.txt

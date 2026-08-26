@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.serienstream.app'
+    namespace 'com.novastream.app'
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.serienstream.app"
+        applicationId "com.novastream.app"
         minSdk 24
         targetSdk 36
         versionCode 2
