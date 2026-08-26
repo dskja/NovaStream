@@ -397,7 +397,7 @@ object NovaStreamScraper {
 
     private fun extractSeasonNumber(url: String): Int? {
         val m = Pattern.compile("/staffel-(\\d+)").matcher(url)
-        return if (m.find()) m.group(1)?.toIntOrNull() else null
+        return if (m.find()) m.group(1)?.toIntOrNull()?.takeIf { it > 0 } else null
     }
 
     private fun slugToTitle(slug: String): String =

@@ -117,6 +117,8 @@ class PlayerViewModel(
      */
     fun saveProgress(positionMs: Long, durationMs: Long) {
         if (durationMs <= 0) return
+        // Validate position is within valid range
+        val safePosition = positionMs.coerceIn(0L, durationMs)
         viewModelScope.launch {
             watchRepo.saveProgress(
                 slug = slug,
@@ -125,10 +127,10 @@ class PlayerViewModel(
                 season = season,
                 episode = episode,
                 episodeTitle = title,
-                positionMs = positionMs,
+                positionMs = safePosition,
                 durationMs = durationMs
             )
-            _state.update { it.copy(resumePositionMs = positionMs, durationMs = durationMs) }
+            _state.update { it.copy(resumePositionMs = safePosition, durationMs = durationMs) }
         }
     }
 

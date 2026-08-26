@@ -2,6 +2,7 @@ package com.novastream.app.ui.navigation
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
@@ -129,6 +130,11 @@ fun NovaStreamNavHost() {
                 val slugArg = it.arguments?.getString("slug") ?: ""
                 val seriesTitleArg = it.arguments?.getString("seriesTitle") ?: ""
                 val coverUrlArg = it.arguments?.getString("coverUrl")?.takeIf { c -> c.isNotBlank() }
+                if (slugArg.isBlank()) {
+                    // Invalid slug - navigate back
+                    LaunchedEffect(Unit) { nav.popBackStack() }
+                    return@composable
+                }
                 PlayerScreen(
                     onBack = { nav.popBackStack() },
                     onNextEpisode = { season, episode, title ->
