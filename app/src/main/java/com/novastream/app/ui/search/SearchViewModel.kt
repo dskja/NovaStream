@@ -39,7 +39,7 @@ class SearchViewModel(
             _state.update { it.copy(loading = true) }
             when (val res = repo.search(q)) {
                 is NovaStreamRepository.RepoResult.Success -> {
-                    // NovaStream /search?q= gibt alle Serien zurück (kein server-side Filter)
+                    // serienstream.to /suche?term= gibt alle Serien zurück (kein server-side Filter)
                     // → client-side Filterung nach Query
                     val filtered = res.data.filter { series ->
                         val title = series.title.lowercase()

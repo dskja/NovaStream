@@ -166,18 +166,6 @@ class HosterResolver(
             }
         }
 
-        // Strategie 5: VOE uses /api2/ endpoint - try to extract from page context
-        // Sometimes the video URL is constructed from the page URL's video ID
-        val videoId = Regex("/e/([a-zA-Z0-9]+)").find(pageUrl)?.groupValues?.get(1)
-        if (videoId != null && out.isEmpty()) {
-            // Try direct CDN patterns
-            val cdnPatterns = listOf(
-                "https://voe.sx/hls/$videoId/index.m3u8",
-                "https://voe.sx/mp4/$videoId/index.mp4"
-            )
-            // These might not work but worth trying
-        }
-
         return out.distinctBy { it.url }
     }
 

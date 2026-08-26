@@ -127,6 +127,17 @@ fun PlayerScreen(onBack: () -> Unit) {
                 .fillMaxSize()
                 .background(BgPure)
         ) {
+            // Episode-Titel anzeigen
+            Text(
+                state.episodeTitle,
+                style = MaterialTheme.typography.titleLarge,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, end = 20.dp)
+            )
+
             if (state.hosters.isNotEmpty()) {
                 Text(
                     "Hoster wählen",

@@ -18,7 +18,8 @@ data class PlayerUiState(
     val hosters: List<HosterLink> = emptyList(),
     val selectedHosterIndex: Int = 0,
     val sources: List<StreamSource> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val episodeTitle: String = ""
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(0)
@@ -35,7 +36,7 @@ class PlayerViewModel(
 
     private val repo = NovaStreamRepository()
 
-    private val _state = MutableStateFlow(PlayerUiState())
+    private val _state = MutableStateFlow(PlayerUiState(episodeTitle = title))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     init { load() }
