@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bs_dark">#0E1116</color>
+    <color name="bs_surface">#161B22</color>
+    <color name="bs_primary">#E50914</color>
+    <color name="bs_accent">#FFB041</color>
+    <color name="bs_text">#E6E6E6</color>
+    <color name="bs_text_dim">#9AA0A6</color>
+</resources>

@@ -1,0 +1,24 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Build outputs
+/app/build
+/build
+/.gradle
+
+# Test files / screenshots
+ss_*.html
+ss_*.png
+ui_*.xml
+scr_*.png
+
+# Logs
+*.log
