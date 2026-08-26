@@ -75,47 +75,63 @@ fun PlayerScreen(
 
     // Create player when source changes
     LaunchedEffect(currentSource?.url) {
-        // Release old player first
-        exoPlayer?.release()
-        exoPlayer = null
-        playerVisible = false
         showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
-        val player = ExoPlayer.Builder(context).build().apply {
+        // Reuse existing player if possible, else create new
+        val existing = exoPlayer
+        if (existing != null) {
             val mediaItem = MediaItem.Builder()
                 .setUri(src.url)
                 .setMimeType(src.mimeType)
                 .build()
-            setMediaItem(mediaItem)
-            prepare()
-            playWhenReady = true
-            if (state.resumePositionMs > 0) {
-                seekTo(state.resumePositionMs)
-            }
-            addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) {
-                        vm.onEpisodeFinished()
-                        showNextEpisodeOverlay = true
-                    }
+            existing.setMediaItem(mediaItem)
+            if (state.resumePositionMs > 0) existing.seekTo(state.resumePositionMs)
+            existing.prepare()
+            existing.playWhenReady = true
+            playerVisible = true
+            showHosters = false
+        } else {
+            val player = ExoPlayer.Builder(context).build().apply {
+                val mediaItem = MediaItem.Builder()
+                    .setUri(src.url)
+                    .setMimeType(src.mimeType)
+                    .build()
+                setMediaItem(mediaItem)
+                prepare()
+                playWhenReady = true
+                if (state.resumePositionMs > 0) {
+                    seekTo(state.resumePositionMs)
                 }
-            })
+                addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_ENDED) {
+                            vm.onEpisodeFinished()
+                            showNextEpisodeOverlay = true
+                        }
+                    }
+                })
+            }
+            exoPlayer = player
+            playerVisible = true
+            showHosters = false
         }
-        exoPlayer = player
-        playerVisible = true
-        showHosters = false
     }
 
     // Save progress periodically
     LaunchedEffect(exoPlayer) {
         val player = exoPlayer ?: return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(5000)
-            val pos = player.currentPosition
-            val dur = player.duration
-            if (dur > 0 && pos > 0) {
-                vm.saveProgress(pos, dur)
+        try {
+            while (true) {
+                kotlinx.coroutines.delay(5000)
+                if (!player.isPlaying) continue
+                val pos = player.currentPosition
+                val dur = player.duration
+                if (dur > 0 && pos > 0) {
+                    vm.saveProgress(pos, dur)
+                }
             }
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // Expected when leaving screen
         }
     }
 

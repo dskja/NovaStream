@@ -40,7 +40,7 @@ val PrimaryGradient = Brush.horizontalGradient(
     colors = listOf(Primary, PrimaryLight)
 )
 val PremiumGradient = Brush.verticalGradient(
-    colors = listOf(Color(0x00), Color(0xE608090C))
+    colors = listOf(Color.Transparent, Color(0xE608090C))
 )
 val AccentGradient = Brush.horizontalGradient(
     colors = listOf(AccentBlue, Accent)

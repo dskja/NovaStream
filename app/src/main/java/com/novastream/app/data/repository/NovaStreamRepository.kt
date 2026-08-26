@@ -60,11 +60,14 @@ class NovaStreamRepository(
      */
     suspend fun loadHosters(episode: Episode): RepoResult<List<HosterLink>> {
         return runCatching {
-            android.util.Log.d("NovaStreamRepo", "loadHosters: slug=${episode.slug} season=${episode.season} ep=${episode.number}")
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.d("NovaStreamRepo", "loadHosters: slug=${episode.slug} season=${episode.season} ep=${episode.number}")
+            }
             val html = api.episode(episode.slug, episode.season, episode.number)
-            android.util.Log.d("NovaStreamRepo", "loadHosters: html length=${html.length}")
             val hosters = NovaStreamScraper.parseHosters(html)
-            android.util.Log.d("NovaStreamRepo", "loadHosters: found ${hosters.size} hosters: ${hosters.map { it.name }}")
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.d("NovaStreamRepo", "loadHosters: found ${hosters.size} hosters")
+            }
             hosters
         }.fold(
             onSuccess = { RepoResult.Success(it) },

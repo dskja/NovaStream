@@ -23,7 +23,7 @@ data class WatchProgress(
 ) {
     /** Fortschritt in Prozent (0-100) */
     val progressPercent: Float
-        get() = if (durationMs > 0) (positionMs.toFloat() / durationMs * 100f).coerceIn(0f, 100f) else 0f
+        get() = if (durationMs > 0 && positionMs >= 0) (positionMs.toFloat() / durationMs * 100f).coerceIn(0f, 100f) else 0f
 
     /** Ob die Episode als "gesehen" gilt (>90% geschaut) */
     val isCompleted: Boolean
