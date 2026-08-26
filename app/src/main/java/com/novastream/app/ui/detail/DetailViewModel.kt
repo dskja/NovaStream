@@ -29,6 +29,17 @@ data class DetailUiState(
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
+
+    /** Count of watched episodes in the currently selected season. */
+    val selectedSeasonWatchedCount: Int
+        get() {
+            val season = selectedSeason ?: return 0
+            val seriesSlug = series?.id ?: return 0
+            return season.episodes.count { ep ->
+                val key = "$seriesSlug-${season.number}-${ep.number}"
+                episodeProgress[key]?.isCompleted == true
+            }
+        }
 }
 
 class DetailViewModel(

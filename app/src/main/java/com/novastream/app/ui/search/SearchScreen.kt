@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -140,6 +142,11 @@ fun SearchScreen(
     val vm: SearchViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        try { focusRequester.requestFocus() } catch (_: Exception) {}
+    }
 
     Column(
         Modifier
@@ -187,7 +194,9 @@ fun SearchScreen(
                     focusedTextColor = TextPrimary,
                     unfocusedTextColor = TextPrimary
                 ),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester)
             )
             if (state.query.isNotEmpty()) {
                 Box(

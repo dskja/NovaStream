@@ -16,7 +16,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
             .allowHardware(true)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.40)
+                    .maxSizePercent(0.25)
                     .build()
             }
             .diskCache {
