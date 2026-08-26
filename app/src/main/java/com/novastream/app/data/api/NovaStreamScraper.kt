@@ -392,7 +392,7 @@ object NovaStreamScraper {
         if (!m.find()) return null
         val slug = m.group(1)
         // URL-decode falls nötig (z.B. "25%20Years%20of%20You")
-        return java.net.URLDecoder.decode(slug, "UTF-8")
+        return try { java.net.URLDecoder.decode(slug, "UTF-8") } catch (_: Exception) { slug }
     }
 
     private fun extractSeasonNumber(url: String): Int? {

@@ -506,44 +506,44 @@ private fun PremiumEpisodeRow(
             }
 
             // Progress overlay
-            if (progress != null) {
-                if (progress.isCompleted) {
-                    // Completed: green checkmark overlay
+            if (progress != null && progress.isCompleted) {
+                // Completed: checkmark overlay (replaces play icon)
+                Box(
+                    Modifier.fillMaxSize().background(Color(0x88000000)),
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
-                        Modifier.fillMaxSize().background(Color(0x88000000)),
+                        Modifier.size(28.dp).clip(CircleShape).background(Primary),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            Modifier.size(28.dp).clip(CircleShape).background(Primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Check, "Gesehen", tint = Color.White, modifier = Modifier.size(18.dp))
-                        }
+                        Icon(Icons.Default.Check, "Gesehen", tint = Color.White, modifier = Modifier.size(18.dp))
                     }
-                } else if (progress.positionMs > 0) {
-                    // Partially watched: progress bar at bottom of thumbnail
-                    LinearProgressIndicator(
-                        progress = { progress.progressPercent / 100f },
-                        color = Primary,
-                        trackColor = Color(0x44FFFFFF),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .height(3.dp)
+                }
+            } else {
+                // Play icon overlay (only when not completed)
+                Box(
+                    Modifier.fillMaxSize().background(Color(0x33000000)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        "Abspielen",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
 
-            // Play icon overlay
-            Box(
-                Modifier.fillMaxSize().background(Color(0x33000000)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    "Abspielen",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+            // Progress bar at bottom (for partially watched, not completed)
+            if (progress != null && !progress.isCompleted && progress.positionMs > 0) {
+                LinearProgressIndicator(
+                    progress = { (progress.progressPercent / 100f).coerceIn(0f, 1f) },
+                    color = Primary,
+                    trackColor = Color(0x44FFFFFF),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
                 )
             }
         }
@@ -621,6 +621,7 @@ private fun PremiumEpisodeRow(
 }
 
 private fun formatRemaining(progress: WatchProgress): Int {
+    if (progress.durationMs <= 0) return 0
     val remainingMs = progress.durationMs - progress.positionMs
     return (remainingMs / 60000).toInt().coerceAtLeast(0)
 }
