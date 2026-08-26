@@ -54,11 +54,13 @@ class HomeViewModel(
             when (val res = repo.loadHome()) {
                 is NovaStreamRepository.RepoResult.Success -> {
                     val series = res.data
+                    val popular = series.take(15)
+                    val newest = if (series.size > 15) series.drop(15).takeLast(20) else emptyList()
                     _state.update {
                         it.copy(
                             loading = false,
-                            popular = series.take(15),
-                            newest = series.takeLast(20),
+                            popular = popular,
+                            newest = newest,
                             error = null
                         )
                     }

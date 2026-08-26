@@ -65,6 +65,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     init {
         // Load recent searches
         viewModelScope.launch {
@@ -77,12 +79,13 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onQueryChange(q: String) {
         _state.update { it.copy(query = q, error = null) }
+        searchJob?.cancel()
         if (q.isBlank()) {
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
         }
         _state.update { it.copy(loading = true) }
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(450) // Debounce
             if (_state.value.query != q) return@launch  // Veraltete Query
             when (val res = repo.search(q)) {

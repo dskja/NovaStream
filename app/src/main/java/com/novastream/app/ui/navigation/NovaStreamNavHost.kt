@@ -35,9 +35,10 @@ object Routes {
         seriesTitle: String = "",
         coverUrl: String? = null
     ): String {
-        val t = java.net.URLEncoder.encode(title, "UTF-8")
-        val st = java.net.URLEncoder.encode(seriesTitle, "UTF-8")
-        val cu = coverUrl?.let { java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
+        fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
+        val t = enc(title)
+        val st = enc(seriesTitle)
+        val cu = coverUrl?.let { enc(it) } ?: ""
         return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu"
     }
 }
