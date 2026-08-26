@@ -72,13 +72,9 @@ fun PlayerScreen(
     var showHosters by remember { mutableStateOf(true) }
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
-
-    // Create player when source changes
-    LaunchedEffect(currentSource?.url) {
-        showNextEpisodeOverlay = false
-        val src = currentSource ?: return@LaunchedEffect
-
-        val episodeEndListener = object : Player.Listener {
+    // Track listener to avoid adding duplicates on player reuse
+    val episodeEndListener = remember {
+        object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) {
                     vm.onEpisodeFinished()
@@ -86,6 +82,12 @@ fun PlayerScreen(
                 }
             }
         }
+    }
+
+    // Create player when source changes
+    LaunchedEffect(currentSource?.url) {
+        showNextEpisodeOverlay = false
+        val src = currentSource ?: return@LaunchedEffect
 
         // Reuse existing player if possible, else create new
         val existing = exoPlayer
@@ -98,8 +100,7 @@ fun PlayerScreen(
             if (state.resumePositionMs > 0) existing.seekTo(state.resumePositionMs)
             existing.prepare()
             existing.playWhenReady = true
-            // Re-add listener in case it was removed
-            existing.addListener(episodeEndListener)
+            // Listener already added from initial creation - no need to re-add
             playerVisible = true
             showHosters = false
         } else {
@@ -356,7 +357,7 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay (shown when episode ends)
+        // Next Episode overlay (shown when episode ends) - with auto-play countdown
         AnimatedVisibility(
             visible = showNextEpisodeOverlay && state.nextEpisode != null,
             enter = fadeIn(),
@@ -365,13 +366,28 @@ fun PlayerScreen(
         ) {
             val next = state.nextEpisode
             if (next != null) {
+                // Auto-play countdown (5 seconds)
+                var countdown by remember { mutableStateOf(5) }
+                LaunchedEffect(showNextEpisodeOverlay, next) {
+                    if (showNextEpisodeOverlay) {
+                        countdown = 5
+                        while (countdown > 0) {
+                            kotlinx.coroutines.delay(1000)
+                            countdown--
+                        }
+                        if (showNextEpisodeOverlay) {
+                            showNextEpisodeOverlay = false
+                            onNextEpisode(next.season, next.episode, next.title)
+                        }
+                    }
+                }
                 Box(
                     Modifier
                         .fillMaxSize()
                         .background(Color(0xE6000000))
                         .clickable {
+                            // Tap anywhere to cancel auto-play and stay
                             showNextEpisodeOverlay = false
-                            onNextEpisode(next.season, next.episode, next.title)
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -412,10 +428,17 @@ fun PlayerScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
                             )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "($countdown)",
+                                color = Color.White.copy(0.7f),
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp
+                            )
                         }
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "Tippen um fortzufahren",
+                            "Tippen um abzubrechen",
                             color = Color.White.copy(0.4f),
                             fontSize = 12.sp
                         )

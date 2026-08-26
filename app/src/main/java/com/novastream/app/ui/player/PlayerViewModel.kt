@@ -212,15 +212,19 @@ class PlayerViewModel(
             return
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
-        when (val res = repo.resolveHoster(hoster)) {
+        val result = kotlinx.coroutines.withTimeoutOrNull(30000L) { repo.resolveHoster(hoster) }
+        when (result) {
             is NovaStreamRepository.RepoResult.Success -> {
-                if (res.data.isEmpty()) {
+                if (result.data.isEmpty()) {
                     tryNextHoster(index)
                 } else {
-                    _state.update { it.copy(loading = false, sources = res.data, error = null) }
+                    _state.update { it.copy(loading = false, sources = result.data, error = null) }
                 }
             }
             is NovaStreamRepository.RepoResult.Error -> {
+                tryNextHoster(index)
+            }
+            null -> {
                 tryNextHoster(index)
             }
         }

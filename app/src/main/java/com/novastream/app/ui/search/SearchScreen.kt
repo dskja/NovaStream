@@ -32,7 +32,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import com.novastream.app.ui.components.PremiumEmpty
@@ -51,7 +51,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
 private val android.content.Context.dataStore by preferencesDataStore("search_prefs")
-private val RECENT_SEARCHES_KEY = stringSetPreferencesKey("recent_searches")
+private val RECENT_SEARCHES_KEY = stringPreferencesKey("recent_searches")
+private const val SEARCH_SEPARATOR = "\u0001"  // Unit separator - won't appear in search queries
 
 data class SearchUiState(
     val query: String = "",
@@ -70,10 +71,11 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private var searchJob: kotlinx.coroutines.Job? = null
 
     init {
-        // Load recent searches
+        // Load recent searches - stored as ordered list (newest first)
         viewModelScope.launch {
             getApplication<Application>().dataStore.data.collect { prefs ->
-                val searches = prefs[RECENT_SEARCHES_KEY]?.toList()?.sortedDescending() ?: emptyList()
+                val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
+                val searches = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
                 _state.update { it.copy(recentSearches = searches) }
             }
         }
@@ -106,8 +108,11 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         if (query.isBlank()) return
         viewModelScope.launch {
             getApplication<Application>().dataStore.edit { prefs ->
-                val current = prefs[RECENT_SEARCHES_KEY] ?: emptySet()
-                prefs[RECENT_SEARCHES_KEY] = (current + query).toList().take(10).toSet()
+                val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
+                val current = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
+                // Remove duplicate if exists, add to front, keep max 10
+                val updated = (listOf(query) + current.filter { it != query }).take(10)
+                prefs[RECENT_SEARCHES_KEY] = updated.joinToString(SEARCH_SEPARATOR)
             }
         }
     }
