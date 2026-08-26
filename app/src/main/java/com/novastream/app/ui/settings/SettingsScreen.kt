@@ -185,6 +185,25 @@ fun SettingsScreen() {
 
             // Section: Datenverwaltung
             SettingsSectionHeader("Datenverwaltung")
+
+            // Stats Cards
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatCard(
+                    label = "Watchlist",
+                    value = state.watchlistCount,
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    label = "Weitersehen",
+                    value = state.continueWatchingCount,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             SettingsItem(
                 icon = Icons.Default.PlayCircle,
                 title = "Weitersehen leeren",
@@ -481,6 +500,35 @@ private fun SettingsSectionHeader(title: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp)
     )
+}
+
+@Composable
+private fun StatCard(
+    label: String,
+    value: Int,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(BgSurface)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            value.toString(),
+            style = MaterialTheme.typography.headlineMedium,
+            color = Primary,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = TextSecondary,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
 
 @Composable
