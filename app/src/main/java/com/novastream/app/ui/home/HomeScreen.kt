@@ -57,7 +57,7 @@ import com.novastream.app.ui.theme.*
 @Composable
 fun HomeScreen(
     onSeriesClick: (String) -> Unit,
-    onContinueWatchingClick: (slug: String, season: Int, episode: Int, title: String) -> Unit
+    onContinueWatchingClick: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?) -> Unit
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -101,7 +101,9 @@ fun HomeScreen(
                                     progress.slug,
                                     progress.season,
                                     progress.episode,
-                                    progress.episodeTitle
+                                    progress.episodeTitle,
+                                    progress.seriesTitle,
+                                    progress.coverUrl
                                 )
                             },
                             onRemove = { vm.removeContinueWatching(progress.episodeKey) }

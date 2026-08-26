@@ -157,24 +157,7 @@ class PlayerViewModel(
         when (val h = repo.loadHosters(ep)) {
             is NovaStreamRepository.RepoResult.Success -> {
                 if (h.data.isNotEmpty()) {
-                    // Next episode exists - get its title
-                    val titleResp = repo.loadSeriesDetail(slug)
-                    if (titleResp is NovaStreamRepository.RepoResult.Success) {
-                        val (_, seasons) = titleResp.data
-                        val currentSeason = seasons.find { it.number == season }
-                        val nextEpInfo = currentSeason?.episodes?.find { it.number == nextEp }
-                        if (nextEpInfo != null) {
-                            _state.update {
-                                it.copy(nextEpisode = NextEpisodeInfo(
-                                    season = season,
-                                    episode = nextEp,
-                                    title = nextEpInfo.title
-                                ))
-                            }
-                            return
-                        }
-                    }
-                    // Fallback - just set basic info
+                    // Next episode exists - use basic info (avoid expensive full series detail load)
                     _state.update {
                         it.copy(nextEpisode = NextEpisodeInfo(
                             season = season,
@@ -183,8 +166,35 @@ class PlayerViewModel(
                         ))
                     }
                 }
+                // If no hosters for next episode, it might not exist - try next season
+                else {
+                    val nextSeason = season + 1
+                    val nextSeasonEp = 1
+                    val nextSeasonUrl = "/serie/$slug/staffel-$nextSeason/episode-$nextSeasonEp"
+                    val nextSeasonEpisode = Episode(
+                        number = nextSeasonEp,
+                        title = "",
+                        slug = slug,
+                        season = nextSeason,
+                        episodeUrl = nextSeasonUrl
+                    )
+                    when (val h2 = repo.loadHosters(nextSeasonEpisode)) {
+                        is NovaStreamRepository.RepoResult.Success -> {
+                            if (h2.data.isNotEmpty()) {
+                                _state.update {
+                                    it.copy(nextEpisode = NextEpisodeInfo(
+                                        season = nextSeason,
+                                        episode = nextSeasonEp,
+                                        title = "Staffel $nextSeason Episode 1"
+                                    ))
+                                }
+                            }
+                        }
+                        else -> { /* No next episode available */ }
+                    }
+                }
             }
-            else -> { /* No next episode in this season - could try next season */ }
+            else -> { /* No next episode available */ }
         }
     }
 

@@ -49,8 +49,13 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         viewModelScope.launch {
-            watchRepo.watchlist().collect { items ->
-                _state.update { it.copy(items = items, loading = false) }
+            try {
+                watchRepo.watchlist().collect { items ->
+                    _state.update { it.copy(items = items, loading = false) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
+                _state.update { it.copy(loading = false) }
             }
         }
     }
