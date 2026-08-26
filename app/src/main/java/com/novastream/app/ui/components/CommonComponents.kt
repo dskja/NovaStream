@@ -108,8 +108,8 @@ fun SeriesPosterCard(
     cardWidth: Int = 130
 ) {
     val context = LocalContext.current
-    var isLoading by remember { mutableStateOf(true) }
-    var isError by remember { mutableStateOf(false) }
+    var isLoading by remember(series.id) { mutableStateOf(true) }
+    var isError by remember(series.id) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -136,7 +136,7 @@ fun SeriesPosterCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(series.coverUrl)
-                        .crossfade(true)
+                        .crossfade(false)  // kein Crossfade → weniger Jank beim Scrollen
                         .build(),
                     contentDescription = series.title,
                     contentScale = ContentScale.Crop,

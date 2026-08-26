@@ -93,7 +93,7 @@ private fun DetailContent(
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(series.coverUrl)
-                            .crossfade(true)
+                            .crossfade(false)
                             .build(),
                         contentDescription = series.title,
                         contentScale = ContentScale.Crop,

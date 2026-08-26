@@ -31,24 +31,39 @@ object SerienStreamScraper {
         val doc = Jsoup.parse(html, SerienStreamConfig.BASE_URL)
         val results = linkedMapOf<String, Series>()
 
-        // Alle <a> mit href="/serie/{slug}" (ohne /staffel- oder /episode- im Pfad)
-        // Das deckt ab: show-cover, stretched-link, text-decoration-none, card-mini Links, trend Links
-        val seriesAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$]")
+        // WICHTIG: Jsoup select() mit Komma gibt Elemente in Dokument-Reihenfolge zurück.
+        // Die card-mini/trend Links kommen im HTML VOR den hero-links.
+        // Um die richtige Reihenfolge zu garantieren (Hero zuerst), selektieren wir
+        // in separaten Phasen und nutzen linkedMapOf für Deduplizierung.
 
-        for (a in seriesAnchors) {
+        // Phase 1: Hero-Links (höchste Priorität – diese sollen zuerst im Hero-Karussell erscheinen)
+        val heroAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$].home-hero-overlay")
+        // Phase 2: card-mini Links (Neu hinzugefügt)
+        val cardMiniAnchors = doc.select(".card-mini a[href~=/serie/[\\w%.-]+\$]")
+        // Phase 3: trend Links (Angesagt)
+        val trendAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$].stretched-link")
+        // Phase 4: top-shows Links (Top 5)
+        val topShowAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$].top-shows-separator")
+        // Phase 5: Search results / generic
+        val searchAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$].text-decoration-none")
+
+        val allAnchors = (heroAnchors + cardMiniAnchors + trendAnchors + topShowAnchors + searchAnchors)
+
+        for (a in allAnchors) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             val slug = extractSlug(href) ?: continue
             if (results.containsKey(slug)) continue
 
-            // Title: versuche show-title h6, dann h3 title, dann anchor title attr, dann anchor text
-            val title = a.closest(".cover-card, .card-mini, .card")?.selectFirst(".show-title")?.text()?.trim()?.ifBlank { null }
+            // Title: versuche show-title h6, dann h3 title, dann h2 title, dann anchor title attr, dann anchor text
+            val title = a.closest(".cover-card, .card-mini, .card, .trend-card, .home-hero, .top-show-item")?.selectFirst(".show-title")?.text()?.trim()?.ifBlank { null }
                 ?: a.selectFirst("h3")?.attr("title")?.ifBlank { null }
                 ?: a.selectFirst("h3")?.text()?.trim()?.ifBlank { null }
+                ?: a.selectFirst("h2")?.text()?.trim()?.ifBlank { null }
                 ?: a.attr("title").ifBlank { null }
-                ?: a.text().trim().ifBlank { null }
+                ?: a.text().trim()?.ifBlank { null }
                 ?: slugToTitle(slug)
 
-            // Cover-Bild suchen: im übergeordneten Container ODER im Anchor selbst
+            // Cover-Bild suchen
             val cover = findCoverUrl(a, doc)
 
             results[slug] = Series(
@@ -64,42 +79,76 @@ object SerienStreamScraper {
 
     /** Sucht das Cover-Bild für einen Serien-Link. */
     private fun findCoverUrl(anchor: Element, doc: Document): String? {
-        // Der Container kann der Parent ODER der Anchor selbst sein (wenn das Bild inside ist)
-        val container = anchor.closest(".cover-card, .trend-cover, .card, .card-mini, .col-6, .col-md-4, .col-lg-2, .trend-content")
-            ?: anchor.parent()
+        // WICHTIG: Suche zuerst IM Anchor selbst (bei top-shows, card-mini ist das Bild inside <a>)
+        // Erst danach im Container suchen – aber nur in kleinen Containern, nicht in großen
+        // wie .card (das könnte mehrere Serien enthalten und das falsche Bild liefern)
 
-        // Suche in beiden: Container (parent) und Anchor selbst (inside)
-        val searchRoots = listOfNotNull(container, anchor)
+        // Weg 0: Direkt im Anchor suchen (zuverlässigste Methode)
+        extractImgFromElement(anchor)?.let { return it }
 
-        for (root in searchRoots) {
-            // Weg 1: <img> mit data-src (Lazy Loading – SerienStream nutzt das primär)
-            val img = root.selectFirst("img[data-src]") ?: root.selectFirst("img[src]")
-            if (img != null) {
-                val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
-                    .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
-                if (src.isNotBlank() && !src.contains("data:image") && src.contains("/media/images/")) return src
+        // Weg 1: Im nächsten Geschwister-Element oder direkten Parent suchen
+        // (bei hero-section liegt das Bild VOR dem Anchor, nicht darin)
+        val parent = anchor.parent()
+        if (parent != null) {
+            // Nur suchen wenn der Parent klein genug ist (kein section/div Container)
+            val parentClass = parent.className()
+            if (parentClass.contains("trend-content") || parentClass.contains("cover-card") ||
+                parentClass.contains("card-mini") || parentClass.contains("home-hero") ||
+                parentClass.contains("swiper-slide") || parentClass.contains("top-show-item") ||
+                parent.tagName() == "li" || parent.tagName() == "article") {
+                extractImgFromElement(parent)?.let { return it }
             }
+        }
 
-            // Weg 2: <source> in <picture> mit srcset (search page nutzt srcset, nicht data-srcset)
-            val source = root.selectFirst("source[srcset]")
-            if (source != null) {
-                val srcset = source.attr("srcset")
-                val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
-                    return if (firstUrl.startsWith("http")) firstUrl
-                          else SerienStreamConfig.BASE_URL + firstUrl
-                }
+        // Weg 2: Im Großelter-Element suchen (article, swiper-slide, etc.)
+        val grandParent = parent?.parent()
+        if (grandParent != null) {
+            val gpClass = grandParent.className()
+            if (gpClass.contains("trend-card") || gpClass.contains("swiper-slide") ||
+                gpClass.contains("home-hero") || gpClass.contains("card-mini") ||
+                grandParent.tagName() == "article" || grandParent.tagName() == "li") {
+                extractImgFromElement(grandParent)?.let { return it }
             }
+        }
 
-            // Weg 3: data-srcset auf <source> (home page nutzt data-srcset für lazy loading)
-            val dataSrcSet = root.selectFirst("source[data-srcset]")
-            if (dataSrcSet != null) {
-                val srcset = dataSrcSet.attr("data-srcset")
-                val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
-                    return if (firstUrl.startsWith("http")) firstUrl
-                          else SerienStreamConfig.BASE_URL + firstUrl
-                }
+        // Weg 3: Fallback – closest mit spezifischen Klassen (kein generisches .card!)
+        val container = anchor.closest(".cover-card, .trend-cover, .card-mini, .home-hero, .swiper-slide, .top-show-item, .trend-card")
+        if (container != null && container !== parent && container !== grandParent) {
+            extractImgFromElement(container)?.let { return it }
+        }
+
+        return null
+    }
+
+    /** Extrahiert die erste gültige Bild-URL aus einem Element (img/source/picture). */
+    private fun extractImgFromElement(elem: Element): String? {
+        // Weg 1: <img> mit data-src (Lazy Loading – SerienStream nutzt das primär)
+        val img = elem.selectFirst("img[data-src]") ?: elem.selectFirst("img[src]")
+        if (img != null) {
+            val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
+                .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
+            if (src.isNotBlank() && !src.contains("data:image") && src.contains("/media/images/")) return src
+        }
+
+        // Weg 2: <source> mit data-srcset (home page nutzt data-srcset für lazy loading)
+        val dataSrcSet = elem.selectFirst("source[data-srcset]")
+        if (dataSrcSet != null) {
+            val srcset = dataSrcSet.attr("data-srcset")
+            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
+            if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
+                return if (firstUrl.startsWith("http")) firstUrl
+                      else SerienStreamConfig.BASE_URL + firstUrl
+            }
+        }
+
+        // Weg 3: <source> mit srcset (search page nutzt srcset)
+        val source = elem.selectFirst("source[srcset]")
+        if (source != null) {
+            val srcset = source.attr("srcset")
+            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
+            if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
+                return if (firstUrl.startsWith("http")) firstUrl
+                      else SerienStreamConfig.BASE_URL + firstUrl
             }
         }
 

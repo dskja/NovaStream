@@ -32,10 +32,13 @@ class HomeViewModel(
             when (val res = repo.loadHome()) {
                 is SerienStreamRepository.RepoResult.Success -> {
                     val series = res.data
+                    // Popular = erste 15 (hero + popular row)
+                    // Newest = letzte 20 (neu hinzugefügt section)
+                    // Dedupliziert durch linkedMapOf im Scraper
                     _state.update {
                         it.copy(
                             loading = false,
-                            popular = series,
+                            popular = series.take(15),
                             newest = series.takeLast(20),
                             error = null
                         )

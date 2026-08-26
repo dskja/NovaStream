@@ -189,7 +189,7 @@ private fun HeroCarousel(
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(s.coverUrl)
-                            .crossfade(true)
+                            .crossfade(false)
                             .build(),
                         contentDescription = s.title,
                         contentScale = ContentScale.Crop,
