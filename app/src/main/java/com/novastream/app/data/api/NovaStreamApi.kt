@@ -8,7 +8,7 @@ import retrofit2.http.Query
  * Retrofit-Interface für NovaStream.to (liefert rohes HTML).
  * URL-Schema (Stand 2025/2026):
  *   Startseite:     /
- *   Suche:          /search?q=...
+ *   Suche:          /suche?term=...
  *   Serie Detail:   /serie/{slug}           (redirectet auf /serie/{slug}/staffel-1)
  *   Staffel:        /serie/{slug}/staffel-{n}
  *   Episode:        /serie/{slug}/staffel-{n}/episode-{m}

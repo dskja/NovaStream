@@ -98,7 +98,7 @@ fun PremiumBottomBar(
                 ) {
                     Icon(
                         imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = item.label,
+                        contentDescription = if (selected) "${item.label}, ausgewählt" else item.label,
                         tint = iconColor,
                         modifier = Modifier.size(24.dp)
                     )

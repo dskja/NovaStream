@@ -15,6 +15,9 @@ import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +75,30 @@ fun WatchlistScreen(
 ) {
     val vm: WatchlistViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    var pendingRemove by remember { mutableStateOf<WatchlistItem?>(null) }
+
+    // Confirmation dialog for removal
+    pendingRemove?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            title = { Text("Entfernen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Möchtest du '${item.title}' aus deiner Watchlist entfernen?", color = TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.remove(item.slug)
+                    pendingRemove = null
+                }) { Text("Entfernen", color = Primary, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemove = null }) {
+                    Text("Abbrechen", color = TextTertiary)
+                }
+            },
+            containerColor = BgSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
+    }
 
     Column(
         Modifier
@@ -103,6 +130,22 @@ fun WatchlistScreen(
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold
             )
+            if (state.items.isNotEmpty()) {
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(BgSurfaceElevated)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        "${state.items.size}",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         Box(Modifier.fillMaxSize()) {
@@ -147,7 +190,7 @@ fun WatchlistScreen(
                                         .size(28.dp)
                                         .clip(RoundedCornerShape(50))
                                         .background(Color(0xCC000000))
-                                        .clickable { vm.remove(item.slug) },
+                                        .clickable { pendingRemove = item },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
