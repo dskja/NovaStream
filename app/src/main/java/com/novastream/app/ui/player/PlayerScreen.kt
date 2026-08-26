@@ -110,7 +110,9 @@ fun PlayerScreen(
             if (state.resumePositionMs > 0) existing.seekTo(state.resumePositionMs)
             existing.prepare()
             existing.playWhenReady = true
-            // Listener already added from initial creation - no need to re-add
+            // Ensure listener is attached (safe to remove+add)
+            existing.removeListener(episodeEndListener)
+            existing.addListener(episodeEndListener)
             playerVisible = true
             showHosters = false
         } else {

@@ -23,6 +23,8 @@ import java.util.regex.Pattern
 object NovaStreamScraper {
 
     private val SLUG_PATTERN = Pattern.compile("/serie/([\\w%.-]+?)(?:/|$)")
+    private val EP_URL_PATTERN = Pattern.compile("/serie/[\\w%.-]+/staffel-(\\d+)/episode-(\\d+)")
+    private val SEASON_PATTERN = Pattern.compile("/staffel-(\\d+)")
 
     // ─── Serien-Listen (Home, Suche) ────────────────────────────────────────
 
@@ -260,7 +262,7 @@ object NovaStreamScraper {
 
         // Episoden-Zeilen: <tr class="episode-row" onclick="window.location='/serie/{slug}/staffel-{n}/episode-{m}'">
         val rows = doc.select("tr.episode-row")
-        val epUrlPattern = Pattern.compile("/serie/[\\w%.-]+/staffel-(\\d+)/episode-(\\d+)")
+        val epUrlPattern = EP_URL_PATTERN
 
         for (row in rows) {
             val onclick = row.attr("onclick")
@@ -396,7 +398,7 @@ object NovaStreamScraper {
     }
 
     private fun extractSeasonNumber(url: String): Int? {
-        val m = Pattern.compile("/staffel-(\\d+)").matcher(url)
+        val m = SEASON_PATTERN.matcher(url)
         return if (m.find()) m.group(1)?.toIntOrNull()?.takeIf { it > 0 } else null
     }
 

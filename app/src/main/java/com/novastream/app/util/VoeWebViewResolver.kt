@@ -26,14 +26,16 @@ import java.util.concurrent.atomic.AtomicReference
 class VoeWebViewResolver {
 
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun resolve(hosterPageUrl: String, hosterName: String): List<StreamSource> = withContext(Dispatchers.Main) {
-        val capturedUrl = AtomicReference<String?>(null)
+    suspend fun resolve(hosterPageUrl: String, hosterName: String): List<StreamSource> {
+        // Check context BEFORE dispatching to Main thread (avoids unnecessary dispatch)
         val context = currentContext ?: run {
             if (com.novastream.app.BuildConfig.DEBUG) {
                 android.util.Log.w("VoeWebViewResolver", "Context is null - VOE resolution skipped")
             }
-            return@withContext emptyList()
+            return emptyList()
         }
+        return withContext(Dispatchers.Main) {
+        val capturedUrl = AtomicReference<String?>(null)
 
         val webView = WebView(context)
         webView.settings.apply {
@@ -143,6 +145,7 @@ class VoeWebViewResolver {
         } else {
             emptyList()
         }
+        }  // end withContext
     }
 
     companion object {
