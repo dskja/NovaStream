@@ -130,8 +130,10 @@ fun NovaStreamNavHost() {
                 val slugArg = it.arguments?.getString("slug") ?: ""
                 val seriesTitleArg = it.arguments?.getString("seriesTitle") ?: ""
                 val coverUrlArg = it.arguments?.getString("coverUrl")?.takeIf { c -> c.isNotBlank() }
-                if (slugArg.isBlank()) {
-                    // Invalid slug - navigate back
+                val seasonArg = it.arguments?.getInt("season") ?: 1
+                val episodeArg = it.arguments?.getInt("episode") ?: 1
+                if (slugArg.isBlank() || seasonArg < 1 || episodeArg < 1) {
+                    // Invalid params - navigate back
                     LaunchedEffect(Unit) { nav.popBackStack() }
                     return@composable
                 }

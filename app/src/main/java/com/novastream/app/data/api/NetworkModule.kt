@@ -40,10 +40,13 @@ object NetworkModule {
      */
     private val dohDns: Dns = run {
         val bootstrap = listOf("1.1.1.1", "1.0.0.1").mapNotNull {
-            try { java.net.InetAddress.getByName(it) } catch (_: Exception) { null }
+            try { java.net.InetAddress.getByName(it) } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "Bootstrap DNS failed: $it", e)
+                null
+            }
         }
         if (bootstrap.isEmpty()) {
-            // Fallback to system DNS if bootstrap IPs fail
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "All bootstrap DNS failed, falling back to system DNS")
             Dns.SYSTEM
         } else {
             DnsOverHttps.Builder()

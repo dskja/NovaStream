@@ -107,19 +107,27 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun saveRecentSearch(query: String) {
         if (query.isBlank()) return
         viewModelScope.launch {
-            getApplication<Application>().dataStore.edit { prefs ->
-                val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
-                val current = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
-                // Remove duplicate if exists, add to front, keep max 10
-                val updated = (listOf(query) + current.filter { it != query }).take(10)
-                prefs[RECENT_SEARCHES_KEY] = updated.joinToString(SEARCH_SEPARATOR)
+            try {
+                getApplication<Application>().dataStore.edit { prefs ->
+                    val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
+                    val current = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
+                    // Remove duplicate if exists, add to front, keep max 10
+                    val updated = (listOf(query) + current.filter { it != query }).take(10)
+                    prefs[RECENT_SEARCHES_KEY] = updated.joinToString(SEARCH_SEPARATOR)
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("SearchVM", "saveRecentSearch failed", e)
             }
         }
     }
 
     fun clearRecentSearches() {
         viewModelScope.launch {
-            getApplication<Application>().dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
+            try {
+                getApplication<Application>().dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("SearchVM", "clearRecentSearches failed", e)
+            }
         }
     }
 }

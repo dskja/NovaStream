@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WatchProgressDao {
 
-    @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC LIMIT 50")
     fun getAll(): Flow<List<WatchProgress>>
 
     @Query("SELECT * FROM watch_progress WHERE episodeKey = :key LIMIT 1")
