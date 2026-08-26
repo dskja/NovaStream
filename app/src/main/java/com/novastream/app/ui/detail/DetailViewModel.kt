@@ -117,6 +117,31 @@ class DetailViewModel(
         viewModelScope.launch { watchRepo.removeProgress(episodeKey) }
     }
 
+    /** Markiert eine Episode als gesehen (>90%) oder entfernt den Status. */
+    fun toggleEpisodeWatched(season: Int, episode: Int, episodeTitle: String) {
+        val key = "$slug-$season-$episode"
+        val existing = _state.value.episodeProgress[key]
+        viewModelScope.launch {
+            if (existing != null && existing.isCompleted) {
+                // Already completed - remove progress
+                watchRepo.removeProgress(key)
+            } else {
+                // Mark as completed (100%)
+                val series = _state.value.series
+                watchRepo.saveProgress(
+                    slug = slug,
+                    seriesTitle = series?.title ?: "",
+                    coverUrl = series?.coverUrl,
+                    season = season,
+                    episode = episode,
+                    episodeTitle = episodeTitle,
+                    positionMs = 1L,
+                    durationMs = 1L  // 100% progress
+                )
+            }
+        }
+    }
+
     private fun loadSeasonEpisodes(seasonNum: Int) {
         _state.update { it.copy(loadingSeason = true) }
         viewModelScope.launch {

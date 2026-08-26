@@ -1,7 +1,9 @@
 package com.novastream.app.ui.detail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
@@ -69,7 +71,8 @@ fun DetailScreen(
                 onSelectSeason = vm::selectSeason,
                 onPlay = onPlay,
                 onToggleWatchlist = vm::toggleWatchlist,
-                onRemoveProgress = vm::removeProgress
+                onRemoveProgress = vm::removeProgress,
+                onToggleWatched = vm::toggleEpisodeWatched
             )
         }
     }
@@ -86,7 +89,8 @@ private fun DetailContent(
     onSelectSeason: (Int) -> Unit,
     onPlay: (String, Int, Int, String, String, String?) -> Unit,
     onToggleWatchlist: () -> Unit,
-    onRemoveProgress: (String) -> Unit
+    onRemoveProgress: (String) -> Unit,
+    onToggleWatched: (Int, Int, String) -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -349,7 +353,8 @@ private fun DetailContent(
                 PremiumEpisodeRow(
                     episode = ep,
                     progress = epProgress,
-                    onPlay = { onPlay(slug, season.number, ep.number, ep.title, seriesTitle, coverUrl) }
+                    onPlay = { onPlay(slug, season.number, ep.number, ep.title, seriesTitle, coverUrl) },
+                    onLongPress = { onToggleWatched(season.number, ep.number, ep.title) }
                 )
             }
         } else if (season != null) {
@@ -527,10 +532,12 @@ private fun ContinueWatchingBanner(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun PremiumEpisodeRow(
     episode: Episode,
     progress: WatchProgress? = null,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    onLongPress: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var thumbError by remember(episode.episodeUrl) { mutableStateOf(false) }
@@ -538,7 +545,10 @@ private fun PremiumEpisodeRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPlay)
+            .combinedClickable(
+                onClick = onPlay,
+                onLongClick = onLongPress
+            )
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
