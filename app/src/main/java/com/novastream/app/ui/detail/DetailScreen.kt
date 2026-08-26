@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -118,7 +119,7 @@ private fun DetailContent(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            series.title.take(2).uppercase(),
+                            series.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
                             color = Accent,
                             fontSize = 48.sp,
                             fontWeight = FontWeight.Black
@@ -301,51 +302,154 @@ private fun ContinueWatchingBanner(
     onPlay: () -> Unit,
     onRemove: () -> Unit
 ) {
+    val context = LocalContext.current
+    var imgError by remember(progress.episodeKey) { mutableStateOf(false) }
+
     Box(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(listOf(Primary.copy(alpha = 0.15f), BgSurface)))
-            .clickable(onClick = onPlay)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Primary.copy(alpha = 0.08f), BgSurface, BgSurface)
+                )
+            )
             .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(PrimaryGradient),
-                contentAlignment = Alignment.Center
+        Column {
+            // Header row
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.PlayArrow, "Weitersehen", tint = Color.White, modifier = Modifier.size(24.dp))
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
+                Box(
+                    Modifier
+                        .size(4.dp, 16.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(PrimaryGradient)
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    "Weitersehen",
+                    "WEITERSEHEN",
                     color = Primary,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
                 )
-                Text(
-                    "S${progress.season} E${progress.episode} · ${progress.episodeTitle}",
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(
-                    progress = { progress.progressPercent / 100f },
-                    color = Primary,
-                    trackColor = BgSurfaceElevated,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                )
+                Spacer(Modifier.weight(1f))
+                // Remove button
+                Box(
+                    Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(BgSurfaceElevated)
+                        .clickable(onClick = onRemove),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Entfernen",
+                        tint = TextTertiary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            // Content row: thumbnail + info + play
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onPlay),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Thumbnail with play overlay
+                Box(
+                    Modifier
+                        .size(120.dp, 68.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(BgSurfaceElevated),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!progress.coverUrl.isNullOrBlank() && !imgError) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(progress.coverUrl)
+                                .crossfade(false)
+                                .build(),
+                            contentDescription = progress.seriesTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            onState = { imgError = it is AsyncImagePainter.State.Error }
+                        )
+                    } else {
+                        Box(
+                            Modifier.fillMaxSize().background(BgSurfaceElevated),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "S${progress.season}E${progress.episode}",
+                                color = Accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    // Dark overlay
+                    Box(Modifier.fillMaxSize().background(Color(0x66000000)))
+                    // Play icon
+                    Box(
+                        Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryGradient),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            "Abspielen",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    // Progress bar on thumbnail
+                    LinearProgressIndicator(
+                        progress = { progress.progressPercent / 100f },
+                        color = Primary,
+                        trackColor = Color(0x44FFFFFF),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
+                // Info
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Staffel ${progress.season} · Episode ${progress.episode}",
+                        color = TextTertiary,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        progress.episodeTitle,
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${progress.progressPercent.toInt()}% gesehen · Noch ${formatRemaining(progress)} min",
+                        color = Primary,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

@@ -127,12 +127,7 @@ fun WatchlistScreen(
                         items(state.items, key = { it.slug }) { item ->
                             Box {
                                 SeriesPosterCard(
-                                    series = com.novastream.app.data.model.Series(
-                                        id = item.slug,
-                                        title = item.title,
-                                        coverUrl = item.coverUrl,
-                                        detailUrl = "/serie/${item.slug}"
-                                    ),
+                                    series = item.toSeries(),
                                     onClick = { onSeriesClick(item.slug) }
                                 )
                                 // Remove button overlay

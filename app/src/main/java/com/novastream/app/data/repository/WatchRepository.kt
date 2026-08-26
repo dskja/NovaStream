@@ -58,8 +58,13 @@ class WatchRepository(context: Context) {
     /** Entfernt alle Einträge einer Serie. */
     suspend fun removeProgressBySlug(slug: String) = progressDao.deleteBySlug(slug)
 
-    /** Entfernt alle abgeschlossenen Episoden. */
-    suspend fun removeCompleted() = progressDao.deleteCompleted()
+    /** Entfernt alle abgeschlossenen Episoden (>90% geschaut). */
+    suspend fun removeCompleted() {
+        val completed = progressDao.getWithProgress().filter { it.isCompleted }
+        if (completed.isNotEmpty()) {
+            progressDao.deleteByKeys(completed.map { it.episodeKey })
+        }
+    }
 
     /** Löscht alle Watch-Progress-Daten. */
     suspend fun clearAllProgress() = progressDao.deleteAll()

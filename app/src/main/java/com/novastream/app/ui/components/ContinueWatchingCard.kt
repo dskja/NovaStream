@@ -101,7 +101,7 @@ fun ContinueWatchingCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = progress.seriesTitle.take(2).uppercase(),
+                        text = progress.seriesTitle.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
                         color = Accent,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Black
@@ -158,7 +158,7 @@ fun ContinueWatchingCard(
 
             // Progress bar at bottom
             LinearProgressIndicator(
-                progress = { progress.progressPercent / 100f },
+                progress = { (progress.progressPercent / 100f).coerceIn(0f, 1f) },
                 color = Primary,
                 trackColor = Color(0x44FFFFFF),
                 modifier = Modifier

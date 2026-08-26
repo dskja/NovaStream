@@ -27,8 +27,11 @@ interface WatchProgressDao {
     @Query("DELETE FROM watch_progress WHERE slug = :slug")
     suspend fun deleteBySlug(slug: String)
 
-    @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND (CAST(positionMs AS REAL) * 100.0 / durationMs) >= 90")
-    suspend fun deleteCompleted()
+    @Query("SELECT * FROM watch_progress WHERE durationMs > 0")
+    suspend fun getWithProgress(): List<WatchProgress>
+
+    @Query("DELETE FROM watch_progress WHERE episodeKey IN (:keys)")
+    suspend fun deleteByKeys(keys: List<String>)
 
     @Query("DELETE FROM watch_progress")
     suspend fun deleteAll()

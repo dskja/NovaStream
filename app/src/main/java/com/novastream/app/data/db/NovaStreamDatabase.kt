@@ -24,7 +24,11 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     context.applicationContext,
                     NovaStreamDatabase::class.java,
                     "novastream.db"
-                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                )
+                    // Version 1: Keine Migration nötig. Bei zukünftigen Schema-Änderungen
+                    // richtige Migrationen hinzufügen statt destructive fallback!
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build().also { INSTANCE = it }
             }
     }
 }

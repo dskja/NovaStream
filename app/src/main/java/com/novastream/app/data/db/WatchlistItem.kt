@@ -2,6 +2,7 @@ package com.novastream.app.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.novastream.app.data.model.Series
 
 /**
  * Watchlist-Eintrag: eine Serie die der User schauen möchte.
@@ -13,4 +14,12 @@ data class WatchlistItem(
     val title: String,
     val coverUrl: String?,
     val addedAt: Long = System.currentTimeMillis()
-)
+) {
+    /** Konvertiert WatchlistItem zu Series für UI-Komponenten */
+    fun toSeries(): Series = Series(
+        id = slug,
+        title = title,
+        coverUrl = coverUrl,
+        detailUrl = "/serie/$slug"
+    )
+}
