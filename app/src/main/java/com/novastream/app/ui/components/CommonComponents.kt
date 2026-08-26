@@ -144,6 +144,9 @@ fun SeriesPosterCard(
                     onState = { state ->
                         isLoading = state is AsyncImagePainter.State.Loading
                         isError = state is AsyncImagePainter.State.Error
+                        if (isError && com.novastream.app.BuildConfig.DEBUG) {
+                            android.util.Log.w("SeriesPosterCard", "Image load failed: ${series.coverUrl}")
+                        }
                     }
                 )
                 // Gradient overlay am unteren Rand
