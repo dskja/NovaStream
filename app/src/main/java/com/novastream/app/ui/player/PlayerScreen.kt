@@ -46,6 +46,7 @@ import androidx.media3.ui.PlayerView
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
+import com.novastream.app.ui.tv.tvPlayerKeyHandler
 
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -192,6 +193,27 @@ fun PlayerScreen(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .tvPlayerKeyHandler(
+                onPlayPause = {
+                    val p = exoPlayer
+                    if (p != null) {
+                        if (p.isPlaying) p.pause() else p.play()
+                    }
+                },
+                onSeekForward = {
+                    val p = exoPlayer
+                    if (p != null) {
+                        p.seekTo((p.currentPosition + 10000).coerceAtMost(p.duration))
+                    }
+                },
+                onSeekBackward = {
+                    val p = exoPlayer
+                    if (p != null) {
+                        p.seekTo((p.currentPosition - 10000).coerceAtLeast(0))
+                    }
+                },
+                onBack = { onBack() }
+            )
     ) {
         // Player
         val player = exoPlayer

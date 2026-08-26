@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android TV Banner (320x180dp)
+  Wird auf dem TV Home-Screen als App-Icon angezeigt.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <!-- Hintergrund Gradient -->
+    <path
+        android:fillColor="#0D0D0F"
+        android:pathData="M0,0h320v180h-320z" />
+
+    <!-- Akzent-Linie oben -->
+    <path
+        android:fillColor="#6C5CE7"
+        android:pathData="M0,0h320v4h-320z" />
+
+    <!-- NovaStream Logo Text -->
+    <group
+        android:translateX="40"
+        android:translateY="70">
+        <!-- N Symbol -->
+        <path
+            android:fillColor="#6C5CE7"
+            android:pathData="M0,0 L0,40 L8,40 L8,12 L28,40 L36,40 L36,0 L28,0 L28,28 L8,0 Z" />
+        <!-- Stream Wellen -->
+        <path
+            android:fillColor="#A29BFE"
+            android:pathData="M48,20 Q56,10 64,20 Q72,30 80,20 Q88,10 96,20 L96,28 Q88,38 80,28 Q72,18 64,28 Q56,38 48,28 Z" />
+    </group>
+
+    <!-- "NovaStream" Text -->
+    <group
+        android:translateX="90"
+        android:translateY="78">
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.95"
+            android:pathData="M0,8 L4,8 L4,2 Q4,0 6,0 L14,0 L14,4 L8,4 L8,8 L14,8 L14,12 L8,12 L8,18 L14,18 L14,22 L6,22 Q4,22 4,20 L4,12 L0,12 Z" />
+    </group>
+
+    <!-- Untertitel -->
+    <path
+        android:fillColor="#A29BFE"
+        android:fillAlpha="0.7"
+        android:pathData="M40,130 L260,130 L260,134 L40,134 Z" />
+
+    <!-- Play Icon -->
+    <group
+        android:translateX="260"
+        android:translateY="70">
+        <path
+            android:fillColor="#6C5CE7"
+            android:pathData="M0,0 L0,40 L32,20 Z" />
+    </group>
+</vector>

@@ -3,6 +3,7 @@ package com.novastream.app.ui.detail
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
@@ -155,7 +156,8 @@ private fun DetailContent(
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(GlassMedium)
-                        .clickable(onClick = onBack),
+                        .clickable(onClick = onBack)
+                        .focusable(),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -240,7 +242,8 @@ private fun DetailContent(
                             .size(44.dp)
                             .clip(CircleShape)
                             .background(BgSurfaceElevated)
-                            .clickable(onClick = onToggleWatchlist),
+                            .clickable(onClick = onToggleWatchlist)
+                            .focusable(),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -314,6 +317,7 @@ private fun DetailContent(
                             .clip(RoundedCornerShape(20.dp))
                             .background(if (selected) PrimaryGradient else Brush.linearGradient(listOf(Color(0x22FFFFFF), Color(0x11FFFFFF))))
                             .clickable { onSelectSeason(i) }
+                            .focusable()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

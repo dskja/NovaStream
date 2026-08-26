@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,7 +57,7 @@ import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.components.ShimmerRow
 import com.novastream.app.ui.theme.*
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(
     onSeriesClick: (String) -> Unit,
@@ -100,6 +101,7 @@ fun HomeScreen(
             }
             item {
                 LazyRow(
+                    Modifier.focusRestorer(),
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -131,6 +133,7 @@ fun HomeScreen(
             }
             item {
                 LazyRow(
+                    Modifier.focusRestorer(),
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -175,6 +178,7 @@ fun HomeScreen(
             }
             item {
                 LazyRow(
+                    Modifier.focusRestorer(),
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -193,11 +197,13 @@ fun HomeScreen(
             }
             item {
                 LazyHorizontalGrid(
+                    modifier = Modifier
+                        .focusRestorer()
+                        .height(580.dp),
                     rows = GridCells.Fixed(3),
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.height(580.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(state.newest, key = { it.id }) { s ->
                         SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
