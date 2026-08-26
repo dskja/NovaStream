@@ -54,7 +54,9 @@ class HosterResolver(
             // 5. Stream-URLs extrahieren (hoster-spezifisch)
             extractStreamUrls(html, hosterName, hosterPageUrl)
         } catch (e: Exception) {
-            android.util.Log.e("HosterResolver", "resolve failed for $hosterName", e)
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.e("HosterResolver", "resolve failed for $hosterName", e)
+            }
             emptyList()
         }
     }

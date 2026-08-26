@@ -45,8 +45,8 @@ class PlayerViewModel(
 ) : AndroidViewModel(application) {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
-    private val season: Int = savedStateHandle.get<String>("season")?.toIntOrNull() ?: 1
-    private val episode: Int = savedStateHandle.get<String>("episode")?.toIntOrNull() ?: 1
+    private val season: Int = savedStateHandle.get<Int>("season") ?: 1
+    private val episode: Int = savedStateHandle.get<Int>("episode") ?: 1
     private val title: String = run {
         val raw = savedStateHandle.get<String>("title") ?: ""
         try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }

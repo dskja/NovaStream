@@ -376,7 +376,11 @@ private fun openUrl(context: android.content.Context, url: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try {
         context.startActivity(intent)
-    } catch (_: Exception) { /* No browser installed */ }
+    } catch (e: Exception) {
+        if (com.novastream.app.BuildConfig.DEBUG) {
+            android.util.Log.e("Settings", "Failed to open URL: $url", e)
+        }
+    }
 }
 
 @Composable

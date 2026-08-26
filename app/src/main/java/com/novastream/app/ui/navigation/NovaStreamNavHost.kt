@@ -119,8 +119,8 @@ fun NovaStreamNavHost() {
                 route = Routes.PLAYER,
                 arguments = listOf(
                     navArgument("slug") { type = NavType.StringType },
-                    navArgument("season") { type = NavType.StringType },
-                    navArgument("episode") { type = NavType.StringType },
+                    navArgument("season") { type = NavType.IntType },
+                    navArgument("episode") { type = NavType.IntType },
                     navArgument("title") { type = NavType.StringType; defaultValue = "" },
                     navArgument("seriesTitle") { type = NavType.StringType; defaultValue = "" },
                     navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" }

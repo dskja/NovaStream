@@ -104,7 +104,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             getApplication<Application>().dataStore.edit { prefs ->
                 val current = prefs[RECENT_SEARCHES_KEY] ?: emptySet()
-                prefs[RECENT_SEARCHES_KEY] = (current + query).toList().takeLast(10).toSet()
+                prefs[RECENT_SEARCHES_KEY] = (current + query).toList().take(10).toSet()
             }
         }
     }

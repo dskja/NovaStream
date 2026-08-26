@@ -59,22 +59,27 @@ class HomeViewModel(
     fun load() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            when (val res = repo.loadHome()) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    val series = res.data
-                    val popular = series.take(15)
-                    val newest = if (series.size > 15) series.drop(15).takeLast(20) else emptyList()
-                    _state.update {
-                        it.copy(
-                            loading = false,
-                            popular = popular,
-                            newest = newest,
-                            error = null
-                        )
+            try {
+                when (val res = repo.loadHome()) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        val series = res.data
+                        val popular = series.take(15)
+                        val newest = series.drop(15).take(20)
+                        _state.update {
+                            it.copy(
+                                loading = false,
+                                popular = popular,
+                                newest = newest,
+                                error = null
+                            )
+                        }
                     }
+                    is NovaStreamRepository.RepoResult.Error ->
+                        _state.update { it.copy(loading = false, error = res.message) }
                 }
-                is NovaStreamRepository.RepoResult.Error ->
-                    _state.update { it.copy(loading = false, error = res.message) }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "load error", e)
+                _state.update { it.copy(loading = false, error = "Fehler beim Laden") }
             }
         }
     }
