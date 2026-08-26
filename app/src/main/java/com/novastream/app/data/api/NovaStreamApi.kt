@@ -5,7 +5,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * Retrofit-Interface für SerienStream (liefert rohes HTML).
+ * Retrofit-Interface für NovaStream.to (liefert rohes HTML).
  * URL-Schema (Stand 2025/2026):
  *   Startseite:     /
  *   Suche:          /search?q=...
@@ -13,7 +13,7 @@ import retrofit2.http.Query
  *   Staffel:        /serie/{slug}/staffel-{n}
  *   Episode:        /serie/{slug}/staffel-{n}/episode-{m}
  */
-interface SerienStreamApi {
+interface NovaStreamApi {
 
     @GET("/")
     suspend fun home(): String

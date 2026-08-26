@@ -1,6 +1,6 @@
 package com.novastream.app.data.model
 
-/** Eine Serie auf SerienStream. */
+/** Eine Serie auf serienstream.to. */
 data class Series(
     val id: String,           // Slug, z.B. "breaking-bad"
     val title: String,
@@ -10,5 +10,5 @@ data class Series(
     val description: String? = null
 ) {
     val absoluteDetailUrl: String
-        get() = SerienStreamConfig.abs(detailUrl.ifBlank { "/serie/$id" })
+        get() = NovaStreamConfig.abs(detailUrl.ifBlank { "/serie/$id" })
 }

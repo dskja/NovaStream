@@ -1,7 +1,7 @@
 package com.novastream.app.data.model
 
-/** Konfiguration für SerienStream. */
-object SerienStreamConfig {
+/** Konfiguration für NovaStream. */
+object NovaStreamConfig {
     /** Basis-URL des Anbieters. */
     const val BASE_URL = "https://serienstream.to"
     const val SEARCH_PATH = "/suche"

@@ -28,7 +28,7 @@ object Routes {
 }
 
 @Composable
-fun SerienStreamNavHost() {
+fun NovaStreamNavHost() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route

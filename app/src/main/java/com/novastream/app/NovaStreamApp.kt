@@ -7,7 +7,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.novastream.app.data.api.NetworkModule
 
-class SerienStreamApp : Application(), ImageLoaderFactory {
+class NovaStreamApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .okHttpClient(NetworkModule.okHttpClient)

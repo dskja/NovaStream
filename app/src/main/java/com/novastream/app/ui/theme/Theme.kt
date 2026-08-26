@@ -85,7 +85,7 @@ private val Type = Typography(
 )
 
 @Composable
-fun SerienStreamTheme(content: @Composable () -> Unit) {
+fun NovaStreamTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = ColorScheme,
         typography = Type,

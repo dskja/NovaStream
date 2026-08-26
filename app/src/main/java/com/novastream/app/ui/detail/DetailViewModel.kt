@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
-import com.novastream.app.data.repository.SerienStreamRepository
+import com.novastream.app.data.repository.NovaStreamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +30,7 @@ class DetailViewModel(
 ) : ViewModel() {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug"))
-    private val repo = SerienStreamRepository()
+    private val repo = NovaStreamRepository()
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -40,7 +40,7 @@ class DetailViewModel(
     private fun load() {
         viewModelScope.launch {
             when (val res = repo.loadSeriesDetail(slug)) {
-                is SerienStreamRepository.RepoResult.Success -> {
+                is NovaStreamRepository.RepoResult.Success -> {
                     val (series, seasons) = res.data
                     _state.update {
                         it.copy(loading = false, series = series, seasons = seasons)
@@ -52,7 +52,7 @@ class DetailViewModel(
                         loadSeasonEpisodes(seasons.first().number)
                     }
                 }
-                is SerienStreamRepository.RepoResult.Error ->
+                is NovaStreamRepository.RepoResult.Error ->
                     _state.update { it.copy(loading = false, error = res.message) }
             }
         }
@@ -70,7 +70,7 @@ class DetailViewModel(
         _state.update { it.copy(loadingSeason = true) }
         viewModelScope.launch {
             when (val res = repo.loadSeason(slug, seasonNum)) {
-                is SerienStreamRepository.RepoResult.Success -> {
+                is NovaStreamRepository.RepoResult.Success -> {
                     _state.update { current ->
                         val updated = current.seasons.map { s ->
                             if (s.number == seasonNum) s.copy(episodes = res.data) else s
@@ -78,7 +78,7 @@ class DetailViewModel(
                         current.copy(seasons = updated, loadingSeason = false)
                     }
                 }
-                is SerienStreamRepository.RepoResult.Error ->
+                is NovaStreamRepository.RepoResult.Error ->
                     _state.update { it.copy(loadingSeason = false, error = res.message) }
             }
         }

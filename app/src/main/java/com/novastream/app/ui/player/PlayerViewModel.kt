@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.StreamSource
-import com.novastream.app.data.repository.SerienStreamRepository
+import com.novastream.app.data.repository.NovaStreamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +33,7 @@ class PlayerViewModel(
     private val episode: Int = checkNotNull(savedStateHandle.get<String>("episode")).toInt()
     private val title: String = savedStateHandle.get<String>("title") ?: "Episode $episode"
 
-    private val repo = SerienStreamRepository()
+    private val repo = NovaStreamRepository()
 
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -51,7 +51,7 @@ class PlayerViewModel(
                 episodeUrl = "/serie/$slug/staffel-$season/episode-$episode"
             )
             when (val h = repo.loadHosters(ep)) {
-                is SerienStreamRepository.RepoResult.Success -> {
+                is NovaStreamRepository.RepoResult.Success -> {
                     val hosters = h.data
                     if (hosters.isEmpty()) {
                         _state.update { it.copy(loading = false, error = "Keine Hoster gefunden") }
@@ -60,7 +60,7 @@ class PlayerViewModel(
                     _state.update { it.copy(hosters = hosters, loading = false) }
                     resolveHoster(0)
                 }
-                is SerienStreamRepository.RepoResult.Error ->
+                is NovaStreamRepository.RepoResult.Error ->
                     _state.update { it.copy(loading = false, error = h.message) }
             }
         }
@@ -80,7 +80,7 @@ class PlayerViewModel(
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
         when (val res = repo.resolveHoster(hoster)) {
-            is SerienStreamRepository.RepoResult.Success -> {
+            is NovaStreamRepository.RepoResult.Success -> {
                 if (res.data.isEmpty()) {
                     // Keine Stream-URL gefunden → nächsten Hoster versuchen
                     tryNextHoster(index)
@@ -88,7 +88,7 @@ class PlayerViewModel(
                     _state.update { it.copy(loading = false, sources = res.data, error = null) }
                 }
             }
-            is SerienStreamRepository.RepoResult.Error -> {
+            is NovaStreamRepository.RepoResult.Error -> {
                 // Fehler → nächsten Hoster versuchen
                 tryNextHoster(index)
             }
