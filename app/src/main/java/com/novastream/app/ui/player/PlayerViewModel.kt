@@ -214,7 +214,7 @@ class PlayerViewModel(
             return
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
-        val result = kotlinx.coroutines.withTimeoutOrNull(30000L) { repo.resolveHoster(hoster) }
+        val result = kotlinx.coroutines.withTimeoutOrNull(HOSTER_RESOLVE_TIMEOUT_MS) { repo.resolveHoster(hoster) }
         when (result) {
             is NovaStreamRepository.RepoResult.Success -> {
                 if (result.data.isEmpty()) {
@@ -242,5 +242,10 @@ class PlayerViewModel(
                 it.copy(loading = false, error = "Kein Hoster konnte aufgelöst werden. Versuche es später erneut oder wähle einen anderen Hoster.")
             }
         }
+    }
+
+    companion object {
+        private const val HOSTER_RESOLVE_TIMEOUT_MS = 30000L
+        private const val PROGRESS_SAVE_INTERVAL_MS = 5000L
     }
 }

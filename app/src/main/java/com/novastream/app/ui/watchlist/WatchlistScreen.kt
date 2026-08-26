@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -43,7 +44,8 @@ import kotlinx.coroutines.launch
 data class WatchlistUiState(
     val items: List<WatchlistItem> = emptyList(),
     val loading: Boolean = true,
-    val sortOption: SortOption = SortOption.ADDED_DESC
+    val sortOption: SortOption = SortOption.ADDED_DESC,
+    val watchingSlugs: Set<String> = emptySet()
 )
 
 enum class SortOption(val label: String) {
@@ -69,6 +71,17 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
                 _state.update { it.copy(loading = false) }
+            }
+        }
+        // Track which slugs have active watch progress
+        viewModelScope.launch {
+            try {
+                watchRepo.watchProgress().collect { progressList ->
+                    val slugs = progressList.filter { !it.isCompleted }.map { it.slug }.toSet()
+                    _state.update { it.copy(watchingSlugs = slugs) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "progress flow error", e)
             }
         }
     }
@@ -256,6 +269,25 @@ fun WatchlistScreen(
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
+                                }
+                                // "Watching" badge for series with active progress
+                                if (item.slug in state.watchingSlugs) {
+                                    Box(
+                                        Modifier
+                                            .align(Alignment.BottomStart)
+                                            .padding(8.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Primary)
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            "Läuft",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
