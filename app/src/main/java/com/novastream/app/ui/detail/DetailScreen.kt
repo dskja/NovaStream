@@ -12,6 +12,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -54,13 +56,14 @@ fun DetailScreen(
     Box(Modifier.fillMaxSize().background(BgPure)) {
         when {
             state.loading -> PremiumLoading(label = "Serie wird geladen…")
-            state.error != null -> PremiumError(state.error!!)
+            state.error != null -> PremiumError(state.error ?: "Unbekannter Fehler")
             series != null -> DetailContent(
                 state = state,
                 slug = series.id,
                 onBack = onBack,
                 onSelectSeason = vm::selectSeason,
-                onPlay = onPlay
+                onPlay = onPlay,
+                onToggleWatchlist = vm::toggleWatchlist
             )
         }
     }
@@ -73,7 +76,8 @@ private fun DetailContent(
     slug: String,
     onBack: () -> Unit,
     onSelectSeason: (Int) -> Unit,
-    onPlay: (String, Int, Int, String) -> Unit
+    onPlay: (String, Int, Int, String) -> Unit,
+    onToggleWatchlist: () -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -151,14 +155,37 @@ private fun DetailContent(
         item {
             var expanded by remember { mutableStateOf(false) }
             Column(Modifier.padding(20.dp)) {
-                Text(
-                    series.title,
-                    style = MaterialTheme.typography.displayMedium,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        series.title,
+                        style = MaterialTheme.typography.displayMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    // Watchlist button
+                    Box(
+                        Modifier
+                            .padding(start = 12.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(BgSurfaceElevated)
+                            .clickable(onClick = onToggleWatchlist),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (state.inWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkAdd,
+                            contentDescription = if (state.inWatchlist) "Aus Watchlist entfernen" else "Zur Watchlist hinzufügen",
+                            tint = if (state.inWatchlist) Primary else TextSecondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
                 series.description?.let { desc ->
                     Spacer(Modifier.height(16.dp))
                     Text(

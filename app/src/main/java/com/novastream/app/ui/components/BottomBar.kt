@@ -9,10 +9,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,7 +46,9 @@ fun PremiumBottomBar(
 ) {
     val items = listOf(
         NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
-        NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search")
+        NavItem("Liste", Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
+        NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search"),
+        NavItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
     )
 
     Box(
@@ -60,7 +66,7 @@ fun PremiumBottomBar(
             Modifier
                 .fillMaxSize()
                 .padding(
-                    horizontal = 24.dp,
+                    horizontal = 16.dp,
                     vertical = 8.dp
                 )
                 .padding(
@@ -88,13 +94,13 @@ fun PremiumBottomBar(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { onNavigate(item.route) }
-                        .padding(horizontal = 24.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
                         contentDescription = item.label,
                         tint = iconColor,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(

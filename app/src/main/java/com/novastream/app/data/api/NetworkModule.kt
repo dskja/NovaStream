@@ -37,22 +37,24 @@ object NetworkModule {
      * Bootstrap-IPs 1.1.1.1 / 1.0.0.1 stellen sicher, dass DoH auch ohne
      * funktionierenden System-DNS erreichbar ist.
      */
-    private val dohDns: Dns = DnsOverHttps.Builder()
-        .client(
-            OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .build()
-        )
-        .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
-        .bootstrapDnsHosts(
-            listOf(
-                java.net.InetAddress.getByName("1.1.1.1"),
-                java.net.InetAddress.getByName("1.0.0.1")
+    private val dohDns: Dns = run {
+        val bootstrap = listOf("1.1.1.1", "1.0.0.1").mapNotNull {
+            try { java.net.InetAddress.getByName(it) } catch (_: Exception) { null }
+        }
+        DnsOverHttps.Builder()
+            .client(
+                OkHttpClient.Builder()
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(10, TimeUnit.SECONDS)
+                    .build()
             )
-        )
-        .includeIPv6(true)
-        .build()
+            .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
+            .apply {
+                if (bootstrap.isNotEmpty()) bootstrapDnsHosts(bootstrap)
+            }
+            .includeIPv6(true)
+            .build()
+    }
 
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
