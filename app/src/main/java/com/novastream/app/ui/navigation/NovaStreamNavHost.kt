@@ -77,8 +77,8 @@ fun NovaStreamNavHost() {
             composable(Routes.HOME) {
                 HomeScreen(
                     onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) },
-                    onContinueWatchingClick = { slug, season, episode, title ->
-                        nav.navigate(Routes.player(slug, season, episode, title))
+                    onContinueWatchingClick = { slug, season, episode, title, seriesTitle, coverUrl ->
+                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl))
                     }
                 )
             }
