@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.novastream.app.ui.navigation.SerienStreamNavHost
-import com.novastream.app.ui.theme.SerienStreamTheme
+import com.novastream.app.ui.navigation.NovaStreamNavHost
+import com.novastream.app.ui.theme.NovaStreamTheme
 import com.novastream.app.util.VoeWebViewResolver
 
 class MainActivity : ComponentActivity() {
@@ -19,12 +19,12 @@ class MainActivity : ComponentActivity() {
         VoeWebViewResolver.setContext(this)
         enableEdgeToEdge()
         setContent {
-            SerienStreamTheme {
+            NovaStreamTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SerienStreamNavHost()
+                    NovaStreamNavHost()
                 }
             }
         }

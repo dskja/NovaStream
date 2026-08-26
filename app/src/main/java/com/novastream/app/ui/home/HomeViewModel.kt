@@ -3,7 +3,7 @@ package com.novastream.app.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Series
-import com.novastream.app.data.repository.SerienStreamRepository
+import com.novastream.app.data.repository.NovaStreamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +18,7 @@ data class HomeUiState(
 )
 
 class HomeViewModel(
-    private val repo: SerienStreamRepository = SerienStreamRepository()
+    private val repo: NovaStreamRepository = NovaStreamRepository()
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
@@ -30,7 +30,7 @@ class HomeViewModel(
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             when (val res = repo.loadHome()) {
-                is SerienStreamRepository.RepoResult.Success -> {
+                is NovaStreamRepository.RepoResult.Success -> {
                     val series = res.data
                     // Popular = erste 15 (hero + popular row)
                     // Newest = letzte 20 (neu hinzugefügt section)
@@ -44,7 +44,7 @@ class HomeViewModel(
                         )
                     }
                 }
-                is SerienStreamRepository.RepoResult.Error ->
+                is NovaStreamRepository.RepoResult.Error ->
                     _state.update { it.copy(loading = false, error = res.message) }
             }
         }

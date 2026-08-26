@@ -4,14 +4,14 @@ import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
-import com.novastream.app.data.model.SerienStreamConfig
+import com.novastream.app.data.model.NovaStreamConfig
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.regex.Pattern
 
 /**
- * Parst das HTML von SerienStream (serienstream.to) mit Jsoup.
+ * Parst das HTML von serienstream.to (serienstream.to) mit Jsoup.
  *
  * URL-Schema (Stand 2025/2026):
  *   /serie/{slug}                     – Serien-Detail (redirectet auf staffel-1)
@@ -20,7 +20,7 @@ import java.util.regex.Pattern
  *
  * Die Selektoren basieren auf dem aktuellen Bootstrap-basierten Markup.
  */
-object SerienStreamScraper {
+object NovaStreamScraper {
 
     private val SLUG_PATTERN = Pattern.compile("/serie/([\\w%.-]+?)(?:/|$)")
 
@@ -28,7 +28,7 @@ object SerienStreamScraper {
 
     /** Parst eine Liste von Serien (Startseite, Suche). */
     fun parseSeriesList(html: String): List<Series> {
-        val doc = Jsoup.parse(html, SerienStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val results = linkedMapOf<String, Series>()
 
         // WICHTIG: Jsoup select() mit Komma gibt Elemente in Dokument-Reihenfolge zurück.
@@ -122,7 +122,7 @@ object SerienStreamScraper {
 
     /** Extrahiert die erste gültige Bild-URL aus einem Element (img/source/picture). */
     private fun extractImgFromElement(elem: Element): String? {
-        // Weg 1: <img> mit data-src (Lazy Loading – SerienStream nutzt das primär)
+        // Weg 1: <img> mit data-src (Lazy Loading – serienstream.to nutzt das primär)
         val img = elem.selectFirst("img[data-src]") ?: elem.selectFirst("img[src]")
         if (img != null) {
             val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
@@ -137,7 +137,7 @@ object SerienStreamScraper {
             val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
             if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
                 return if (firstUrl.startsWith("http")) firstUrl
-                      else SerienStreamConfig.BASE_URL + firstUrl
+                      else NovaStreamConfig.BASE_URL + firstUrl
             }
         }
 
@@ -148,7 +148,7 @@ object SerienStreamScraper {
             val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
             if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
                 return if (firstUrl.startsWith("http")) firstUrl
-                      else SerienStreamConfig.BASE_URL + firstUrl
+                      else NovaStreamConfig.BASE_URL + firstUrl
             }
         }
 
@@ -174,7 +174,7 @@ object SerienStreamScraper {
             val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
             if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
                 return if (firstUrl.startsWith("http")) firstUrl
-                       else SerienStreamConfig.BASE_URL + firstUrl
+                       else NovaStreamConfig.BASE_URL + firstUrl
             }
         }
 
@@ -190,7 +190,7 @@ object SerienStreamScraper {
 
     /** Parst die Serien-Detail-/Staffel-Seite: Beschreibung, Staffeln, Episoden. */
     fun parseSeriesDetail(html: String, slug: String): Pair<Series, List<Season>> {
-        val doc = Jsoup.parse(html, SerienStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
 
         val title = doc.selectFirst("h1")?.text()?.trim() ?: slugToTitle(slug)
         val cover = extractDetailCover(doc)
@@ -322,7 +322,7 @@ object SerienStreamScraper {
 
     /** Parst nur die Episoden aus einer Staffel-Seite. */
     fun parseSeasonEpisodes(html: String, slug: String, season: Int): List<Episode> {
-        val doc = Jsoup.parse(html, SerienStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         return parseEpisodes(doc, slug)
     }
 
@@ -337,7 +337,7 @@ object SerienStreamScraper {
      *   data-link-id       = interne ID
      */
     fun parseHosters(html: String): List<HosterLink> {
-        val doc = Jsoup.parse(html, SerienStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 

@@ -1,8 +1,8 @@
 package com.novastream.app.data.repository
 
 import com.novastream.app.data.api.NetworkModule
-import com.novastream.app.data.api.SerienStreamApi
-import com.novastream.app.data.api.SerienStreamScraper
+import com.novastream.app.data.api.NovaStreamApi
+import com.novastream.app.data.api.NovaStreamScraper
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
@@ -14,8 +14,8 @@ import com.novastream.app.util.HosterResolver
  * Repository: kapselt API + Scraper + Hoster-Auflösung.
  * Fängt alle Fehler als [RepoResult] ab.
  */
-class SerienStreamRepository(
-    private val api: SerienStreamApi = NetworkModule.serienStreamApi,
+class NovaStreamRepository(
+    private val api: NovaStreamApi = NetworkModule.novaStreamApi,
     private val hosterResolver: HosterResolver = HosterResolver()
 ) {
 
@@ -25,21 +25,21 @@ class SerienStreamRepository(
     }
 
     suspend fun loadHome(): RepoResult<List<Series>> = runCatching {
-        SerienStreamScraper.parseSeriesList(api.home())
+        NovaStreamScraper.parseSeriesList(api.home())
     }.fold(
         onSuccess = { RepoResult.Success(it) },
         onFailure = { RepoResult.Error("Startseite konnte nicht geladen werden", it) }
     )
 
     suspend fun search(query: String): RepoResult<List<Series>> = runCatching {
-        SerienStreamScraper.parseSeriesList(api.search(query.trim()))
+        NovaStreamScraper.parseSeriesList(api.search(query.trim()))
     }.fold(
         onSuccess = { RepoResult.Success(it) },
         onFailure = { RepoResult.Error("Suche fehlgeschlagen", it) }
     )
 
     suspend fun loadSeriesDetail(slug: String): RepoResult<Pair<Series, List<Season>>> = runCatching {
-        SerienStreamScraper.parseSeriesDetail(api.seriesDetail(slug), slug)
+        NovaStreamScraper.parseSeriesDetail(api.seriesDetail(slug), slug)
     }.fold(
         onSuccess = { RepoResult.Success(it) },
         onFailure = { RepoResult.Error("Serien-Details konnten nicht geladen werden", it) }
@@ -48,7 +48,7 @@ class SerienStreamRepository(
     /** Lädt eine bestimmte Staffel-Seite und liefert die Episoden. */
     suspend fun loadSeason(slug: String, season: Int): RepoResult<List<Episode>> = runCatching {
         val html = api.season(slug, season)
-        SerienStreamScraper.parseSeasonEpisodes(html, slug, season)
+        NovaStreamScraper.parseSeasonEpisodes(html, slug, season)
     }.fold(
         onSuccess = { RepoResult.Success(it) },
         onFailure = { RepoResult.Error("Staffel konnte nicht geladen werden", it) }
@@ -61,7 +61,7 @@ class SerienStreamRepository(
     suspend fun loadHosters(episode: Episode): RepoResult<List<HosterLink>> {
         return runCatching {
             val html = api.episode(episode.slug, episode.season, episode.number)
-            SerienStreamScraper.parseHosters(html)
+            NovaStreamScraper.parseHosters(html)
         }.fold(
             onSuccess = { RepoResult.Success(it) },
             onFailure = { RepoResult.Error("Hoster konnten nicht geladen werden", it) }

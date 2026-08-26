@@ -2,7 +2,7 @@ package com.novastream.app.util
 
 import android.util.Base64
 import com.novastream.app.data.api.NetworkModule
-import com.novastream.app.data.model.SerienStreamConfig
+import com.novastream.app.data.model.NovaStreamConfig
 import com.novastream.app.data.model.StreamSource
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -30,7 +30,7 @@ class HosterResolver(
         return try {
             // 1. Redirect-URL absolut machen und Seite laden (auf IO-Thread!)
             // OkHttp folgt HTTP-302 Redirects automatisch (followRedirects=true)
-            val absoluteUrl = SerienStreamConfig.abs(redirectUrl)
+            val absoluteUrl = NovaStreamConfig.abs(redirectUrl)
             val redirectHtml = withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
 
             // 2. JS-Redirect-URL aus dem HTML extrahieren (falls vorhanden)
@@ -83,8 +83,8 @@ class HosterResolver(
     private suspend fun fetchHtml(url: String): String {
         val req = Request.Builder()
             .url(url)
-            .header("User-Agent", SerienStreamConfig.USER_AGENT)
-            .header("Referer", SerienStreamConfig.BASE_URL + "/")
+            .header("User-Agent", NovaStreamConfig.USER_AGENT)
+            .header("Referer", NovaStreamConfig.BASE_URL + "/")
             .header("Accept", "text/html,application/xhtml+xml,*/*")
             .build()
         return client.newCall(req).execute().use { resp ->

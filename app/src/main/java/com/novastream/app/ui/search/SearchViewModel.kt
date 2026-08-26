@@ -3,7 +3,7 @@ package com.novastream.app.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Series
-import com.novastream.app.data.repository.SerienStreamRepository
+import com.novastream.app.data.repository.NovaStreamRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +20,7 @@ data class SearchUiState(
 )
 
 class SearchViewModel(
-    private val repo: SerienStreamRepository = SerienStreamRepository()
+    private val repo: NovaStreamRepository = NovaStreamRepository()
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
@@ -38,8 +38,8 @@ class SearchViewModel(
             delay(450) // Debounce
             _state.update { it.copy(loading = true) }
             when (val res = repo.search(q)) {
-                is SerienStreamRepository.RepoResult.Success -> {
-                    // SerienStream's /search?q= gibt alle Serien zurück (kein server-side Filter)
+                is NovaStreamRepository.RepoResult.Success -> {
+                    // NovaStream /search?q= gibt alle Serien zurück (kein server-side Filter)
                     // → client-side Filterung nach Query
                     val filtered = res.data.filter { series ->
                         val title = series.title.lowercase()
@@ -49,7 +49,7 @@ class SearchViewModel(
                     }
                     _state.update { it.copy(loading = false, results = filtered) }
                 }
-                is SerienStreamRepository.RepoResult.Error ->
+                is NovaStreamRepository.RepoResult.Error ->
                     _state.update { it.copy(loading = false, error = res.message) }
             }
         }

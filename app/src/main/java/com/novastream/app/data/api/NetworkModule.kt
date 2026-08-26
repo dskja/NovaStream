@@ -1,6 +1,6 @@
 package com.novastream.app.data.api
 
-import com.novastream.app.data.model.SerienStreamConfig
+import com.novastream.app.data.model.NovaStreamConfig
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -19,10 +19,10 @@ object NetworkModule {
 
     private val userAgentInterceptor = Interceptor { chain ->
         val req = chain.request().newBuilder()
-            .header("User-Agent", SerienStreamConfig.USER_AGENT)
+            .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
-            .header("Referer", SerienStreamConfig.BASE_URL + "/")
+            .header("Referer", NovaStreamConfig.BASE_URL + "/")
             .build()
         chain.proceed(req)
     }
@@ -68,13 +68,13 @@ object NetworkModule {
 
     val retrofit: Retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl(SerienStreamConfig.BASE_URL + "/")
+            .baseUrl(NovaStreamConfig.BASE_URL + "/")
             .client(okHttpClient)
             .addConverterFactory(ScalarsConverterFactory.create())
             .build()
     }
 
-    val serienStreamApi: SerienStreamApi by lazy {
-        retrofit.create(SerienStreamApi::class.java)
+    val novaStreamApi: NovaStreamApi by lazy {
+        retrofit.create(NovaStreamApi::class.java)
     }
 }
