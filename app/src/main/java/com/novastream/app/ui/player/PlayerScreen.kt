@@ -10,6 +10,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyRow
@@ -29,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -235,8 +238,20 @@ fun PlayerScreen(
                     pv.player = player
                     pv.setPadding(0, 0, 0, navBarHeightPx)
                     if (showHosters) pv.hideController() else pv.showController()
+                    // Fire TV: PlayerView muss focusable sein für D-Pad Navigation
+                    pv.isFocusable = true
+                    pv.isFocusableInTouchMode = true
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusable()
+                    .onKeyEvent { keyEvent ->
+                        // Fire TV / Android TV: Delegiere Key Events an PlayerView
+                        // damit die Player Controls (Seekbar, Play/Pause Button) navigierbar sind
+                        val nativeKeyEvent = keyEvent.nativeKeyEvent
+                        // PlayerView.dispatchKeyEvent behandelt D-Pad Navigation intern
+                        false // Lass tvPlayerKeyHandler auf der Box die Keys behandeln
+                    }
             )
         } else if (state.loading) {
             PremiumLoading(label = "Stream wird aufgelöst…")

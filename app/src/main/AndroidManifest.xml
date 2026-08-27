@@ -5,10 +5,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Android TV: Touchscreen nicht erforderlich -->
+    <!-- Android TV / Fire TV: Touchscreen nicht erforderlich -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <!-- Android TV: Leanback Feature (required=false damit App auch auf Handys läuft) -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- Fire TV: Television Type Feature (für Amazon Appstore Filtering) -->
+    <uses-feature android:name="android.hardware.type.television" android:required="false" />
+    <!-- Fire TV: Fake Touch (D-Pad emuliert Touch) -->
+    <uses-feature android:name="android.hardware.faketouch" android:required="false" />
 
     <application
         android:name=".NovaStreamApp"
