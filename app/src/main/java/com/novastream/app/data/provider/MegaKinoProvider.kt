@@ -233,21 +233,21 @@ class MegaKinoProvider(
             seasons.add(Season(number = n, episodes = eps))
         }
 
-        if (seasons.isEmpty() && currentEpisodes.isNotEmpty()) {
-            seasons.add(Season(number = 1, episodes = currentEpisodes))
-        }
-
-        // Wenn keine Staffeln gefunden: Film (1 Episode)
+        // Wenn keine Staffeln gefunden: Film (1 Episode) oder aktuelle Episoden
         if (seasons.isEmpty()) {
-            seasons.add(Season(number = 1, episodes = listOf(
-                Episode(
-                    number = 1,
-                    title = "Film",
-                    slug = slug,
-                    season = 1,
-                    episodeUrl = "/title/$slug"
-                )
-            )))
+            if (currentEpisodes.isNotEmpty()) {
+                seasons.add(Season(number = 1, episodes = currentEpisodes))
+            } else {
+                seasons.add(Season(number = 1, episodes = listOf(
+                    Episode(
+                        number = 1,
+                        title = "Film",
+                        slug = slug,
+                        season = 1,
+                        episodeUrl = "/title/$slug"
+                    )
+                )))
+            }
         }
 
         return seasons

@@ -153,7 +153,10 @@ class KinoGerProvider(
         // Nur cachen wenn HTML nicht leer ist
         if (html.isNotBlank()) {
             synchronized(cacheLock) {
-                detailCache[slug] = html
+                // Double-check: anderer Thread könnte bereits gecacht haben
+                if (detailCache[slug] == null) {
+                    detailCache[slug] = html
+                }
             }
         }
         return html

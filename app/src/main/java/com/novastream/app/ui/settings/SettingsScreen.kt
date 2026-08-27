@@ -667,7 +667,7 @@ fun SettingsScreen() {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version 2.5 · Build 16",
+                    "Version 2.6 · Build 17",
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )

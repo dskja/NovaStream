@@ -216,8 +216,9 @@ object NovaStreamScraper {
 
         // Fallback: href-Pattern /serie/{slug}/staffel-{n}
         if (seasonNumbers.isEmpty()) {
-            for (a in doc.select("a[href~=/serie/[\\w%.-]+/staffel-\\d+]")) {
+            for (a in doc.select("a[href^=/serie/]")) {
                 val href = a.absUrl("href").ifBlank { a.attr("href") }
+                if (!href.contains("/staffel-")) continue
                 extractSeasonNumber(href)?.let { if (it > 0) seasonNumbers.add(it) }
             }
         }
@@ -294,8 +295,9 @@ object NovaStreamScraper {
         // Fallback: Links mit /staffel-{n}/episode-{m}
         if (episodes.isEmpty()) {
             val seen = mutableSetOf<String>()
-            for (a in doc.select("a[href~=/serie/[\\w%.-]+/staffel-\\d+/episode-\\d+]")) {
+            for (a in doc.select("a[href^=/serie/]")) {
                 val href = a.absUrl("href").ifBlank { a.attr("href") }
+                if (!href.contains("/staffel-") || !href.contains("/episode-")) continue
                 val m = EP_URL_PATTERN.matcher(href)
                 if (m.find()) {
                     val season = m.group(1)?.toIntOrNull() ?: 1
