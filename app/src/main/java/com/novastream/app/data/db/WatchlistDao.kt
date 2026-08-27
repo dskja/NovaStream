@@ -12,6 +12,12 @@ interface WatchlistDao {
     @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
     fun getAll(): Flow<List<WatchlistItem>>
 
+    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC LIMIT :limit")
+    fun getRecent(limit: Int): Flow<List<WatchlistItem>>
+
+    @Query("SELECT COUNT(*) FROM watchlist")
+    fun count(): Flow<Int>
+
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
     fun isInWatchlist(slug: String): Flow<Boolean>
 
@@ -21,8 +27,14 @@ interface WatchlistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(item: WatchlistItem)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun addAll(items: List<WatchlistItem>)
+
     @Query("DELETE FROM watchlist WHERE slug = :slug")
     suspend fun remove(slug: String)
+
+    @Query("DELETE FROM watchlist WHERE slug IN (:slugs)")
+    suspend fun removeAll(slugs: List<String>)
 
     @Query("DELETE FROM watchlist")
     suspend fun clear()

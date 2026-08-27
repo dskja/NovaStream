@@ -663,7 +663,13 @@ fun SettingsScreen() {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "© 2024 dskja · MIT License",
+                    "Version 1.5 · Build 6",
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "© 2024-2025 dskja · MIT License",
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )

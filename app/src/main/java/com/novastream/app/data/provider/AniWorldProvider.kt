@@ -118,7 +118,7 @@ class AniWorldProvider(
         parseSeriesListAniWorld(fetchUrl(baseUrl))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Startseite konnte nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
@@ -129,7 +129,7 @@ class AniWorldProvider(
             parseSeriesListAniWorld(html)
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Suche fehlgeschlagen", it) }
+            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
         )
     }
 
@@ -138,7 +138,7 @@ class AniWorldProvider(
         parseAniWorldDetail(html, slug)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Details konnten nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
@@ -146,7 +146,7 @@ class AniWorldProvider(
         parseAniWorldEpisodes(html, slug, season)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Staffel konnte nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
@@ -154,14 +154,14 @@ class AniWorldProvider(
         parseAniWorldHosters(html)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Hoster konnten nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("Stream-URL konnte nicht aufgelöst werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────

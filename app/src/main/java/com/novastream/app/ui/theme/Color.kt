@@ -47,3 +47,21 @@ val AccentGradient = Brush.horizontalGradient(
 )
 val ShimmerBase = Color(0xFF1A1F2B)
 val ShimmerHighlight = Color(0xFF2D3444)
+
+// ─── Status Colors ──────────────────────────────────────────────────────────
+val Success = Color(0xFF22C55E)        // Green for success states
+val SuccessDark = Color(0xFF16A34A)
+val Error = Color(0xFFEF4444)          // Red for error states
+val ErrorDark = Color(0xFFDC2626)
+val Warning = Color(0xFFF59E0B)        // Amber for warnings
+val Info = Color(0xFF3B82F6)           // Blue for info
+
+// ─── TV-Optimized Colors ────────────────────────────────────────────────────
+// Höhere Sättigung und hellerer Hintergrund für 10-foot UI Sichtbarkeit
+val TvBgPure = Color(0xFF050608)       // Dunkler für besseren Kontrast auf TV
+val TvBgSurface = Color(0xFF1A1F2B)    // Etwas heller als Phone BgSurface
+val TvPrimary = Color(0xFFFF1A2A)      // Helleres Rot für TV Sichtbarkeit
+val TvAccent = Color(0xFFFFC857)       // Helleres Gold für TV
+val TvTextPrimary = Color(0xFFFFFFFF)  // Voll weiß für max Kontrast
+val TvTextSecondary = Color(0xFFB8C0CC) // Heller als Phone TextSecondary
+val TvFocusRing = Color(0xFFFFB041)    // Goldener Focus-Ring für D-Pad Navigation
