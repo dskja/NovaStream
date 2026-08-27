@@ -156,7 +156,7 @@ fun SettingsScreen() {
             SnackbarHost(
                 snackbarHostState,
                 modifier = Modifier.padding(
-                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    bottom = 72.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 )
             )
         },

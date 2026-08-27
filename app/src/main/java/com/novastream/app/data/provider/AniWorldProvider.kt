@@ -42,22 +42,21 @@ class AniWorldProvider(
         return retrofit.create(NovaStreamApi::class.java)
     }
 
-    // AniWorld-spezifischer Scraper der die gleichen Selektoren nutzt aber /anime/stream/ Pfade
+    // AniWorld-spezifischer Scraper - parst Homepage mit Covers
     private fun parseSeriesListAniWorld(html: String): List<Series> {
         val doc = Jsoup.parse(html, baseUrl)
         val results = linkedMapOf<String, Series>()
 
-        // AniWorld nutzt ähnliche Selektoren wie SerienStream
-        // Nutze starts-with (^=) statt contains-word (~=) für href Matching
-        val anchors = doc.select("a[href^=/anime/stream/]")
-        for (a in anchors) {
+        // Phase 1: Beliebte Animes - div.seriesListContainer > div > a[href="/anime/stream/{slug}"]
+        // Diese haben Cover in img[data-src] und Titel in h3
+        val popularAnchors = doc.select("div.seriesListContainer a[href^=/anime/stream/]")
+        for (a in popularAnchors) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             val slug = extractAniWorldSlug(href) ?: continue
             if (results.containsKey(slug)) continue
 
             val title = a.selectFirst("h3")?.text()?.trim()?.ifBlank { null }
-                ?: a.selectFirst("h2")?.text()?.trim()?.ifBlank { null }
-                ?: a.attr("title").ifBlank { null }
+                ?: a.attr("title")?.substringBefore(" stream online")?.ifBlank { null }
                 ?: a.text().trim().ifBlank { null }
                 ?: slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
 
@@ -69,6 +68,31 @@ class AniWorldProvider(
                 detailUrl = "/anime/stream/$slug"
             )
         }
+
+        // Phase 2: Homepage Promotion Boxes - div.homeContentPromotionBoxPicture
+        // Diese haben Cover in img[data-src] und Titel in h3
+        val promoAnchors = doc.select("a[href^=/anime/stream/]")
+        for (a in promoAnchors) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractAniWorldSlug(href) ?: continue
+            if (results.containsKey(slug)) continue
+
+            // Title aus h3 im homeContentPromotionBoxPicture
+            val title = a.selectFirst("h3")?.text()?.trim()?.ifBlank { null }
+                ?: a.selectFirst("h2")?.text()?.trim()?.ifBlank { null }
+                ?: a.attr("title")?.substringBefore(" stream online")?.ifBlank { null }
+                ?: a.text().trim().ifBlank { null }
+                ?: slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+
+            val cover = findCoverUrl(a)
+            results[slug] = Series(
+                id = slug,
+                title = title,
+                coverUrl = cover,
+                detailUrl = "/anime/stream/$slug"
+            )
+        }
+
         return results.values.toList()
     }
 
@@ -102,8 +126,8 @@ class AniWorldProvider(
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        // AniWorld Startseite: /animes für die Anime-Liste
-        parseSeriesListAniWorld(fetchUrl("$baseUrl/animes"))
+        // AniWorld Homepage hat "Beliebt bei AniWorld" + Promotion Boxes mit Covers
+        parseSeriesListAniWorld(fetchUrl(baseUrl))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Startseite konnte nicht geladen werden", it) }
@@ -235,7 +259,7 @@ class AniWorldProvider(
             doc.select("a[href^=/anime/stream/]").forEach { a ->
                 val href = a.absUrl("href").ifBlank { a.attr("href") }
                 val m = pattern.matcher(href)
-                if (m.find()) m.group(1).toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
+                if (m.find()) m.group(1)?.toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
             }
         }
 
