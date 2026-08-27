@@ -65,7 +65,7 @@ fun HomeScreen(
     var activeProviderName by remember { mutableStateOf(com.novastream.app.data.provider.ActiveProvider.displayName) }
 
     // Provider-Name reaktiv aktualisieren bei Provider-Wechsel
-    LaunchedEffect(Unit) {
+    LaunchedEffect(com.novastream.app.data.provider.ActiveProvider.id) {
         com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(context).collect {
             activeProviderName = com.novastream.app.data.provider.ActiveProvider.displayName
         }

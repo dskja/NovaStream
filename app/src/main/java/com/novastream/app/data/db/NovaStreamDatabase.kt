@@ -57,8 +57,12 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     "novastream.db"
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                    // Fallback: Wenn eine Migration fehlt, DB neu erstellen
-                    .fallbackToDestructiveMigration()
+                    // Fallback nur in Debug: Wenn eine Migration fehlt, DB neu erstellen
+                    .apply {
+                        if (com.novastream.app.BuildConfig.DEBUG) {
+                            fallbackToDestructiveMigration()
+                        }
+                    }
                     // WAL Mode für bessere concurrent read/write Performance
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .build().also { INSTANCE = it }

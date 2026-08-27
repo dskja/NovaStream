@@ -80,6 +80,14 @@ object NetworkModule {
         }
     }
 
+    /** Shared DoH HttpClient - verhindert mehrfache Thread-Pool-Erstellung. */
+    private val dohClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+    }
+
     private fun resolveDohDns(): Dns {
         // Bootstrap IPs für Cloudflare + Google
         val bootstrap = listOf("1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4").mapNotNull {
@@ -95,12 +103,7 @@ object NetworkModule {
         if (cloudflareBootstrap.isNotEmpty()) {
             try {
                 return DnsOverHttps.Builder()
-                    .client(
-                        OkHttpClient.Builder()
-                            .connectTimeout(10, TimeUnit.SECONDS)
-                            .readTimeout(10, TimeUnit.SECONDS)
-                            .build()
-                    )
+                    .client(dohClient)
                     .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
                     .bootstrapDnsHosts(cloudflareBootstrap)
                     .includeIPv6(true)
@@ -115,12 +118,7 @@ object NetworkModule {
         if (googleBootstrap.isNotEmpty()) {
             try {
                 return DnsOverHttps.Builder()
-                    .client(
-                        OkHttpClient.Builder()
-                            .connectTimeout(10, TimeUnit.SECONDS)
-                            .readTimeout(10, TimeUnit.SECONDS)
-                            .build()
-                    )
+                    .client(dohClient)
                     .url("https://dns.google/dns-query".toHttpUrl())
                     .bootstrapDnsHosts(googleBootstrap)
                     .includeIPv6(true)

@@ -19,7 +19,7 @@ data class Episode(
 
     /** Sortierschlüssel für korrekte Reihenfolge. */
     val sortKey: Long
-        get() = season.toLong() * 1000L + number.toLong()
+        get() = season.toLong() * 10000L + number.toLong()
 
     /** Kurzes Display-Format: "S1 E2" */
     val shortDisplay: String get() = "S$season E$number"
