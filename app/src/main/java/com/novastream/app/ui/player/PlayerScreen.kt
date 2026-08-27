@@ -60,12 +60,11 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    // Lock to landscape orientation while in player + immersive fullscreen mode
+    // Lock to landscape orientation + immersive fullscreen
     DisposableEffect(Unit) {
         val originalOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
-        // Immersive fullscreen - hide status bar + nav bar
         val window = activity?.window
         val originalSystemUiVisibility = window?.decorView?.systemUiVisibility
         window?.decorView?.systemUiVisibility = (
@@ -78,9 +77,7 @@ fun PlayerScreen(
         )
 
         onDispose {
-            // Restore orientation - use UNSPECIFIED so system handles it properly
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            // Restore system UI
             window?.decorView?.systemUiVisibility = originalSystemUiVisibility ?: 0
         }
     }
@@ -90,8 +87,9 @@ fun PlayerScreen(
     var showHosters by remember { mutableStateOf(true) }
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
+    var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
 
-    // Back handler: close hoster panel or next-episode overlay first, then exit
+    // Back handler
     androidx.activity.compose.BackHandler {
         when {
             showNextEpisodeOverlay -> showNextEpisodeOverlay = false
@@ -100,7 +98,7 @@ fun PlayerScreen(
         }
     }
 
-    // Track listener to avoid adding duplicates on player reuse
+    // Track listener for episode end
     val episodeEndListener = remember {
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -112,13 +110,19 @@ fun PlayerScreen(
         }
     }
 
-    // Create player when source changes - ALWAYS release old player and create new one
-    // Reusing ExoPlayer with setMediaItem causes black screen + audio only on hoster switch
+    // Create/recreate player when source URL changes
+    // KEY FIX: Only release+recreate when we have a NEW valid source URL
+    // This prevents black screen during hoster switching when sources is empty
     LaunchedEffect(currentSource?.url) {
         showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
+        val url = src.url
+        if (url.isBlank()) return@LaunchedEffect
 
-        // Release old player first (fixes black screen on hoster switch)
+        // Skip if we already loaded this exact URL
+        if (url == lastLoadedUrl && exoPlayer != null) return@LaunchedEffect
+
+        // Release old player
         exoPlayer?.let { old ->
             try {
                 old.removeListener(episodeEndListener)
@@ -127,29 +131,30 @@ fun PlayerScreen(
         }
         exoPlayer = null
 
-        // Create new player for the new source
+        // Create new player
         val player = ExoPlayer.Builder(context)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
                     .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
                     .build(),
-                true  // handleAudioFocus = true
+                true
             )
             .build().apply {
-            val mediaItem = MediaItem.Builder()
-                .setUri(src.url)
-                .setMimeType(src.mimeType)
-                .build()
-            setMediaItem(mediaItem)
-            prepare()
-            playWhenReady = true
-            if (state.resumePositionMs > 0) {
-                seekTo(state.resumePositionMs)
+                val mediaItem = MediaItem.Builder()
+                    .setUri(url)
+                    .setMimeType(src.mimeType)
+                    .build()
+                setMediaItem(mediaItem)
+                prepare()
+                playWhenReady = true
+                if (state.resumePositionMs > 0) {
+                    seekTo(state.resumePositionMs)
+                }
             }
-        }
         player.addListener(episodeEndListener)
         exoPlayer = player
+        lastLoadedUrl = url
         playerVisible = true
         showHosters = false
     }
@@ -167,9 +172,7 @@ fun PlayerScreen(
                     vm.saveProgress(pos, dur)
                 }
             }
-        } catch (_: kotlinx.coroutines.CancellationException) {
-            // Expected when leaving screen
-        }
+        } catch (_: kotlinx.coroutines.CancellationException) {}
     }
 
     // Save progress on dispose and release player
@@ -183,15 +186,14 @@ fun PlayerScreen(
                     if (dur > 0 && pos > 0) {
                         vm.saveProgress(pos, dur)
                     }
-                } catch (e: Exception) {
-                    // Ignore save errors - must release player
-                }
-                player.removeListener(episodeEndListener)
-                player.release()
+                } catch (_: Exception) {}
+                try { player.removeListener(episodeEndListener) } catch (_: Exception) {}
+                try { player.release() } catch (_: Exception) {}
             }
             exoPlayer = null
-            playerVisible = false  // Reset visibility to prevent ghost
+            playerVisible = false
             showHosters = false
+            lastLoadedUrl = null
         }
     }
 
@@ -227,7 +229,7 @@ fun PlayerScreen(
                 onBack = { onBack() }
             )
     ) {
-        // Player
+        // Player - nur anzeigen wenn wir einen validen Source haben
         val player = exoPlayer
         if (player != null && currentSource != null) {
             AndroidView(
@@ -247,7 +249,6 @@ fun PlayerScreen(
                     pv.player = player
                     pv.setPadding(0, 0, 0, navBarHeightPx)
                     if (showHosters) pv.hideController() else pv.showController()
-                    // Fire TV: PlayerView muss focusable sein für D-Pad Navigation
                     pv.isFocusable = true
                     pv.isFocusableInTouchMode = true
                 },
@@ -257,12 +258,12 @@ fun PlayerScreen(
             )
         } else if (state.loading) {
             PremiumLoading(label = "Stream wird aufgelöst…")
-        } else if (state.error != null && state.hosters.isEmpty()) {
+        } else if (state.error != null) {
             PremiumError(state.error ?: "Unbekannter Fehler")
         }
 
-        // Loading overlay when switching hosters (player visible but loading new source)
-        if (playerVisible && state.loading && exoPlayer != null) {
+        // Loading overlay when switching hosters (player still visible with old content)
+        if (playerVisible && state.loading && exoPlayer != null && state.hosterSwitching) {
             Box(
                 Modifier
                     .align(Alignment.Center)
@@ -353,7 +354,7 @@ fun PlayerScreen(
             }
         }
 
-        // Bottom overlay: Hoster pills (collapsible)
+        // Bottom overlay: Hoster pills
         AnimatedVisibility(
             visible = showHosters && state.hosters.isNotEmpty(),
             enter = slideInVertically { it } + fadeIn(),
@@ -439,7 +440,7 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay (shown when episode ends) - with cover image + auto-play countdown
+        // Next Episode overlay
         AnimatedVisibility(
             visible = showNextEpisodeOverlay && state.nextEpisode != null,
             enter = fadeIn(),
@@ -448,7 +449,6 @@ fun PlayerScreen(
         ) {
             val next = state.nextEpisode
             if (next != null) {
-                // Auto-play countdown (5 seconds) - cancels if overlay dismissed
                 var countdown by remember { mutableStateOf(5) }
                 LaunchedEffect(showNextEpisodeOverlay, next) {
                     if (showNextEpisodeOverlay) {
@@ -484,7 +484,6 @@ fun PlayerScreen(
                         )
                         Spacer(Modifier.height(16.dp))
 
-                        // Cover thumbnail (16:9)
                         Box(
                             Modifier
                                 .size(280.dp, 158.dp)
@@ -503,7 +502,6 @@ fun PlayerScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
-                            // Dark gradient overlay
                             Box(
                                 Modifier.fillMaxSize().background(
                                     Brush.verticalGradient(
@@ -512,7 +510,6 @@ fun PlayerScreen(
                                     )
                                 )
                             )
-                            // Episode info on thumbnail
                             Column(
                                 Modifier.align(Alignment.BottomStart).padding(16.dp)
                             ) {

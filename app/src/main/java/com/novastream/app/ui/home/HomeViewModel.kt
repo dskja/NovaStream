@@ -17,8 +17,14 @@ import kotlinx.coroutines.launch
 data class HomeUiState(
     val loading: Boolean = false,
     val isRefreshing: Boolean = false,
+    val hero: List<Series> = emptyList(),
     val popular: List<Series> = emptyList(),
     val newest: List<Series> = emptyList(),
+    val trending: List<Series> = emptyList(),
+    val action: List<Series> = emptyList(),
+    val comedy: List<Series> = emptyList(),
+    val drama: List<Series> = emptyList(),
+    val scifi: List<Series> = emptyList(),
     val continueWatching: List<WatchProgress> = emptyList(),
     val watchlist: List<WatchlistItem> = emptyList(),
     val error: String? = null
@@ -35,7 +41,7 @@ class HomeViewModel(
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
     init {
-        // Collect continue watching + watchlist reactively
+        // Continue watching reactive
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progress ->
@@ -45,6 +51,7 @@ class HomeViewModel(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchProgress flow error", e)
             }
         }
+        // Watchlist reactive
         viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { list ->
@@ -54,11 +61,10 @@ class HomeViewModel(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchlist flow error", e)
             }
         }
-        // Watch provider changes - reload home when provider changes
+        // Provider changes - reload home
         viewModelScope.launch {
             try {
                 com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
-                    // Reload home data when provider changes (skip initial load - handled by load() below)
                     if (_state.value.popular.isNotEmpty() || _state.value.error != null) {
                         load()
                     }
@@ -77,14 +83,28 @@ class HomeViewModel(
                 when (val res = repo.loadHome()) {
                     is NovaStreamRepository.RepoResult.Success -> {
                         val series = res.data
+                        // Verteile Serien auf mehrere Sektionen für eine längere Homepage
+                        val hero = series.take(8)
                         val popular = series.take(20)
-                        val newest = series.drop(20).take(40)
+                        val newest = series.drop(20).take(20)
+                        val trending = series.drop(40).take(20)
+                        val action = series.filter { it.title.contains("Action", ignoreCase = true) }.take(15)
+                        val comedy = series.filter { it.title.contains("Comedy", ignoreCase = true) }.take(15)
+                        val drama = series.filter { it.title.contains("Drama", ignoreCase = true) }.take(15)
+                        val scifi = series.filter { it.title.contains("Sci", ignoreCase = true) || it.title.contains("Star", ignoreCase = true) }.take(15)
+
                         _state.update {
                             it.copy(
                                 loading = false,
                                 isRefreshing = false,
+                                hero = hero,
                                 popular = popular,
                                 newest = newest,
+                                trending = trending,
+                                action = action,
+                                comedy = comedy,
+                                drama = drama,
+                                scifi = scifi,
                                 error = null
                             )
                         }
@@ -94,12 +114,11 @@ class HomeViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "load error", e)
-                _state.update { it.copy(loading = false, isRefreshing = false, error = "Fehler beim Laden") }
+                _state.update { it.copy(loading = false, isRefreshing = false, error = "Fehler beim Laden: ${e.message}") }
             }
         }
     }
 
-    /** Pull-to-refresh: lädt Daten neu ohne loading state (zeigt nur refresh indicator) */
     fun refresh() {
         _state.update { it.copy(isRefreshing = true, error = null) }
         load()

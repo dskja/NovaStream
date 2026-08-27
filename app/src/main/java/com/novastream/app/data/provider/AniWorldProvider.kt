@@ -9,16 +9,20 @@ import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.HosterResolver
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 /**
  * Provider für AniWorld.to.
- * AniWorld nutzt das gleiche HTML-Markup wie SerienStream, aber:
- *   - Base-URL: https://aniworld.to
- *   - Content-Pfad: /anime/stream/{slug} statt /serie/{slug}
- *   - URL-Schema: /anime/stream/{slug}/staffel-{n}/episode-{m}
+ * AniWorld nutzt ein komplett anderes HTML-Markup als SerienStream:
  *
- * Der Scraper (NovaStreamScraper) funktioniert mit kleinen Anpassungen,
- * da die CSS-Selektoren identisch sind.
+ * Homepage:  div.seriesListContainer a[href^=/anime/stream/] (Beliebt)
+ *            div.homeContentPromotionBoxPicture (Promotion Boxes)
+ * Detail:    div.seriesCoverBox img[data-src] (Cover)
+ *            div.series-title h1 (Titel)
+ *            p.seri_des (Beschreibung)
+ *            a[href^=/anime/stream/{slug}/staffel-] (Staffeln)
+ * Episoden:  Staffel-Links und Episoden-Links unter /anime/stream/ Pfad
+ * Hoster:    li[data-link-target] mit i.icon Klassen fuer Hoster-Namen
  */
 class AniWorldProvider(
     override val id: String = "aniworld",
@@ -29,8 +33,6 @@ class AniWorldProvider(
 
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
 
-    // AniWorld nutzt /anime/stream/{slug} statt /serie/{slug}
-    // Wir bauen ein angepasstes Retrofit-Interface
     private val api: NovaStreamApi = createApi(baseUrl)
 
     private fun createApi(base: String): NovaStreamApi {
@@ -42,55 +44,41 @@ class AniWorldProvider(
         return retrofit.create(NovaStreamApi::class.java)
     }
 
-    // AniWorld-spezifischer Scraper - parst Homepage mit Covers
+    // ─── Homepage Parsing ───────────────────────────────────────────────────
+
     private fun parseSeriesListAniWorld(html: String): List<Series> {
         val doc = Jsoup.parse(html, baseUrl)
         val results = linkedMapOf<String, Series>()
 
-        // Phase 1: Beliebte Animes - div.seriesListContainer > div > a[href="/anime/stream/{slug}"]
-        // Diese haben Cover in img[data-src] und Titel in h3
-        val popularAnchors = doc.select("div.seriesListContainer a[href^=/anime/stream/]")
-        for (a in popularAnchors) {
+        // Phase 1: seriesListContainer (Beliebt bei AniWorld) - hat Cover + h3 Titel
+        for (a in doc.select("div.seriesListContainer a[href^=/anime/stream/]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             val slug = extractAniWorldSlug(href) ?: continue
             if (results.containsKey(slug)) continue
 
             val title = a.selectFirst("h3")?.text()?.trim()?.ifBlank { null }
                 ?: a.attr("title")?.substringBefore(" stream online")?.ifBlank { null }
-                ?: a.text().trim().ifBlank { null }
-                ?: slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+                ?: slugToTitle(slug)
 
-            val cover = findCoverUrl(a)
-            results[slug] = Series(
-                id = slug,
-                title = title,
-                coverUrl = cover,
-                detailUrl = "/anime/stream/$slug"
-            )
+            val cover = findAniWorldCover(a)
+            results[slug] = Series(id = slug, title = title, coverUrl = cover, detailUrl = "/anime/stream/$slug")
         }
 
-        // Phase 2: Homepage Promotion Boxes - div.homeContentPromotionBoxPicture
-        // Diese haben Cover in img[data-src] und Titel in h3
-        val promoAnchors = doc.select("a[href^=/anime/stream/]")
-        for (a in promoAnchors) {
+        // Phase 2: homeContentPromotionBoxPicture (Promo Boxes auf Homepage)
+        for (a in doc.select("a[href^=/anime/stream/]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             val slug = extractAniWorldSlug(href) ?: continue
             if (results.containsKey(slug)) continue
+            // Skip season/episode links
+            if (href.contains("/staffel-")) continue
 
-            // Title aus h3 im homeContentPromotionBoxPicture
             val title = a.selectFirst("h3")?.text()?.trim()?.ifBlank { null }
                 ?: a.selectFirst("h2")?.text()?.trim()?.ifBlank { null }
                 ?: a.attr("title")?.substringBefore(" stream online")?.ifBlank { null }
-                ?: a.text().trim().ifBlank { null }
-                ?: slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
 
-            val cover = findCoverUrl(a)
-            results[slug] = Series(
-                id = slug,
-                title = title,
-                coverUrl = cover,
-                detailUrl = "/anime/stream/$slug"
-            )
+            val cover = findAniWorldCover(a)
+            results[slug] = Series(id = slug, title = title, coverUrl = cover, detailUrl = "/anime/stream/$slug")
         }
 
         return results.values.toList()
@@ -104,29 +92,29 @@ class AniWorldProvider(
         return try { java.net.URLDecoder.decode(slug, "UTF-8") } catch (_: Exception) { slug }
     }
 
-    private fun findCoverUrl(anchor: org.jsoup.nodes.Element): String? {
-        val img = anchor.selectFirst("img[data-src]") ?: anchor.selectFirst("img[src]")
+    private fun findAniWorldCover(anchor: Element): String? {
+        // img[data-src] (AniWorld nutzt Lazy Loading)
+        val img = anchor.selectFirst("img[data-src]")
         if (img != null) {
             val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
-                .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
                 return if (src.startsWith("http")) src else baseUrl + src
             }
         }
-        // source[srcset]
-        val source = anchor.selectFirst("source[srcset]")
-        if (source != null) {
-            val srcset = source.attr("srcset")
-            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            if (!firstUrl.isNullOrBlank()) {
-                return if (firstUrl.startsWith("http")) firstUrl else baseUrl + firstUrl
+        // img[src]
+        val imgSrc = anchor.selectFirst("img[src]")
+        if (imgSrc != null) {
+            val src = imgSrc.absUrl("src").ifBlank { imgSrc.attr("src") }
+            if (src.isNotBlank() && !src.contains("data:image")) {
+                return if (src.startsWith("http")) src else baseUrl + src
             }
         }
         return null
     }
 
+    // ─── Provider Interface ─────────────────────────────────────────────────
+
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        // AniWorld Homepage hat "Beliebt bei AniWorld" + Promotion Boxes mit Covers
         parseSeriesListAniWorld(fetchUrl(baseUrl))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -136,8 +124,6 @@ class AniWorldProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
-            // AniWorld nutzt /search?term=... (nicht /suche wie SerienStream)
-            // Direkter OkHttp Call da Retrofit @GET("{path}") mit Query-String problematisch sein kann
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
             val html = fetchUrl("$baseUrl/search?term=$encoded")
             parseSeriesListAniWorld(html)
@@ -157,7 +143,7 @@ class AniWorldProvider(
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
         val html = fetchUrl("$baseUrl/anime/stream/$slug/staffel-$season")
-        NovaStreamScraper.parseSeasonEpisodes(html, slug, season)
+        parseAniWorldEpisodes(html, slug, season)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Staffel konnte nicht geladen werden", it) }
@@ -165,7 +151,7 @@ class AniWorldProvider(
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
         val html = fetchUrl("$baseUrl/anime/stream/${episode.slug}/staffel-${episode.season}/episode-${episode.number}")
-        NovaStreamScraper.parseHosters(html)
+        parseAniWorldHosters(html)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Hoster konnten nicht geladen werden", it) }
@@ -178,13 +164,9 @@ class AniWorldProvider(
         onFailure = { StreamingProvider.ProviderResult.Error("Stream-URL konnte nicht aufgelöst werden", it) }
     )
 
-    /** Lädt eine beliebige relative URL via Retrofit raw endpoint. */
-    private suspend fun fetchCustomPath(path: String): String {
-        // Nutze NovaStreamApi.raw mit angepasstem Pfad
-        return api.raw(path.removePrefix("/"))
-    }
+    // ─── HTML Parsing ───────────────────────────────────────────────────────
 
-    /** Lädt eine absolute URL via OkHttp (für Query-String URLs). */
+    /** Lädt eine absolute URL via OkHttp. */
     private suspend fun fetchUrl(url: String): String {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val req = okhttp3.Request.Builder()
@@ -200,37 +182,32 @@ class AniWorldProvider(
         }
     }
 
-    /** Parst AniWorld Detail-Seite (angepasst für /anime/stream/ Pfade). */
+    /** Parst AniWorld Detail-Seite. */
     private fun parseAniWorldDetail(html: String, slug: String): Pair<Series, List<Season>> {
         val doc = Jsoup.parse(html, baseUrl)
 
-        val title = doc.selectFirst("h1")?.text()?.trim()
-            ?: slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
+        // Titel: div.series-title h1
+        val title = doc.selectFirst("div.series-title h1")?.text()?.trim()
+            ?: doc.selectFirst("h1")?.text()?.trim()
+            ?: slugToTitle(slug)
 
-        // Cover
+        // Cover: div.seriesCoverBox img[data-src]
         var cover: String? = null
-        val img = doc.selectFirst("img[data-src]") ?: doc.selectFirst("img[src]")
-        if (img != null) {
-            val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
-                .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
+        val coverImg = doc.selectFirst("div.seriesCoverBox img[data-src]")
+            ?: doc.selectFirst("div.seriesCoverBox img[src]")
+            ?: doc.selectFirst("img[data-src]")
+        if (coverImg != null) {
+            val src = coverImg.absUrl("data-src").ifBlank { coverImg.attr("data-src") }
+                .ifBlank { coverImg.absUrl("src") }.ifBlank { coverImg.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
                 cover = if (src.startsWith("http")) src else baseUrl + src
             }
         }
-        if (cover == null) {
-            val source = doc.selectFirst("source[srcset]")
-            if (source != null) {
-                val srcset = source.attr("srcset")
-                val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-                if (!firstUrl.isNullOrBlank()) {
-                    cover = if (firstUrl.startsWith("http")) firstUrl else baseUrl + firstUrl
-                }
-            }
-        }
 
-        val description = doc.selectFirst(".description-text")?.text()?.trim()
-            ?: doc.selectFirst(".series-description")?.text()?.trim()
+        // Beschreibung: p.seri_des
+        val description = doc.selectFirst("p.seri_des")?.attr("data-full-description")?.ifBlank { null }
             ?: doc.selectFirst("p.seri_des")?.text()?.trim()
+            ?: doc.selectFirst(".description-text")?.text()?.trim()
 
         val series = Series(
             id = slug,
@@ -240,35 +217,28 @@ class AniWorldProvider(
             description = description
         )
 
-        // Staffeln parsen - AniWorld nutzt data-season-pill wie SerienStream
         val seasons = parseAniWorldSeasons(doc, slug)
         return series to seasons
     }
 
+    /** Parst Staffeln aus der AniWorld Detail-Seite. */
     private fun parseAniWorldSeasons(doc: org.jsoup.nodes.Document, slug: String): List<Season> {
         val seasonNumbers = mutableSetOf<Int>()
 
-        // data-season-pill
-        doc.select("a[data-season-pill]").forEach { a ->
-            a.attr("data-season-pill").toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
-        }
-
-        // Fallback: href pattern /anime/stream/{slug}/staffel-{n}
-        if (seasonNumbers.isEmpty()) {
-            val pattern = java.util.regex.Pattern.compile("/anime/stream/[\\w%.-]+/staffel-(\\d+)")
-            doc.select("a[href^=/anime/stream/]").forEach { a ->
-                val href = a.absUrl("href").ifBlank { a.attr("href") }
-                val m = pattern.matcher(href)
-                if (m.find()) m.group(1)?.toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
+        // Staffel-Links: a[href*=/staffel-] im Staffel-Navigationsbereich
+        val pattern = java.util.regex.Pattern.compile("/anime/stream/[\\w%.-]+/staffel-(\\d+)")
+        for (a in doc.select("a[href^=/anime/stream/]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val m = pattern.matcher(href)
+            if (m.find()) {
+                m.group(1)?.toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
             }
         }
 
         if (seasonNumbers.isEmpty()) seasonNumbers.add(1)
 
-        // Aktuelle Episoden parsen (gleiche Selektoren wie SerienStream)
-        val currentEpisodes = NovaStreamScraper.parseSeasonEpisodes(
-            doc.toString(), slug, seasonNumbers.minOrNull() ?: 1
-        )
+        // Episoden der ersten Staffel parsen (die auf der Detail-Seite angezeigt wird)
+        val currentEpisodes = parseAniWorldEpisodes(doc.toString(), slug, seasonNumbers.minOrNull() ?: 1)
 
         val seasons = mutableListOf<Season>()
         for (n in seasonNumbers.sorted()) {
@@ -286,4 +256,99 @@ class AniWorldProvider(
 
         return seasons
     }
+
+    /** Parst Episoden aus einer AniWorld Staffel-Seite. */
+    private fun parseAniWorldEpisodes(html: String, slug: String, season: Int): List<Episode> {
+        val doc = Jsoup.parse(html, baseUrl)
+        val episodes = mutableListOf<Episode>()
+        val seen = mutableSetOf<Int>()
+
+        // Episoden-Links: a[href~=/anime/stream/.*/staffel-{n}/episode-{m}]
+        val epPattern = java.util.regex.Pattern.compile("/anime/stream/[\\w%.-]+/staffel-(\\d+)/episode-(\\d+)")
+        for (a in doc.select("a[href^=/anime/stream/]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val m = epPattern.matcher(href)
+            if (m.find()) {
+                val s = m.group(1)?.toIntOrNull() ?: continue
+                val ep = m.group(2)?.toIntOrNull() ?: continue
+                if (s != season) continue
+                if (seen.add(ep)) {
+                    val title = a.text()?.trim()?.ifBlank { null }
+                        ?: a.attr("title")?.ifBlank { null }
+                        ?: "Folge $ep"
+                    episodes.add(Episode(
+                        number = ep,
+                        title = title,
+                        slug = slug,
+                        season = s,
+                        episodeUrl = m.group(0)
+                    ))
+                }
+            }
+        }
+
+        return episodes.sortedBy { it.number }
+    }
+
+    /**
+     * Parst Hoster aus einer AniWorld Episoden-Seite.
+     * AniWorld nutzt li[data-link-target="/redirect/{id}"] mit i.icon.{HosterName}
+     */
+    private fun parseAniWorldHosters(html: String): List<HosterLink> {
+        val doc = Jsoup.parse(html, baseUrl)
+        val hosters = mutableListOf<HosterLink>()
+        val seen = mutableSetOf<String>()
+
+        // Hoster-Links: li[data-link-target]
+        for (li in doc.select("li[data-link-target]")) {
+            val redirectUrl = li.attr("data-link-target")
+            if (redirectUrl.isBlank()) continue
+
+            // Hoster-Name aus i.icon.{Name}
+            val icon = li.selectFirst("i.icon")
+            val name = icon?.attr("title")?.replace("Hoster ", "")?.ifBlank { null }
+                ?: icon?.className()?.substringAfter("icon ")?.ifBlank { null }
+                ?: li.selectFirst("a")?.text()?.trim()
+                ?: "Unknown"
+
+            val langKey = li.attr("data-lang-key")
+            val language = when (langKey) {
+                "1" -> "Deutsch"
+                "2" -> "Ger-Sub"
+                "3" -> "Eng-Sub"
+                else -> ""
+            }
+
+            val key = "$name-$redirectUrl"
+            if (seen.add(key)) {
+                hosters.add(HosterLink(
+                    name = name,
+                    redirectUrl = redirectUrl,
+                    language = language,
+                    linkId = li.attr("data-link-id"),
+                    index = hosters.size
+                ))
+            }
+        }
+
+        // Fallback: a.watchEpisode mit i.icon
+        if (hosters.isEmpty()) {
+            for (a in doc.select("a.watchEpisode")) {
+                val href = a.absUrl("href").ifBlank { a.attr("href") }
+                if (href.isBlank()) continue
+                val icon = a.selectFirst("i.icon")
+                val name = icon?.attr("title")?.replace("Hoster ", "")?.ifBlank { null }
+                    ?: icon?.className()?.substringAfter("icon ")?.ifBlank { null }
+                    ?: "Unknown"
+                if (seen.add("$name-$href")) {
+                    hosters.add(HosterLink(name = name, redirectUrl = href, index = hosters.size))
+                }
+            }
+        }
+
+        return hosters
+    }
+
+    private fun slugToTitle(slug: String): String =
+        slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
 }

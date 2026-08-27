@@ -27,7 +27,8 @@ data class PlayerUiState(
     val resumePositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val isFinished: Boolean = false,
-    val nextEpisode: NextEpisodeInfo? = null
+    val nextEpisode: NextEpisodeInfo? = null,
+    val hosterSwitching: Boolean = false
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(0)
@@ -73,6 +74,7 @@ class PlayerViewModel(
     init { load() }
 
     private fun load() {
+        _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             // Restore saved position
             val saved = watchRepo.getProgress(slug, season, episode)
@@ -80,12 +82,19 @@ class PlayerViewModel(
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
             }
 
+            // Build episode URL based on active provider
+            val activeProvider = com.novastream.app.data.provider.ActiveProvider.get()
+            val epUrl = when (activeProvider.id) {
+                "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
+                "kinoger" -> "/stream/$slug.html"
+                else -> "/serie/$slug/staffel-$season/episode-$episode"
+            }
             val ep = Episode(
                 number = episode,
                 title = title,
                 slug = slug,
                 season = season,
-                episodeUrl = "/serie/$slug/staffel-$season/episode-$episode"
+                episodeUrl = epUrl
             )
             when (val h = repo.loadHosters(ep)) {
                 is NovaStreamRepository.RepoResult.Success -> {
@@ -94,7 +103,7 @@ class PlayerViewModel(
                         _state.update { it.copy(loading = false, error = "Keine Hoster gefunden") }
                         return@launch
                     }
-                    // Deutsche Hoster priorisieren: sortiere so dass "Deutsch" zuerst kommt
+                    // Deutsche Hoster priorisieren
                     val sorted = hosters.sortedWith(
                         compareByDescending { it.language.contains("Deutsch", ignoreCase = true) }
                     )
@@ -108,17 +117,22 @@ class PlayerViewModel(
     }
 
     fun selectHoster(index: Int) {
-        _state.update { it.copy(selectedHosterIndex = index, sources = emptyList(), loading = true, error = null) }
+        // Mark as switching - keeps old player alive until new source is ready
+        _state.update {
+            it.copy(
+                selectedHosterIndex = index,
+                sources = emptyList(),
+                loading = true,
+                error = null,
+                hosterSwitching = true
+            )
+        }
         viewModelScope.launch { resolveHoster(index) }
     }
 
-    /**
-     * Speichert den Wiedergabefortschritt.
-     * Wird periodisch vom Player aufgerufen.
-     */
+    /** Speichert den Wiedergabefortschritt. */
     fun saveProgress(positionMs: Long, durationMs: Long) {
         if (durationMs <= 0) return
-        // Validate position is within valid range
         val safePosition = positionMs.coerceIn(0L, durationMs)
         viewModelScope.launch {
             watchRepo.saveProgress(
@@ -139,17 +153,19 @@ class PlayerViewModel(
     fun onEpisodeFinished() {
         _state.update { it.copy(isFinished = true) }
         viewModelScope.launch {
-            // Remove progress for this episode (it's completed)
             watchRepo.removeProgress("$slug-$season-$episode")
-            // Load next episode info
             loadNextEpisode()
         }
     }
 
     private suspend fun loadNextEpisode() {
-        // Try to find next episode in the same season
+        val activeProvider = com.novastream.app.data.provider.ActiveProvider.get()
         val nextEp = episode + 1
-        val nextEpUrl = "/serie/$slug/staffel-$season/episode-$nextEp"
+        val nextEpUrl = when (activeProvider.id) {
+            "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$nextEp"
+            "kinoger" -> "/stream/$slug.html"
+            else -> "/serie/$slug/staffel-$season/episode-$nextEp"
+        }
         val ep = Episode(
             number = nextEp,
             title = "",
@@ -160,7 +176,6 @@ class PlayerViewModel(
         when (val h = repo.loadHosters(ep)) {
             is NovaStreamRepository.RepoResult.Success -> {
                 if (h.data.isNotEmpty()) {
-                    // Next episode exists - use basic info (avoid expensive full series detail load)
                     _state.update {
                         it.copy(nextEpisode = NextEpisodeInfo(
                             season = season,
@@ -169,14 +184,16 @@ class PlayerViewModel(
                             coverUrl = coverUrl
                         ))
                     }
-                }
-                // If no hosters for next episode, it might not exist - try next season
-                else {
+                } else {
+                    // Try next season
                     val nextSeason = season + 1
-                    val nextSeasonEp = 1
-                    val nextSeasonUrl = "/serie/$slug/staffel-$nextSeason/episode-$nextSeasonEp"
+                    val nextSeasonUrl = when (activeProvider.id) {
+                        "aniworld" -> "/anime/stream/$slug/staffel-$nextSeason/episode-1"
+                        "kinoger" -> "/stream/$slug.html"
+                        else -> "/serie/$slug/staffel-$nextSeason/episode-1"
+                    }
                     val nextSeasonEpisode = Episode(
-                        number = nextSeasonEp,
+                        number = 1,
                         title = "",
                         slug = slug,
                         season = nextSeason,
@@ -188,22 +205,21 @@ class PlayerViewModel(
                                 _state.update {
                                     it.copy(nextEpisode = NextEpisodeInfo(
                                         season = nextSeason,
-                                        episode = nextSeasonEp,
+                                        episode = 1,
                                         title = "Staffel $nextSeason Episode 1",
                                         coverUrl = coverUrl
                                     ))
                                 }
                             }
                         }
-                        else -> { /* No next episode available */ }
+                        else -> {}
                     }
                 }
             }
-            else -> { /* No next episode available */ }
+            else -> {}
         }
     }
 
-    /** Entfernt den Fortschritt. */
     fun clearProgress() {
         viewModelScope.launch {
             watchRepo.removeProgress("$slug-$season-$episode")
@@ -223,7 +239,15 @@ class PlayerViewModel(
                 if (result.data.isEmpty()) {
                     tryNextHoster(index)
                 } else {
-                    _state.update { it.copy(loading = false, sources = result.data, error = null) }
+                    // Sources gefunden - hosterSwitching bleibt true bis Player den neuen Source lädt
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            sources = result.data,
+                            error = null,
+                            hosterSwitching = false
+                        )
+                    }
                 }
             }
             is NovaStreamRepository.RepoResult.Error -> {
@@ -242,13 +266,16 @@ class PlayerViewModel(
             viewModelScope.launch { resolveHoster(nextIndex) }
         } else {
             _state.update {
-                it.copy(loading = false, error = "Kein Hoster konnte aufgelöst werden. Versuche es später erneut oder wähle einen anderen Hoster.")
+                it.copy(
+                    loading = false,
+                    hosterSwitching = false,
+                    error = "Kein Hoster konnte aufgelöst werden. Versuche es später erneut oder wähle einen anderen Hoster."
+                )
             }
         }
     }
 
     companion object {
         private const val HOSTER_RESOLVE_TIMEOUT_MS = 30000L
-        private const val PROGRESS_SAVE_INTERVAL_MS = 5000L
     }
 }
