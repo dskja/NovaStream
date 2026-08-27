@@ -31,6 +31,9 @@ class MainActivity : ComponentActivity() {
             enableEdgeToEdge()
         }
 
+        // Splash screen sofort entfernen sobald UI bereit ist (verhindert lange Splash Zeit)
+        splashScreen.setKeepOnScreenCondition { false }
+
         setContent {
             val appSettings = remember { com.novastream.app.data.prefs.AppSettings(this) }
             val dynamicColor by appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = true)
@@ -50,6 +53,17 @@ class MainActivity : ComponentActivity() {
             super.onDestroy()
         } finally {
             VoeWebViewResolver.clearContext()
+        }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Bei niedrigem Memory: VoeWebViewResolver Context kann sicher bleiben
+        // aber Coil Image Cache sollte geleert werden
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            try {
+                coil.Coil.imageLoader(this).memoryCache?.clear()
+            } catch (_: Exception) {}
         }
     }
 }

@@ -31,6 +31,7 @@ object KinoGerScraper {
 
     /** Parst eine Liste von Serien/Filmen von KinoGer. */
     fun parseSeriesList(html: String): List<Series> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, BASE_URL)
         val results = linkedMapOf<String, Series>()
 
@@ -110,6 +111,9 @@ object KinoGerScraper {
 
     /** Parst die Detail-Seite einer Serie/Film auf KinoGer. */
     fun parseSeriesDetail(html: String, slug: String): Pair<Series, List<Season>> {
+        if (html.isBlank()) {
+            return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/stream/$slug.html") to emptyList()
+        }
         val doc = Jsoup.parse(html, BASE_URL)
 
         // Titel: h1#news-title oder h1

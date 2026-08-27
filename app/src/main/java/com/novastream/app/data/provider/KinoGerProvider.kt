@@ -11,7 +11,6 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.HosterResolver
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Provider für KinoGer.to.
@@ -61,7 +60,7 @@ class KinoGerProvider(
         KinoGerScraper.parseSeriesList(api.seriesHome())
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("KinoGer Startseite konnte nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
@@ -70,7 +69,7 @@ class KinoGerProvider(
             KinoGerScraper.parseSeriesList(api.search(query = query.trim()))
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error("KinoGer Suche fehlgeschlagen", it) }
+            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
         )
     }
 
@@ -79,7 +78,7 @@ class KinoGerProvider(
         KinoGerScraper.parseSeriesDetail(html, slug)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("KinoGer Details konnten nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
@@ -88,7 +87,7 @@ class KinoGerProvider(
         seasons.find { it.number == season }?.episodes ?: emptyList()
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("KinoGer Staffel konnte nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
@@ -100,14 +99,14 @@ class KinoGerProvider(
         }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("KinoGer Hoster konnten nicht geladen werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error("Stream-URL konnte nicht aufgelöst werden", it) }
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     /** Lädt die Detail-Seite mit thread-safe LRU Caching. */

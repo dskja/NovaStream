@@ -27,3 +27,6 @@ data class WatchlistItem(
         detailUrl = "/serie/$slug"  // Wird für Navigation nicht genutzt - slug reicht
     )
 }
+
+// Extension: WatchlistItem -> Series mit inWatchlist Flag für UI Badges
+fun WatchlistItem.toSeriesWithFlag(): Series = toSeries().copy()
