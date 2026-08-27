@@ -37,7 +37,7 @@ class HosterResolver(
 
             // 1. Redirect-URL absolut machen und Seite laden
             val absoluteUrl = absUrl(redirectUrl)
-            val redirectHtml = kotlinx.coroutines.withTimeoutOrNull(15000L) {
+            val redirectHtml = kotlinx.coroutines.withTimeoutOrNull(NovaStreamConfig.REDIRECT_TIMEOUT_MS) {
                 withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
             } ?: return emptyList()
 
@@ -63,7 +63,7 @@ class HosterResolver(
             }
 
             // 4. Andere Hoster: HTML laden und Stream-URLs extrahieren
-            val html = kotlinx.coroutines.withTimeoutOrNull(15000L) {
+            val html = kotlinx.coroutines.withTimeoutOrNull(NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) {
                 withContext(Dispatchers.IO) { fetchHtml(hosterPageUrl) }
             } ?: return emptyList()
             if (html.isBlank()) return emptyList()

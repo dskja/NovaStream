@@ -15,8 +15,14 @@ object ActiveProvider {
         current = provider
     }
 
+    /** Setzt den Provider anhand der ID. Fallback auf Default bei ungültiger ID. */
     fun setById(id: String) {
-        current = ProviderManager.getProvider(id)
+        val provider = ProviderManager.getProviderOrNull(id)
+        if (provider != null) {
+            current = provider
+        } else {
+            current = ProviderManager.defaultProvider
+        }
     }
 
     /** Aktuelle Provider-ID. */
@@ -30,4 +36,43 @@ object ActiveProvider {
 
     /** True wenn der aktuelle Provider Serien unterstützt. */
     val supportsSeries: Boolean get() = current.supportsSeries
+
+    /** True wenn der aktuelle Provider Filme unterstützt. */
+    val supportsMovies: Boolean get() = !current.supportsSeries
+
+    /** True wenn SerienStream der aktive Provider ist. */
+    val isSerienStream: Boolean get() = current.id == "serienstream"
+
+    /** True wenn AniWorld der aktive Provider ist. */
+    val isAniWorld: Boolean get() = current.id == "aniworld"
+
+    /** True wenn KinoGer der aktive Provider ist. */
+    val isKinoGer: Boolean get() = current.id == "kinoger"
+
+    /** Baut eine Episode-URL für den aktiven Provider. */
+    fun episodeUrl(slug: String, season: Int, episode: Int): String {
+        return when (current.id) {
+            "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
+            "kinoger" -> "/stream/$slug.html"
+            else -> "/serie/$slug/staffel-$season/episode-$episode"
+        }
+    }
+
+    /** Baut eine Staffel-URL für den aktiven Provider. */
+    fun seasonUrl(slug: String, season: Int): String {
+        return when (current.id) {
+            "aniworld" -> "/anime/stream/$slug/staffel-$season"
+            "kinoger" -> "/stream/$slug.html"
+            else -> "/serie/$slug/staffel-$season"
+        }
+    }
+
+    /** Baut eine Serien-Detail-URL für den aktiven Provider. */
+    fun seriesDetailUrl(slug: String): String {
+        return when (current.id) {
+            "aniworld" -> "/anime/stream/$slug"
+            "kinoger" -> "/stream/$slug.html"
+            else -> "/serie/$slug"
+        }
+    }
 }
