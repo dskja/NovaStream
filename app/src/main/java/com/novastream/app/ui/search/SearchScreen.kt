@@ -107,16 +107,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onQueryChange(q: String) {
         // Limit query length to prevent issues with extremely long queries
-        val trimmed = q.take(100)
+        val trimmed = q.trim().take(100)
         _state.update { it.copy(query = trimmed, error = null) }
         searchJob?.cancel()
         if (trimmed.isBlank()) {
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
         }
+        // Minimum 2 characters before searching (reduces unnecessary API calls)
+        if (trimmed.length < 2) {
+            _state.update { it.copy(results = emptyList(), loading = false) }
+            return
+        }
         _state.update { it.copy(loading = true) }
         searchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(250) // Debounce (reduziert von 450ms für schnellere UX)
+            kotlinx.coroutines.delay(200) // Debounce (reduziert für schnellere UX)
             currentCoroutineContext().ensureActive()
             if (_state.value.query != trimmed) return@launch  // Veraltete Query
             when (val res = repo.search(trimmed)) {
