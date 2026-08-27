@@ -38,6 +38,21 @@ interface NovaStreamApi {
     @GET("/genre/{genre}")
     suspend fun genre(@Path("genre") genre: String): String
 
+    /** Lädt eine Genre-Seite mit Pagination (z.B. /genre/action/page/2). */
+    @GET("/genre/{genre}/page/{page}")
+    suspend fun genrePaged(
+        @Path("genre") genre: String,
+        @Path("page") page: Int
+    ): String
+
+    /** Lädt die Neuesten Serien (/neuesten). */
+    @GET("/neuesten")
+    suspend fun newest(): String
+
+    /** Lädt die Beliebtesten Serien (/beliebte). */
+    @GET("/beliebte")
+    suspend fun popular(): String
+
     /** Lädt eine beliebige relative URL als HTML (für Redirect-Auflösung). */
     @GET("{path}")
     suspend fun raw(@Path("path") path: String): String

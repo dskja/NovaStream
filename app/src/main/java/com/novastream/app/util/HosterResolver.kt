@@ -108,6 +108,26 @@ class HosterResolver(
         Regex("window\\.location\\.replace\\(['\"]([^'\"]+)['\"]\\)").find(html)?.let {
             return it.groupValues[1]
         }
+        // Pattern 6: document.location.href = 'https://...'
+        Regex("document\\.location\\.href\\s*=\\s*['\"]([^'\"]+)['\"]").find(html)?.let {
+            return it.groupValues[1]
+        }
+        // Pattern 7: self.location = 'https://...'
+        Regex("self\\.location\\s*=\\s*['\"]([^'\"]+)['\"]").find(html)?.let {
+            return it.groupValues[1]
+        }
+        // Pattern 8: top.location.href = 'https://...'
+        Regex("top\\.location\\.href\\s*=\\s*['\"]([^'\"]+)['\"]").find(html)?.let {
+            return it.groupValues[1]
+        }
+        // Pattern 9: setTimeout("location.href='...'", ...)
+        Regex("setTimeout\\(['\"]location\\.href=['\"]([^'\"]+)['\"]['\"]").find(html)?.let {
+            return it.groupValues[1]
+        }
+        // Pattern 10: <a href="..." onclick="...">click here</a> auto-redirect
+        Regex("<a[^>]+href=['\"]([^'\"]+)['\"][^>]*>\\s*[Cc]lick here").find(html)?.let {
+            return it.groupValues[1]
+        }
         return ""
     }
 
@@ -148,6 +168,12 @@ class HosterResolver(
                 sources.addAll(extractSpeedo(html, hoster))
             hoster.contains("fsst", ignoreCase = true) || pageUrl.contains("fsst", ignoreCase = true) ->
                 sources.addAll(extractFsst(html, hoster, pageUrl))
+            hoster.contains("mixdrop", ignoreCase = true) || pageUrl.contains("mixdrop", ignoreCase = true) ->
+                sources.addAll(extractMixdrop(html, hoster))
+            hoster.contains("upstream", ignoreCase = true) || pageUrl.contains("upstream", ignoreCase = true) ->
+                sources.addAll(extractUpstream(html, hoster))
+            hoster.contains("streamlare", ignoreCase = true) || pageUrl.contains("streamlare", ignoreCase = true) ->
+                sources.addAll(extractStreamlare(html, hoster))
             else -> {
                 // Generic: search for m3u8, mp4, and webm
                 Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
@@ -317,6 +343,53 @@ class HosterResolver(
             val isHls = url.contains(".m3u8")
             out.add(StreamSource(hoster, url, isHls = isHls,
                 mimeType = if (isHls) "application/x-mpegURL" else "video/mp4"))
+        }
+        return out
+    }
+
+    /** Mixdrop extraction. */
+    private fun extractMixdrop(html: String, hoster: String): List<StreamSource> {
+        val out = mutableListOf<StreamSource>()
+        // Mixdrop: eval(p,a,c,k,e,d) pattern with video URL
+        Regex("https?://[\\w.-]+/get_video\\?[^\"'\\s]+").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/mp4"))
+        }
+        Regex("MDCore\\.video_url\\s*=\\s*['\"]([^'\"]+)['\"]").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            if (url.startsWith("http")) {
+                out.add(StreamSource(hoster, url, isHls = url.contains(".m3u8"),
+                    mimeType = if (url.contains(".m3u8")) "application/x-mpegURL" else "video/mp4"))
+            }
+        }
+        return out
+    }
+
+    /** Upstream extraction. */
+    private fun extractUpstream(html: String, hoster: String): List<StreamSource> {
+        val out = mutableListOf<StreamSource>()
+        Regex("https?://[\\w.-]+/stream/[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = true))
+        }
+        Regex("file\\s*:\\s*['\"]([^'\"]+\\.mp4[^'\"]*)['\"]").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.groupValues[1], isHls = false, mimeType = "video/mp4"))
+        }
+        // Upstream uses hls.src pattern
+        Regex("hls\\.src\\s*=\\s*['\"]([^'\"]+)['\"]").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.groupValues[1], isHls = true))
+        }
+        return out
+    }
+
+    /** Streamlare extraction. */
+    private fun extractStreamlare(html: String, hoster: String): List<StreamSource> {
+        val out = mutableListOf<StreamSource>()
+        Regex("https?://[\\w.-]+/stream/[^\"'\\s]+").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = m.value.contains(".m3u8"),
+                mimeType = if (m.value.contains(".m3u8")) "application/x-mpegURL" else "video/mp4"))
+        }
+        Regex("file\\s*:\\s*['\"]([^'\"]+(?:m3u8|mp4)[^'\"]*)['\"]").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            out.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
         }
         return out
     }
