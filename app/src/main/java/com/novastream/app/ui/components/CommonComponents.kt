@@ -138,7 +138,8 @@ fun SeriesPosterCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(series.coverUrl)
-                        .crossfade(false)  // kein Crossfade → weniger Jank beim Scrollen
+                        .crossfade(false)
+                        .size(400, 600)  // Higher resolution for sharper covers
                         .build(),
                     contentDescription = series.title,
                     contentScale = ContentScale.Crop,

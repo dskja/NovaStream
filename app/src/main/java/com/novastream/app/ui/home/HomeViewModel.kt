@@ -54,6 +54,19 @@ class HomeViewModel(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchlist flow error", e)
             }
         }
+        // Watch provider changes - reload home when provider changes
+        viewModelScope.launch {
+            try {
+                com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
+                    // Reload home data when provider changes (skip initial load - handled by load() below)
+                    if (_state.value.popular.isNotEmpty() || _state.value.error != null) {
+                        load()
+                    }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "provider flow error", e)
+            }
+        }
         load()
     }
 
@@ -64,8 +77,8 @@ class HomeViewModel(
                 when (val res = repo.loadHome()) {
                     is NovaStreamRepository.RepoResult.Success -> {
                         val series = res.data
-                        val popular = series.take(15)
-                        val newest = series.drop(15).take(20)
+                        val popular = series.take(20)
+                        val newest = series.drop(20).take(40)
                         _state.update {
                             it.copy(
                                 loading = false,

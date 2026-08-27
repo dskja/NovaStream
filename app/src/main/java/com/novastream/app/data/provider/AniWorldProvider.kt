@@ -124,9 +124,7 @@ class AniWorldProvider(
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        // AniWorld: /anime/stream/{slug} redirectet auf /anime/stream/{slug}/staffel-1
-        // NovaStreamApi.seriesDetail nutzt /serie/{slug} - wir müssen den Pfad anpassen
-        val html = fetchCustomPath("/anime/stream/$slug")
+        val html = fetchUrl("$baseUrl/anime/stream/$slug")
         parseAniWorldDetail(html, slug)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -134,7 +132,7 @@ class AniWorldProvider(
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
-        val html = fetchCustomPath("/anime/stream/$slug/staffel-$season")
+        val html = fetchUrl("$baseUrl/anime/stream/$slug/staffel-$season")
         NovaStreamScraper.parseSeasonEpisodes(html, slug, season)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -142,7 +140,7 @@ class AniWorldProvider(
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
-        val html = fetchCustomPath("/anime/stream/${episode.slug}/staffel-${episode.season}/episode-${episode.number}")
+        val html = fetchUrl("$baseUrl/anime/stream/${episode.slug}/staffel-${episode.season}/episode-${episode.number}")
         NovaStreamScraper.parseHosters(html)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },

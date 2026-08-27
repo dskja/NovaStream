@@ -121,6 +121,17 @@ fun ContinueWatchingCard(
                 )
             )
 
+            // Progress bar at bottom (BEFORE buttons so buttons are on top)
+            LinearProgressIndicator(
+                progress = { (progress.progressPercent / 100f).coerceIn(0f, 1f) },
+                color = Primary,
+                trackColor = Color(0x44FFFFFF),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(3.dp)
+            )
+
             // Play button overlay
             Box(
                 Modifier
@@ -139,14 +150,14 @@ fun ContinueWatchingCard(
                 )
             }
 
-            // Remove button (top-right) - shows confirmation dialog
+            // Remove button (top-right) - AFTER gradient so it's visible on top
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
                     .padding(6.dp)
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(GlassMedium)
+                    .background(Color(0x99000000))
                     .clickable { showConfirmDialog = true },
                 contentAlignment = Alignment.Center
             ) {
@@ -157,17 +168,6 @@ fun ContinueWatchingCard(
                     modifier = Modifier.size(16.dp)
                 )
             }
-
-            // Progress bar at bottom
-            LinearProgressIndicator(
-                progress = { (progress.progressPercent / 100f).coerceIn(0f, 1f) },
-                color = Primary,
-                trackColor = Color(0x44FFFFFF),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(3.dp)
-            )
         }
         Spacer(Modifier.height(6.dp))
         Text(

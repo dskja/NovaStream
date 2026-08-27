@@ -48,8 +48,10 @@ object NovaStreamScraper {
         val topShowAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$].top-shows-separator")
         // Phase 5: Search results / generic
         val searchAnchors = doc.select("a[href~=/serie/[\\w%.-]+\$].text-decoration-none")
+        // Phase 6: Generic series links (catch-all für alle Serien-Links auf der Seite)
+        val genericAnchors = doc.select("a[href^=/serie/]")
 
-        val allAnchors = (heroAnchors + cardMiniAnchors + trendAnchors + topShowAnchors + searchAnchors)
+        val allAnchors = (heroAnchors + cardMiniAnchors + trendAnchors + topShowAnchors + searchAnchors + genericAnchors)
 
         for (a in allAnchors) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
@@ -161,30 +163,46 @@ object NovaStreamScraper {
 
     /** Extrahiert das Cover/Backdrop-Bild aus der Detail-Seite. */
     private fun extractDetailCover(doc: Document): String? {
-        // Weg 1: <img> mit data-src im Hauptbereich
-        val img = doc.selectFirst("img[data-src]") ?: doc.selectFirst("img[src]")
-        if (img != null) {
-            val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
-                .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
-            if (src.isNotBlank() && !src.contains("data:image") && src.contains("/media/images/")) return src
-        }
-
-        // Weg 2: <source> mit srcset
-        val source = doc.selectFirst("source[srcset]")
-        if (source != null) {
-            val srcset = source.attr("srcset")
-            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            if (!firstUrl.isNullOrBlank() && firstUrl.contains("/media/images/")) {
-                return if (firstUrl.startsWith("http")) firstUrl
-                       else NovaStreamConfig.BASE_URL + firstUrl
+        // Weg 1: Spezifische Serien-Cover Selektoren (am zuverlässigsten)
+        val coverImg = doc.selectFirst(".series-cover img[data-src]")
+            ?: doc.selectFirst(".series-cover img[src]")
+            ?: doc.selectFirst(".cover img[data-src]")
+            ?: doc.selectFirst(".cover img[src]")
+            ?: doc.selectFirst("img.series-poster")
+            ?: doc.selectFirst(".series-image img")
+        if (coverImg != null) {
+            val src = coverImg.absUrl("data-src").ifBlank { coverImg.attr("data-src") }
+                .ifBlank { coverImg.absUrl("src") }.ifBlank { coverImg.attr("src") }
+            if (src.isNotBlank() && !src.contains("data:image")) {
+                return if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
             }
         }
 
-        // Weg 3: og:image Meta-Tag
+        // Weg 2: <source> mit srcset (größtes Bild nehmen)
+        val source = doc.selectFirst("source[srcset]")
+        if (source != null) {
+            val srcset = source.attr("srcset")
+            // Nimm das LETZTE (größte) Bild aus srcset
+            val lastUrl = srcset.split(",").lastOrNull()?.trim()?.split(" ")?.firstOrNull()
+            if (!lastUrl.isNullOrBlank() && !lastUrl.contains("data:image")) {
+                return if (lastUrl.startsWith("http")) lastUrl
+                       else NovaStreamConfig.BASE_URL + lastUrl
+            }
+        }
+
+        // Weg 3: og:image Meta-Tag (zuverlässig für Backdrop)
         val ogImage = doc.selectFirst("meta[property=og:image]")
         if (ogImage != null) {
             val content = ogImage.attr("content")
             if (content.isNotBlank()) return content
+        }
+
+        // Weg 4: Fallback - erstes img mit /media/images/ Pfad
+        val anyImg = doc.selectFirst("img[data-src]") ?: doc.selectFirst("img[src]")
+        if (anyImg != null) {
+            val src = anyImg.absUrl("data-src").ifBlank { anyImg.attr("data-src") }
+                .ifBlank { anyImg.absUrl("src") }.ifBlank { anyImg.attr("src") }
+            if (src.isNotBlank() && !src.contains("data:image") && src.contains("/media/images/")) return src
         }
 
         return null
@@ -282,7 +300,9 @@ object NovaStreamScraper {
                 val thumbnail = thumbImg?.let { img ->
                     val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
                         .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
-                    if (src.isNotBlank() && !src.contains("data:image") && src.contains("/media/")) src else null
+                    if (src.isNotBlank() && !src.contains("data:image")) {
+                        if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
+                    } else null
                 }
 
                 // Hoster-Icons in der Zeile (nur Anzeige, nicht klickbar hier)

@@ -39,14 +39,13 @@ object KinoGerScraper {
         val doc = Jsoup.parse(html, BASE_URL)
         val results = linkedMapOf<String, Series>()
 
-        // DLE: div#dle-content > div.short
+        // DLE: div#dle-content > div.short (primärer Selektor)
         val shortItems = doc.select("div#dle-content div.short")
         for (item in shortItems) {
             val anchor = item.selectFirst("a") ?: continue
             val href = anchor.absUrl("href").ifBlank { anchor.attr("href") }
             if (href.isBlank()) continue
 
-            // Nur Serien-Links (enthalten "stream/" oder "series/")
             if (!href.contains("/stream/") && !href.contains("/series/")) continue
 
             val slug = extractKinoGerSlug(href) ?: continue
@@ -67,7 +66,7 @@ object KinoGerScraper {
             )
         }
 
-        // Fallback: Suche nutzt div.titlecontrol statt div.short
+        // Fallback 1: Suche nutzt div.titlecontrol statt div.short
         if (results.isEmpty()) {
             val searchItems = doc.select("div#dle-content div.titlecontrol")
             for (item in searchItems) {
@@ -84,6 +83,37 @@ object KinoGerScraper {
 
                 // Cover im nächsten Geschwister-Element suchen
                 val cover = findCoverInSearch(item)
+
+                results[slug] = Series(
+                    id = slug,
+                    title = title,
+                    coverUrl = cover,
+                    detailUrl = href.substringAfter(BASE_URL).ifBlank { href }
+                )
+            }
+        }
+
+        // Fallback 2: Alle Links mit /stream/ oder /series/ auf der Seite (breitester Fallback)
+        if (results.isEmpty()) {
+            val allLinks = doc.select("a[href]")
+            for (anchor in allLinks) {
+                val href = anchor.absUrl("href").ifBlank { anchor.attr("href") }
+                if (href.isBlank()) continue
+                if (!href.contains("/stream/") && !href.contains("/series/")) continue
+                // Skip navigation/category links
+                if (href.endsWith("/stream/") || href.endsWith("/series/") ||
+                    href.contains("/stream/page/") || href.contains("/series/page/")) continue
+
+                val slug = extractKinoGerSlug(href) ?: continue
+                if (results.containsKey(slug)) continue
+
+                val title = anchor.text()?.trim()?.ifBlank { null }
+                    ?: anchor.attr("title")?.ifBlank { null }
+                    ?: slugToTitle(slug)
+
+                // Cover: suche im Parent Container
+                val parent = anchor.parent()
+                val cover = parent?.let { findCoverInShort(it) }
 
                 results[slug] = Series(
                     id = slug,

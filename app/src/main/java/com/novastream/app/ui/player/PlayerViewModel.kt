@@ -36,7 +36,8 @@ data class PlayerUiState(
 data class NextEpisodeInfo(
     val season: Int,
     val episode: Int,
-    val title: String
+    val title: String,
+    val coverUrl: String? = null
 )
 
 class PlayerViewModel(
@@ -164,7 +165,8 @@ class PlayerViewModel(
                         it.copy(nextEpisode = NextEpisodeInfo(
                             season = season,
                             episode = nextEp,
-                            title = "Episode $nextEp"
+                            title = "Episode $nextEp",
+                            coverUrl = coverUrl
                         ))
                     }
                 }
@@ -187,7 +189,8 @@ class PlayerViewModel(
                                     it.copy(nextEpisode = NextEpisodeInfo(
                                         season = nextSeason,
                                         episode = nextSeasonEp,
-                                        title = "Staffel $nextSeason Episode 1"
+                                        title = "Staffel $nextSeason Episode 1",
+                                        coverUrl = coverUrl
                                     ))
                                 }
                             }

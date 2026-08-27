@@ -75,7 +75,8 @@ fun DetailScreen(
                 onToggleWatchlist = vm::toggleWatchlist,
                 onRemoveProgress = vm::removeProgress,
                 onToggleWatched = vm::toggleEpisodeWatched,
-                onMarkSeasonWatched = vm::markSeasonAsWatched
+                onMarkSeasonWatched = vm::markSeasonAsWatched,
+                onMarkSeasonUnwatched = vm::markSeasonAsUnwatched
             )
         }
     }
@@ -94,7 +95,8 @@ private fun DetailContent(
     onToggleWatchlist: () -> Unit,
     onRemoveProgress: (String) -> Unit,
     onToggleWatched: (Int, Int, String) -> Unit,
-    onMarkSeasonWatched: (Int) -> Unit
+    onMarkSeasonWatched: (Int) -> Unit,
+    onMarkSeasonUnwatched: (Int) -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -388,13 +390,25 @@ private fun DetailContent(
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(
-                        "Alle als gesehen markieren",
-                        color = Primary,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onMarkSeasonWatched(season.number) }
-                    )
+                    // Toggle: Alle als gesehen / Alle als ungesehen
+                    val allWatched = watchedCount == totalCount && totalCount > 0
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (allWatched) Color(0x22FF4444) else Primary.copy(alpha = 0.12f))
+                            .clickable {
+                                if (allWatched) onMarkSeasonUnwatched(season.number)
+                                else onMarkSeasonWatched(season.number)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            if (allWatched) "Alle zurücksetzen" else "Alle gesehen",
+                            color = if (allWatched) Color(0xFFFF6666) else Primary,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }) }
 

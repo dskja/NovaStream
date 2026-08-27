@@ -24,6 +24,6 @@ data class WatchlistItem(
         id = slug,
         title = title,
         coverUrl = coverUrl,
-        detailUrl = "/serie/$slug"
+        detailUrl = "/serie/$slug"  // Wird für Navigation nicht genutzt - slug reicht
     )
 }

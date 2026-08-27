@@ -76,9 +76,18 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         // Load recent searches - stored as ordered list (newest first)
         viewModelScope.launch {
             getApplication<Application>().dataStore.data.collect { prefs ->
-                val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
-                val searches = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
-                _state.update { it.copy(recentSearches = searches) }
+                try {
+                    val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
+                    val searches = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
+                    _state.update { it.copy(recentSearches = searches) }
+                } catch (e: Exception) {
+                    // Type mismatch (z.B. alte Version hat Set gespeichert) - reset
+                    if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("SearchVM", "Recent searches parse error, resetting", e)
+                    try {
+                        getApplication<Application>().dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
+                    } catch (_: Exception) {}
+                    _state.update { it.copy(recentSearches = emptyList()) }
+                }
             }
         }
     }
