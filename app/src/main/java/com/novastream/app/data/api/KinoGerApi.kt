@@ -19,13 +19,13 @@ interface KinoGerApi {
     @GET("/")
     suspend fun home(): String
 
-    @GET("stream/serie/")
+    @GET("stream/serie")
     suspend fun seriesHome(): String
 
-    @GET("stream/tv-shows/")
+    @GET("stream/tv-shows")
     suspend fun tvShows(): String
 
-    @GET("stream/filme/")
+    @GET("stream/filme")
     suspend fun movies(): String
 
     @GET("stream/serie/page/{page}")
