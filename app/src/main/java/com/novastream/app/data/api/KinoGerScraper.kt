@@ -348,6 +348,45 @@ object KinoGerScraper {
 
     // ─── Hilfsfunktionen ───────────────────────────────────────────────────
 
+    /** Parst Genre-Links aus einer KinoGer-Seite. */
+    fun parseGenres(html: String): List<Pair<String, String>> {
+        if (html.isBlank()) return emptyList()
+        val doc = Jsoup.parse(html, BASE_URL)
+        val genres = linkedMapOf<String, String>()
+        for (a in doc.select("a[href]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            // KinoGer Genre-URLs: /stream/{genre}/ oder /stream/{genre}/page/{n}
+            if (href.contains("/stream/") && !href.contains(".html") && !href.endsWith("/stream/")) {
+                val parts = href.substringAfter("/stream/").split("/")
+                val genreSlug = parts.firstOrNull()?.takeIf { it.isNotBlank() && it != "page" }
+                if (genreSlug != null && !genres.containsKey(genreSlug)) {
+                    val name = a.text().trim().ifBlank { slugToTitle(genreSlug) }
+                    if (name.isNotBlank() && name.length < 30) {
+                        genres[genreSlug] = name
+                    }
+                }
+            }
+        }
+        return genres.entries.map { (slug, name) -> slug to name }
+    }
+
+    /** True wenn die Detail-Seite ein Film ist (keine Episoden). */
+    fun isMovie(html: String): Boolean {
+        if (html.isBlank()) return false
+        val doc = Jsoup.parse(html, BASE_URL)
+        // Suche nach pw.show/fsst.show - wenn nicht vorhanden, ist es ein Film
+        val scripts = doc.select("script")
+        for (script in scripts) {
+            val data = script.data()
+            if (Regex("(?:pw|fsst)\\.show\\(").containsMatchIn(data)) {
+                return false
+            }
+        }
+        // Suche nach iframe (Film hat meist 1 iframe, Serie hat pw.show)
+        val iframes = doc.select("iframe[src]")
+        return iframes.size <= 1
+    }
+
     /** Extrahiert den Slug aus einer KinoGer URL (/stream/12345-title.html → "12345-title"). */
     private fun extractKinoGerSlug(url: String): String? {
         val m = SLUG_PATTERN.matcher(url)

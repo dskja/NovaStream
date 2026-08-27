@@ -38,6 +38,31 @@ object NetworkModule {
                 else HttpLoggingInterceptor.Level.NONE
     }
 
+    /** Retry-Interceptor: wiederholt fehlgeschlagene Requests bis zu 2 Mal. */
+    private val retryInterceptor = Interceptor { chain ->
+        var attempt = 0
+        var lastException: Exception? = null
+        while (attempt < 3) {
+            try {
+                val response = chain.proceed(chain.request())
+                if (response.isSuccessful || response.code < 500) return@Interceptor response
+                response.close()
+            } catch (e: Exception) {
+                lastException = e
+                if (e is java.net.SocketTimeoutException || e is java.net.ConnectException) {
+                    // Retry bei Timeout/Connect-Fehler
+                } else {
+                    throw e
+                }
+            }
+            attempt++
+            if (attempt < 3) {
+                try { Thread.sleep(500L * attempt) } catch (_: InterruptedException) {}
+            }
+        }
+        throw lastException ?: java.io.IOException("Max retries exceeded")
+    }
+
     /**
      * DNS-over-HTTPS via Cloudflare (1.1.1.1) mit Google (8.8.8.8) Fallback.
      * Umgeht ISP-DNS-Blockaden (z.B. O2/Telefonica cuii-Sperre).
@@ -112,6 +137,7 @@ object NetworkModule {
         OkHttpClient.Builder()
             .dns(dohDns)
             .addInterceptor(userAgentInterceptor)
+            .addInterceptor(retryInterceptor)
             .addInterceptor(loggingInterceptor)
             .followRedirects(true)
             .followSslRedirects(true)

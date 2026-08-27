@@ -123,7 +123,7 @@ class AniWorldProvider(
     )
 
     /** Lädt Serien nach Genre (z.B. "action", "drama", "comedy"). */
-    suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         if (genre.isBlank()) return@runCatching emptyList()
         val html = fetchUrl("$baseUrl/genre/${genre.trim()}")
         parseSeriesListAniWorld(html)
@@ -307,12 +307,24 @@ class AniWorldProvider(
                     val title = a.text()?.trim()?.ifBlank { null }
                         ?: a.attr("title")?.ifBlank { null }
                         ?: "Folge $ep"
+
+                    // Episode-Thumbnail aus der Zeile suchen
+                    val thumbImg = a.selectFirst("img[data-src]") ?: a.selectFirst("img[src]")
+                    val thumbnail = thumbImg?.let { img ->
+                        val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
+                            .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
+                        if (src.isNotBlank() && !src.contains("data:image")) {
+                            if (src.startsWith("http")) src else baseUrl + src
+                        } else null
+                    }
+
                     episodes.add(Episode(
                         number = ep,
                         title = title,
                         slug = slug,
                         season = s,
-                        episodeUrl = m.group(0) ?: ""
+                        episodeUrl = m.group(0) ?: "",
+                        thumbnailUrl = thumbnail
                     ))
                 }
             }

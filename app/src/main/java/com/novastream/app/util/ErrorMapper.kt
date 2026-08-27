@@ -27,6 +27,19 @@ object ErrorMapper {
             is NullPointerException -> "Ein interner Fehler ist aufgetreten. Versuche es erneut."
             is IndexOutOfBoundsException -> "Daten konnten nicht verarbeitet werden. Versuche es erneut."
             is SecurityException -> "Zugriff verweigert. Überprüfe deine Berechtigungen."
+            is kotlinx.coroutines.TimeoutCancellationException -> "Zeitüberschreitung. Der Server braucht zu lange zum Antworten."
+            is retrofit2.HttpException -> {
+                when (error.code()) {
+                    403 -> "Zugriff verweigert (403). Die Website blockiert möglicherweise die App."
+                    404 -> "Seite nicht gefunden (404). Der Inhalt wurde möglicherweise entfernt."
+                    429 -> "Zu viele Anfragen (429). Bitte warte einen Moment und versuche es erneut."
+                    500, 502, 503 -> "Server-Fehler (${error.code()}). Versuche es später erneut."
+                    else -> "HTTP-Fehler ${error.code()}: ${error.message()}"
+                }
+            }
+            is com.google.gson.JsonSyntaxException -> "Daten konnten nicht gelesen werden. Versuche es erneut."
+            is org.jsoup.HttpStatusException -> "HTTP-Fehler ${error.statusCode}: ${error.message}"
+            is org.jsoup.UnsupportedMimeTypeException -> "Nicht unterstützter Inhaltstyp. Versuche es erneut."
             else -> {
                 val msg = error.message
                 if (msg.isNullOrBlank()) "Ein unbekannter Fehler ist aufgetreten"
@@ -49,7 +62,9 @@ object ErrorMapper {
         return error is SocketTimeoutException ||
                error is UnknownHostException ||
                error is ConnectException ||
-               error is IOException
+               error is IOException ||
+               error is kotlinx.coroutines.TimeoutCancellationException ||
+               (error is retrofit2.HttpException && error.code() in setOf(429, 500, 502, 503))
     }
 
     /** True wenn der Fehler permanent ist (kein Retry sinnvoll). */
@@ -74,6 +89,11 @@ object ErrorMapper {
             is NullPointerException -> "NPE"
             is IndexOutOfBoundsException -> "INDEX"
             is SecurityException -> "SECURITY"
+            is kotlinx.coroutines.TimeoutCancellationException -> "COROUTINE_TIMEOUT"
+            is retrofit2.HttpException -> "HTTP_${error.code()}"
+            is com.google.gson.JsonSyntaxException -> "JSON"
+            is org.jsoup.HttpStatusException -> "JSOUP_HTTP_${error.statusCode}"
+            is org.jsoup.UnsupportedMimeTypeException -> "MIME"
             else -> "UNKNOWN"
         }
     }

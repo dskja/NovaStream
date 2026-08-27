@@ -49,7 +49,7 @@ class SerienStreamProvider(
     )
 
     /** Lädt Serien nach Genre (z.B. "action", "drama", "comedy"). */
-    suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         if (genre.isBlank()) return@runCatching emptyList()
         NovaStreamScraper.parseSeriesList(api.genre(genre.trim()))
     }.fold(
@@ -67,7 +67,7 @@ class SerienStreamProvider(
     )
 
     /** Lädt die neuesten Serien. */
-    suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         NovaStreamScraper.parseSeriesList(api.newest())
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -75,7 +75,7 @@ class SerienStreamProvider(
     )
 
     /** Lädt die beliebtesten Serien. */
-    suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         NovaStreamScraper.parseSeriesList(api.popular())
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
