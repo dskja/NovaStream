@@ -39,7 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,138 +74,205 @@ fun HomeScreen(
                 .fillMaxSize()
                 .background(BgPure)
         ) {
-        // Hero Banner Karussell
-        item {
+            // Hero Banner Karussell
+            item {
+                if (state.loading && state.hero.isEmpty()) {
+                    ShimmerBox(
+                        Modifier.fillMaxWidth().height(280.dp),
+                        cornerRadius = 0
+                    )
+                } else if (state.hero.isNotEmpty()) {
+                    HeroCarousel(
+                        series = state.hero.take(8),
+                        onClick = onSeriesClick
+                    )
+                }
+            }
+
+            // Continue Watching Section
+            if (state.continueWatching.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    SectionHeader("Weitersehen")
+                }
+                item {
+                    LazyRow(
+                        Modifier.focusRestorer(),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(state.continueWatching, key = { it.episodeKey }) { progress ->
+                            ContinueWatchingCard(
+                                progress = progress,
+                                onClick = {
+                                    onContinueWatchingClick(
+                                        progress.slug,
+                                        progress.season,
+                                        progress.episode,
+                                        progress.episodeTitle,
+                                        progress.seriesTitle,
+                                        progress.coverUrl
+                                    )
+                                },
+                                onRemove = { vm.removeContinueWatching(progress.episodeKey) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Watchlist Preview Section
+            if (state.watchlist.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Meine Liste")
+                }
+                item {
+                    LazyRow(
+                        Modifier.focusRestorer(),
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(state.watchlist.take(20), key = { it.slug }) { item ->
+                            SeriesPosterCard(
+                                series = item.toSeries(),
+                                onClick = { onSeriesClick(item.slug) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Loading State
             if (state.loading && state.popular.isEmpty()) {
-                ShimmerBox(
-                    Modifier.fillMaxWidth().height(280.dp),
-                    cornerRadius = 0
-                )
-            } else if (state.popular.isNotEmpty()) {
-                HeroCarousel(
-                    series = state.popular.take(5),
-                    onClick = onSeriesClick
-                )
-            }
-        }
-
-        // Continue Watching Section
-        if (state.continueWatching.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(8.dp))
-                SectionHeader("Weitersehen")
-            }
-            item {
-                LazyRow(
-                    Modifier.focusRestorer(),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(state.continueWatching, key = { it.episodeKey }) { progress ->
-                        ContinueWatchingCard(
-                            progress = progress,
-                            onClick = {
-                                onContinueWatchingClick(
-                                    progress.slug,
-                                    progress.season,
-                                    progress.episode,
-                                    progress.episodeTitle,
-                                    progress.seriesTitle,
-                                    progress.coverUrl
-                                )
-                            },
-                            onRemove = { vm.removeContinueWatching(progress.episodeKey) }
-                        )
-                    }
+                item {
+                    Spacer(Modifier.height(24.dp))
+                    SectionHeader("Beliebt")
+                    ShimmerRow()
+                    Spacer(Modifier.height(24.dp))
+                    SectionHeader("Neu hinzugefügt")
+                    ShimmerRow()
+                    Spacer(Modifier.height(24.dp))
+                    SectionHeader("Angesagt")
+                    ShimmerRow()
                 }
             }
-        }
 
-        // Watchlist Preview Section (if user has watchlist items)
-        if (state.watchlist.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(28.dp))
-                SectionHeader("Meine Liste")
-            }
-            item {
-                LazyRow(
-                    Modifier.focusRestorer(),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(state.watchlist.take(10), key = { it.slug }) { item ->
-                        SeriesPosterCard(
-                            series = item.toSeries(),
-                            onClick = { onSeriesClick(item.slug) }
-                        )
-                    }
+            // Error State
+            if (state.error != null && state.popular.isEmpty()) {
+                item {
+                    PremiumError(
+                        message = state.error ?: "Unbekannter Fehler",
+                        onRetry = vm::load,
+                        modifier = Modifier.fillParentMaxSize()
+                    )
                 }
             }
-        }
 
-        // Loading State
-        if (state.loading && state.popular.isEmpty()) {
-            item {
-                Spacer(Modifier.height(24.dp))
-                SectionHeader("Beliebt")
-                ShimmerRow()
-                Spacer(Modifier.height(24.dp))
-                SectionHeader("Neu hinzugefügt")
-                ShimmerRow()
-            }
-        }
-
-        // Error State
-        if (state.error != null && state.popular.isEmpty()) {
-            item {
-                PremiumError(
-                    message = state.error ?: "Unbekannter Fehler",
-                    onRetry = vm::load,
-                    modifier = Modifier.fillParentMaxSize()
-                )
-            }
-        }
-
-        // Beliebt
-        if (state.popular.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(8.dp))
-                SectionHeader("Beliebt")
-            }
-            item {
-                LazyRow(
-                    Modifier.focusRestorer(),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(state.popular, key = { it.id }) { s ->
-                        SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
-                    }
+            // Beliebt
+            if (state.popular.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    SectionHeader("Beliebt")
+                }
+                item {
+                    SeriesRow(state.popular, onSeriesClick)
                 }
             }
-        }
 
-        // Neu hinzugefügt
-        if (state.newest.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(28.dp))
-                SectionHeader("Neu hinzugefügt")
-            }
-            item {
-                LazyRow(
-                    Modifier.focusRestorer(),
-                    contentPadding = PaddingValues(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(state.newest, key = { it.id }) { s ->
-                        SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
-                    }
+            // Neu hinzugefügt
+            if (state.newest.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Neu hinzugefügt")
+                }
+                item {
+                    SeriesRow(state.newest, onSeriesClick)
                 }
             }
-        }
 
-        // Bottom spacing for BottomBar
-        item { Spacer(Modifier.height(80.dp)) }
+            // Angesagt / Trending
+            if (state.trending.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Angesagt")
+                }
+                item {
+                    SeriesRow(state.trending, onSeriesClick)
+                }
+            }
+
+            // Action
+            if (state.action.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Action")
+                }
+                item {
+                    SeriesRow(state.action, onSeriesClick)
+                }
+            }
+
+            // Drama
+            if (state.drama.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Drama")
+                }
+                item {
+                    SeriesRow(state.drama, onSeriesClick)
+                }
+            }
+
+            // Sci-Fi
+            if (state.scifi.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Sci-Fi & Fantasy")
+                }
+                item {
+                    SeriesRow(state.scifi, onSeriesClick)
+                }
+            }
+
+            // Comedy
+            if (state.comedy.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Comedy")
+                }
+                item {
+                    SeriesRow(state.comedy, onSeriesClick)
+                }
+            }
+
+            // Alle Serien (alle restlichen anzeigen)
+            if (state.popular.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Alle Serien")
+                }
+                item {
+                    SeriesRow(state.popular + state.newest + state.trending, onSeriesClick)
+                }
+            }
+
+            // Bottom spacing for BottomBar
+            item { Spacer(Modifier.height(80.dp)) }
+        }
+    }
+}
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+private fun SeriesRow(series: List<Series>, onSeriesClick: (String) -> Unit) {
+    LazyRow(
+        Modifier.focusRestorer(),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items(series.distinctBy { it.id }, key = { it.id }) { s ->
+            SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
         }
     }
 }
@@ -220,21 +286,18 @@ private fun HeroCarousel(
     val pagerState = rememberPagerState(pageCount = { series.size })
     val context = LocalContext.current
 
-    // Auto-scroll - pausiert wenn User swipet, wird automatisch gecancelt wenn Composable disposed wird
+    // Auto-scroll
     LaunchedEffect(pagerState, series.size) {
         if (series.size <= 1) return@LaunchedEffect
         try {
             while (true) {
                 kotlinx.coroutines.delay(5000)
                 kotlinx.coroutines.yield()
-                // Skip auto-scroll if user is currently interacting
                 if (pagerState.isScrollInProgress) continue
                 val next = (pagerState.currentPage + 1) % series.size
                 pagerState.animateScrollToPage(next, animationSpec = tween(800))
             }
-        } catch (_: kotlinx.coroutines.CancellationException) {
-            // Expected when navigating away
-        }
+        } catch (_: kotlinx.coroutines.CancellationException) {}
     }
 
     Box(
@@ -344,7 +407,7 @@ private fun HeroCarousel(
             }
         }
 
-        // Page indicators - animated
+        // Page indicators
         Row(
             Modifier
                 .align(Alignment.BottomCenter)

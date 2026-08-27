@@ -12,12 +12,14 @@ import kotlinx.coroutines.withContext
  * Löst eine Hoster-URL zu einer abspielbaren Stream-URL auf.
  *
  * Ablauf:
- * 1. data-play-url ist ein relativer Redirect-Pfad (/r?t=eyJ...) auf serienstream.to
- * 2. Dieser gibt HTML mit einem JS-Redirect zurück: window.location.href = 'https://voe-...com/e/...'
- * 3. Hoster-Seite laden und Video-URL (m3u8/mp4) extrahieren
- *
- * VOE nutzt obfuscated JWPlayer – die URL ist oft in Base64 oder in
- * var source='...' eingebettet. Wir versuchen mehrere Strategien.
+ * 1. redirectUrl kann sein:
+ *    - SerienStream: /r?t=eyJ... (Redirect-Pfad auf serienstream.to)
+ *    - AniWorld: /redirect/{id} (Redirect-Pfad auf aniworld.to)
+ *    - KinoGer: direkte iframe-URL (https://fsst.online/embed/... oder https://kinoger.pw/e/...)
+ * 2. OkHttp folgt HTTP-302 Redirects automatisch zur Hoster-Seite
+ * 3. Falls JS-Redirect im HTML: URL extrahieren und Hoster-Seite laden
+ * 4. VOE: WebView-Resolver (Bot-Detection + obfuskiertes JS)
+ * 5. Andere Hoster: HTML parsen und Stream-URLs extrahieren
  */
 class HosterResolver(
     private val client: okhttp3.OkHttpClient = NetworkModule.okHttpClient,
@@ -31,8 +33,9 @@ class HosterResolver(
 
     suspend fun resolve(hosterName: String, redirectUrl: String): List<StreamSource> {
         return try {
-            // 1. Redirect-URL absolut machen und Seite laden (auf IO-Thread!)
-            // OkHttp folgt HTTP-302 Redirects automatisch (followRedirects=true)
+            if (redirectUrl.isBlank()) return emptyList()
+
+            // 1. Redirect-URL absolut machen und Seite laden
             val absoluteUrl = absUrl(redirectUrl)
             val redirectHtml = kotlinx.coroutines.withTimeoutOrNull(15000L) {
                 withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
@@ -40,35 +43,50 @@ class HosterResolver(
 
             // 2. JS-Redirect-URL aus dem HTML extrahieren (falls vorhanden)
             val hosterPageUrl = extractJsRedirect(redirectHtml).ifBlank {
-                // Kein JS-Redirect → OkHttp ist bereits zum Hoster gefolgt
-                absoluteUrl
+                // Prüfe ob die URL bereits zur Hoster-Seite führt (kein JS-Redirect nötig)
+                // OkHttp ist bereits durch followRedirects zur Hoster-Seite gefolgt
+                if (redirectHtml.contains(".m3u8") || redirectHtml.contains(".mp4") ||
+                    redirectHtml.contains("jwplayer") || redirectHtml.contains("videojs") ||
+                    redirectHtml.contains("player") || redirectHtml.contains("source")) {
+                    absoluteUrl
+                } else {
+                    absoluteUrl
+                }
             }
 
             // 3. VOE: Nutze WebView-Resolver (Bot-Detection + obfuskiertes JS)
-            // WebView muss auf dem Main-Thread laufen
-            if (hosterName.contains("voe", ignoreCase = true)) {
+            if (hosterName.contains("voe", ignoreCase = true) ||
+                hosterPageUrl.contains("voe", ignoreCase = true)) {
                 val voeResult = voeWebViewResolver.resolve(hosterPageUrl, hosterName)
                 if (voeResult.isNotEmpty()) return voeResult
                 // Fallback: versuche HTTP-Extraktion
             }
 
-            // 4. Andere Hoster: HTML laden (auf IO-Thread!) und Stream-URLs extrahieren
+            // 4. Andere Hoster: HTML laden und Stream-URLs extrahieren
             val html = kotlinx.coroutines.withTimeoutOrNull(15000L) {
                 withContext(Dispatchers.IO) { fetchHtml(hosterPageUrl) }
             } ?: return emptyList()
             if (html.isBlank()) return emptyList()
 
             // 5. Stream-URLs extrahieren (hoster-spezifisch)
-            extractStreamUrls(html, hosterName, hosterPageUrl)
+            val sources = extractStreamUrls(html, hosterName, hosterPageUrl)
+            if (sources.isNotEmpty()) return sources
+
+            // 6. Falls keine direkten URLs gefunden: versuche VOE WebView als letzten Ausweg
+            if (hosterPageUrl.contains("voe", ignoreCase = true)) {
+                return voeWebViewResolver.resolve(hosterPageUrl, hosterName)
+            }
+
+            emptyList()
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) {
-                android.util.Log.e("HosterResolver", "resolve failed for $hosterName", e)
+                android.util.Log.e("HosterResolver", "resolve failed for $hosterName url=$redirectUrl", e)
             }
             emptyList()
         }
     }
 
-    /** Extrahiert die JS-Redirect-URL aus dem /r?t=... Response-HTML. */
+    /** Extrahiert die JS-Redirect-URL aus dem Response-HTML. */
     private fun extractJsRedirect(html: String): String {
         // Pattern 1: window.location.href = 'https://...'
         Regex("window\\.location\\.href\\s*=\\s*['\"]([^'\"]+)['\"]").find(html)?.let {
@@ -84,6 +102,10 @@ class HosterResolver(
         }
         // Pattern 4: <meta http-equiv="refresh" content="0;url=https://...">
         Regex("http-equiv=['\"]refresh['\"]\\s+content=['\"]\\d+;url=([^'\"]+)['\"]").find(html)?.let {
+            return it.groupValues[1]
+        }
+        // Pattern 5: window.location.replace('https://...')
+        Regex("window\\.location\\.replace\\(['\"]([^'\"]+)['\"]\\)").find(html)?.let {
             return it.groupValues[1]
         }
         return ""
@@ -112,12 +134,20 @@ class HosterResolver(
         val sources = mutableListOf<StreamSource>()
 
         when {
-            hoster.contains("voe", ignoreCase = true) -> sources.addAll(extractVoe(html, hoster, pageUrl))
-            hoster.contains("streamtape", ignoreCase = true) -> sources.addAll(extractStreamtape(html, hoster))
-            hoster.contains("dood", ignoreCase = true) -> sources.addAll(extractDood(html, hoster, pageUrl))
-            hoster.contains("vidoza", ignoreCase = true) -> sources.addAll(extractVidoza(html, hoster))
-            hoster.contains("filemoon", ignoreCase = true) -> sources.addAll(extractFilemoon(html, hoster))
-            hoster.contains("speedo", ignoreCase = true) -> sources.addAll(extractSpeedo(html, hoster))
+            hoster.contains("voe", ignoreCase = true) || pageUrl.contains("voe", ignoreCase = true) ->
+                sources.addAll(extractVoe(html, hoster, pageUrl))
+            hoster.contains("streamtape", ignoreCase = true) || pageUrl.contains("streamtape", ignoreCase = true) ->
+                sources.addAll(extractStreamtape(html, hoster))
+            hoster.contains("dood", ignoreCase = true) || pageUrl.contains("dood", ignoreCase = true) ->
+                sources.addAll(extractDood(html, hoster, pageUrl))
+            hoster.contains("vidoza", ignoreCase = true) || pageUrl.contains("vidoza", ignoreCase = true) ->
+                sources.addAll(extractVidoza(html, hoster))
+            hoster.contains("filemoon", ignoreCase = true) || pageUrl.contains("filemoon", ignoreCase = true) ->
+                sources.addAll(extractFilemoon(html, hoster))
+            hoster.contains("speedo", ignoreCase = true) || pageUrl.contains("speedo", ignoreCase = true) ->
+                sources.addAll(extractSpeedo(html, hoster))
+            hoster.contains("fsst", ignoreCase = true) || pageUrl.contains("fsst", ignoreCase = true) ->
+                sources.addAll(extractFsst(html, hoster, pageUrl))
             else -> {
                 // Generic: search for m3u8 and mp4
                 Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
@@ -160,11 +190,7 @@ class HosterResolver(
                             isHls = urlMatch.value.contains(".m3u8")))
                     }
                 }
-            } catch (e: Exception) {
-                if (com.novastream.app.BuildConfig.DEBUG) {
-                    android.util.Log.w("HosterResolver", "Base64 decode failed: ${e.message}")
-                }
-            }
+            } catch (_: Exception) {}
         }
 
         // Strategie 3: Direct m3u8/mp4 URLs in the page
@@ -196,7 +222,6 @@ class HosterResolver(
         Regex("'(https?://[^']+\\.mp4[^']*)'").findAll(html).forEach { m ->
             out.add(StreamSource(hoster, m.groupValues[1], isHls = false, mimeType = "video/mp4"))
         }
-        // Streamtape uses document.getElementById('download') with onclick
         Regex("href\\s*=\\s*\"(https?://[^\"]+)\"[^>]*>.*?Download").findAll(html).forEach { m ->
             out.add(StreamSource(hoster, m.groupValues[1], isHls = false, mimeType = "video/mp4"))
         }
@@ -238,6 +263,12 @@ class HosterResolver(
             out.add(StreamSource(hoster, url, isHls = isHls,
                 mimeType = if (isHls) "application/x-mpegURL" else "video/mp4"))
         }
+        Regex("file\\s*:\\s*\"(https?://[^\"]+(?:m3u8|mp4)[^\"]*)\"").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            val isHls = url.contains(".m3u8")
+            out.add(StreamSource(hoster, url, isHls = isHls,
+                mimeType = if (isHls) "application/x-mpegURL" else "video/mp4"))
+        }
         return out
     }
 
@@ -248,6 +279,33 @@ class HosterResolver(
         }
         Regex("file:\\s*['\"]([^'\"]+\\.mp4[^'\"]*)['\"]").findAll(html).forEach { m ->
             out.add(StreamSource(hoster, m.groupValues[1], isHls = false, mimeType = "video/mp4"))
+        }
+        return out
+    }
+
+    /** FSST.online - KinoGer's primärer Hoster. */
+    private fun extractFsst(html: String, hoster: String, pageUrl: String): List<StreamSource> {
+        val out = mutableListOf<StreamSource>()
+        // m3u8/mp4 URLs
+        Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = true))
+        }
+        Regex("https?://[^\"'\\s]+\\.mp4[^\"'\\s]*").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/mp4"))
+        }
+        // file: 'url'
+        Regex("file:\\s*['\"]([^'\"]+)['\"]").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            if (url.startsWith("http") && (url.contains(".mp4") || url.contains(".m3u8"))) {
+                out.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
+            }
+        }
+        // sources: [{file: "url"}]
+        Regex("sources\\s*:\\s*\\[\\s*\\{[^}]*file\\s*:\\s*\"([^\"]+)\"").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            val isHls = url.contains(".m3u8")
+            out.add(StreamSource(hoster, url, isHls = isHls,
+                mimeType = if (isHls) "application/x-mpegURL" else "video/mp4"))
         }
         return out
     }
