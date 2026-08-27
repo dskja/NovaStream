@@ -174,8 +174,10 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        try { focusRequester.requestFocus() } catch (_: Exception) {}
+    androidx.compose.runtime.LaunchedEffect(state.query.isEmpty()) {
+        if (state.query.isEmpty()) {
+            try { focusRequester.requestFocus() } catch (_: Exception) {}
+        }
     }
 
     Column(

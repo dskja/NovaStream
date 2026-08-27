@@ -117,7 +117,18 @@ fun PlayerScreen(
         showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
         val url = src.url
-        if (url.isBlank()) return@LaunchedEffect
+        if (url.isBlank()) {
+            // Release old player when URL is blank
+            exoPlayer?.let { old ->
+                try {
+                    old.removeListener(episodeEndListener)
+                    old.release()
+                } catch (_: Exception) {}
+            }
+            exoPlayer = null
+            lastLoadedUrl = null
+            return@LaunchedEffect
+        }
 
         // Skip if we already loaded this exact URL
         if (url == lastLoadedUrl && exoPlayer != null) return@LaunchedEffect

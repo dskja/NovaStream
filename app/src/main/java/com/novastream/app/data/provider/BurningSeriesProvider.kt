@@ -280,6 +280,7 @@ class BurningSeriesProvider(
                 } else {
                     epSlug.toIntOrNull()
                 } ?: continue
+                if (epNum !in 1..999) continue
                 if (seen.add(epNum)) {
                     val title = a.text()?.trim()?.ifBlank { null }
                         ?: "Folge $epNum"
@@ -309,6 +310,7 @@ class BurningSeriesProvider(
                 } else {
                     epSlug.toIntOrNull()
                 } ?: continue
+                    if (epNum !in 1..999) continue
                     if (seen.add(epNum)) {
                         episodes.add(Episode(
                             number = epNum,

@@ -36,7 +36,7 @@ data class WatchlistItem(
 
     /** Alter des Eintrags in Tagen. */
     val ageInDays: Int
-        get() = ((System.currentTimeMillis() - addedAt) / (24L * 60 * 60 * 1000)).toInt()
+        get() = ((System.currentTimeMillis() - addedAt) / (24L * 60 * 60 * 1000)).toInt().coerceAtLeast(0)
 
     /** Formatiertes Datum (z.B. "vor 3 Tagen"). */
     val addedRelative: String

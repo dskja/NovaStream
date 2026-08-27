@@ -53,7 +53,10 @@ class MainActivity : ComponentActivity() {
         try {
             super.onDestroy()
         } finally {
-            VoeWebViewResolver.clearContext()
+            // Only clear context if the activity is finishing (not just config change)
+            if (isFinishing) {
+                VoeWebViewResolver.clearContext()
+            }
         }
     }
 
