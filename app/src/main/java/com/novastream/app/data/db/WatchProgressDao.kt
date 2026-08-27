@@ -18,6 +18,18 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress WHERE slug = :slug AND season = :season AND episode = :episode LIMIT 1")
     suspend fun getByEpisode(slug: String, season: Int, episode: Int): WatchProgress?
 
+    @Query("SELECT * FROM watch_progress WHERE slug = :slug ORDER BY season ASC, episode ASC")
+    suspend fun getBySlug(slug: String): List<WatchProgress>
+
+    @Query("SELECT * FROM watch_progress WHERE slug = :slug ORDER BY updatedAt DESC LIMIT 1")
+    suspend fun getLatestForSlug(slug: String): WatchProgress?
+
+    @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC LIMIT :limit")
+    fun getRecent(limit: Int): Flow<List<WatchProgress>>
+
+    @Query("SELECT COUNT(*) FROM watch_progress WHERE durationMs > 0 AND positionMs < CAST(durationMs AS REAL) * 0.9")
+    fun activeCount(): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(progress: WatchProgress)
 

@@ -124,7 +124,7 @@ fun ContinueWatchingCard(
             // Progress bar at bottom (BEFORE buttons so buttons are on top)
             LinearProgressIndicator(
                 progress = { (progress.progressPercent / 100f).coerceIn(0f, 1f) },
-                color = Primary,
+                color = if (progress.isNearEnd) Accent else Primary,
                 trackColor = Color(0x44FFFFFF),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -181,7 +181,7 @@ fun ContinueWatchingCard(
         Text(
             text = "S${progress.season} E${progress.episode} · ${progress.episodeTitle}",
             style = MaterialTheme.typography.labelSmall,
-            color = TextTertiary,
+            color = if (progress.isNearEnd) Accent else TextTertiary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

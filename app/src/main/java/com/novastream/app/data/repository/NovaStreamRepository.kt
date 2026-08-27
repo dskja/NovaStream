@@ -44,7 +44,7 @@ class NovaStreamRepository {
         withRetry { provider.loadHosters(episode).toRepoResult() }
 
     suspend fun resolveHoster(hoster: HosterLink): RepoResult<List<StreamSource>> =
-        provider.resolveHoster(hoster).toRepoResult()
+        withRetry(maxRetries = 1) { provider.resolveHoster(hoster).toRepoResult() }
 
     /**
      * Retry-Wrapper: versucht eine Operation bis zu 2x erneut bei Fehler.
@@ -70,6 +70,9 @@ class NovaStreamRepository {
     private fun <T> StreamingProvider.ProviderResult<T>.toRepoResult(): RepoResult<T> =
         when (this) {
             is StreamingProvider.ProviderResult.Success -> RepoResult.Success(data)
-            is StreamingProvider.ProviderResult.Error -> RepoResult.Error(message, cause)
+            is StreamingProvider.ProviderResult.Error -> RepoResult.Error(
+                com.novastream.app.util.ErrorMapper.toUserMessage(cause ?: Exception(message)),
+                cause
+            )
         }
 }

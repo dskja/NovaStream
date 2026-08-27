@@ -130,12 +130,12 @@ class VoeWebViewResolver {
 
             // Wait for URLs with timeout - check every 200ms, return as soon as we have any
             val videoUrls = try {
-                withTimeoutOrNull(20000L) {
+                withTimeoutOrNull(com.novastream.app.data.model.NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) {
                     while (capturedUrls.isEmpty()) {
                         kotlinx.coroutines.delay(200)
                     }
                     // Wait a bit more for additional URLs (quality options)
-                    kotlinx.coroutines.delay(1000)
+                    kotlinx.coroutines.delay(800)
                     capturedUrls.toList()
                 }
             } finally {

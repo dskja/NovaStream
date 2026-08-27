@@ -86,6 +86,27 @@ object TvUtils {
         return context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
     }
 
+    /** True wenn auf einem Tablet (Screen Size > 600dp). */
+    fun isTablet(context: Context): Boolean {
+        val config = context.resources.configuration
+        return config.smallestScreenWidthDp >= 600
+    }
+
+    /** Gibt den Geräte-Typ als String zurück (für Analytics/Logging). */
+    fun getDeviceType(context: Context): String {
+        return when {
+            isFireTv(context) -> "FireTV"
+            isAndroidTv(context) -> "AndroidTV"
+            isTablet(context) -> "Tablet"
+            else -> "Phone"
+        }
+    }
+
+    /** True wenn D-Pad Navigation primär ist (TV ohne Touchscreen). */
+    fun isDpadNavigation(context: Context): Boolean {
+        return isTvDevice(context) && !hasTouchscreen(context)
+    }
+
     /** Fire OS Version aus Build.VERSION.SDK_INT ableiten. */
     fun getFireOsVersion(): String? {
         if (android.os.Build.MANUFACTURER?.equals("Amazon", ignoreCase = true) == true ||
