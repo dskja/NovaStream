@@ -43,4 +43,11 @@ interface WatchProgressDao {
 
     @Query("DELETE FROM watch_progress")
     suspend fun deleteAll()
+
+    /**
+     * Löscht alle abgeschlossenen Episoden die älter als [cutoffTimestamp] sind.
+     * Wird beim App-Start aufgerufen um die DB schlank zu halten.
+     */
+    @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9 AND updatedAt < :cutoffTimestamp")
+    suspend fun deleteOldCompleted(cutoffTimestamp: Long): Int
 }

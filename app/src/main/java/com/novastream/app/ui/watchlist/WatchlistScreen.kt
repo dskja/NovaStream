@@ -253,7 +253,8 @@ fun WatchlistScreen(
                             Box {
                                 SeriesPosterCard(
                                     series = item.toSeries(),
-                                    onClick = { onSeriesClick(item.slug) }
+                                    onClick = { onSeriesClick(item.slug) },
+                                    inWatchlist = true
                                 )
                                 // Remove button overlay
                                 Box(

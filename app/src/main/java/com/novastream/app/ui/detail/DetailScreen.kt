@@ -48,6 +48,7 @@ import com.novastream.app.data.model.Episode
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.SectionHeader
+import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +63,7 @@ fun DetailScreen(
 
     Box(Modifier.fillMaxSize().background(BgPure)) {
         when {
-            state.loading -> PremiumLoading(label = "Serie wird geladen…")
+            state.loading -> DetailSkeleton()
             state.error != null -> PremiumError(state.error ?: "Unbekannter Fehler", onRetry = vm::retry)
             series != null -> DetailContent(
                 state = state,
@@ -117,7 +118,7 @@ private fun DetailContent(
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(series.coverUrl)
-                            .crossfade(false)
+                            .crossfade(true)
                             .build(),
                         contentDescription = series.title,
                         contentScale = ContentScale.Crop,
@@ -130,7 +131,7 @@ private fun DetailContent(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            series.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
+                            series.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—",
                             color = Accent,
                             fontSize = 48.sp,
                             fontWeight = FontWeight.Black
@@ -565,7 +566,7 @@ private fun ContinueWatchingBanner(
                         AsyncImage(
                             model = ImageRequest.Builder(context)
                                 .data(progress.coverUrl)
-                                .crossfade(false)
+                                .crossfade(true)
                                 .build(),
                             contentDescription = progress.seriesTitle,
                             contentScale = ContentScale.Crop,
@@ -677,7 +678,7 @@ private fun PremiumEpisodeRow(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(episode.thumbnailUrl)
-                        .crossfade(false)
+                        .crossfade(true)
                         .build(),
                     contentDescription = episode.title,
                     contentScale = ContentScale.Crop,
@@ -834,5 +835,80 @@ private fun StatPill(text: String) {
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+private fun DetailSkeleton() {
+    Column(Modifier.fillMaxSize().background(BgPure)) {
+        // Hero skeleton
+        ShimmerBox(
+            Modifier
+                .fillMaxWidth()
+                .height(320.dp),
+            cornerRadius = 0
+        )
+        // Title skeleton
+        Column(Modifier.padding(20.dp)) {
+            ShimmerBox(
+                Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(28.dp),
+                cornerRadius = 6
+            )
+            Spacer(Modifier.height(16.dp))
+            ShimmerBox(
+                Modifier
+                    .fillMaxWidth()
+                    .height(14.dp),
+                cornerRadius = 4
+            )
+            Spacer(Modifier.height(8.dp))
+            ShimmerBox(
+                Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(14.dp),
+                cornerRadius = 4
+            )
+            Spacer(Modifier.height(8.dp))
+            ShimmerBox(
+                Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(14.dp),
+                cornerRadius = 4
+            )
+            Spacer(Modifier.height(16.dp))
+            // Stat pills skeleton
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ShimmerBox(Modifier.width(100.dp).height(28.dp), cornerRadius = 12)
+                ShimmerBox(Modifier.width(120.dp).height(28.dp), cornerRadius = 12)
+            }
+        }
+        // Season chips skeleton
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            repeat(3) {
+                ShimmerBox(Modifier.width(110.dp).height(36.dp), cornerRadius = 20)
+            }
+        }
+        // Episode rows skeleton
+        repeat(5) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShimmerBox(Modifier.size(120.dp, 68.dp), cornerRadius = 8)
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    ShimmerBox(Modifier.fillMaxWidth(0.8f).height(16.dp), cornerRadius = 4)
+                    Spacer(Modifier.height(6.dp))
+                    ShimmerBox(Modifier.fillMaxWidth(0.5f).height(12.dp), cornerRadius = 4)
+                }
+            }
+        }
     }
 }
