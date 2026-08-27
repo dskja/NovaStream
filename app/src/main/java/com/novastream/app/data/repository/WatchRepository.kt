@@ -110,6 +110,13 @@ class WatchRepository(context: Context) {
         }
     }
 
+    /** Entfernt mehrere Serien gleichzeitig aus der Watchlist (batch). */
+    suspend fun removeAllFromWatchlist(slugs: List<String>) {
+        try { watchlistDao.removeAll(slugs) } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeAllFromWatchlist failed", e)
+        }
+    }
+
     /** Prüft ob eine Serie in der Watchlist ist (suspend). */
     suspend fun containsInWatchlist(slug: String): Boolean = try {
         watchlistDao.contains(slug)

@@ -40,6 +40,26 @@ data class DetailUiState(
                 episodeProgress[key]?.isCompleted == true
             }
         }
+
+    /** Total episode count across all seasons. */
+    val totalEpisodeCount: Int
+        get() = seasons.sumOf { it.episodes.size }
+
+    /** Total watched episodes across all seasons. */
+    val totalWatchedCount: Int
+        get() {
+            val seriesSlug = series?.id ?: return 0
+            return seasons.sumOf { season ->
+                season.episodes.count { ep ->
+                    val key = "$seriesSlug-${season.number}-${ep.number}"
+                    episodeProgress[key]?.isCompleted == true
+                }
+            }
+        }
+
+    /** True if any season has episodes loaded. */
+    val hasEpisodes: Boolean
+        get() = seasons.any { it.episodes.isNotEmpty() }
 }
 
 class DetailViewModel(
@@ -98,7 +118,7 @@ class DetailViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "load error", e)
-                _state.update { it.copy(loading = false, error = "Fehler beim Laden") }
+                _state.update { it.copy(loading = false, error = com.novastream.app.util.ErrorMapper.toUserMessage(e)) }
             }
         }
     }

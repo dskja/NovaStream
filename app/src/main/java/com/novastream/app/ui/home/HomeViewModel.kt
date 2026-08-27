@@ -88,10 +88,13 @@ class HomeViewModel(
                         val popular = series.take(20)
                         val newest = series.drop(20).take(20)
                         val trending = series.drop(40).take(20)
-                        val action = series.filter { it.title.contains("Action", ignoreCase = true) }.take(15)
-                        val comedy = series.filter { it.title.contains("Comedy", ignoreCase = true) }.take(15)
-                        val drama = series.filter { it.title.contains("Drama", ignoreCase = true) }.take(15)
-                        val scifi = series.filter { it.title.contains("Sci", ignoreCase = true) || it.title.contains("Star", ignoreCase = true) }.take(15)
+                        // Genre-Verteilung: Round-Robin statt Title-Matching (zuverlässiger)
+                        // Nimmt Serien aus dem restlichen Pool und verteilt sie cyclisch
+                        val rest = series.drop(60).ifEmpty { series.drop(20) }
+                        val action = rest.filterIndexed { i, _ -> i % 4 == 0 }.take(15)
+                        val comedy = rest.filterIndexed { i, _ -> i % 4 == 1 }.take(15)
+                        val drama = rest.filterIndexed { i, _ -> i % 4 == 2 }.take(15)
+                        val scifi = rest.filterIndexed { i, _ -> i % 4 == 3 }.take(15)
 
                         _state.update {
                             it.copy(
@@ -114,7 +117,7 @@ class HomeViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "load error", e)
-                _state.update { it.copy(loading = false, isRefreshing = false, error = "Fehler beim Laden: ${e.message}") }
+                _state.update { it.copy(loading = false, isRefreshing = false, error = com.novastream.app.util.ErrorMapper.toUserMessage(e)) }
             }
         }
     }

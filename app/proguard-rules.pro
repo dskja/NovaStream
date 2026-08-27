@@ -54,3 +54,26 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -dontwarn kotlinx.coroutines.**
+
+# ─── Kotlin Metadata ───────────────────────────────────────────────────
+-keepattributes KotlinMetadata
+-keep class kotlin.Metadata { *; }
+
+# ─── Kotlin Serializable ───────────────────────────────────────────────
+-keepclassmembers class kotlinx.serialization.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# ─── DataStore Preferences ─────────────────────────────────────────────
+-keep class androidx.datastore.preferences.** { *; }
+
+# ─── Lifecycle / ViewModel ─────────────────────────────────────────────
+-keep class androidx.lifecycle.** { *; }
+-dontwarn androidx.lifecycle.**
+
+# ─── Splash Screen ─────────────────────────────────────────────────────
+-keep class androidx.core.splashscreen.** { *; }
+-dontwarn androidx.core.splashscreen.**

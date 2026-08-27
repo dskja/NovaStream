@@ -91,8 +91,28 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { watchRepo.removeFromWatchlist(slug) }
     }
 
+    /** Entfernt alle Watchlist-Einträge (batch operation). */
+    fun clearAll() {
+        val slugs = _state.value.items.map { it.slug }
+        if (slugs.isEmpty()) return
+        viewModelScope.launch {
+            watchRepo.removeAllFromWatchlist(slugs)
+        }
+    }
+
+    /** Entfernt mehrere Einträge gleichzeitig. */
+    fun removeBatch(slugs: List<String>) {
+        if (slugs.isEmpty()) return
+        viewModelScope.launch {
+            watchRepo.removeAllFromWatchlist(slugs)
+        }
+    }
+
     fun setSortOption(option: SortOption) {
         _state.update { it.copy(sortOption = option) }
+        // Re-sort existing items immediately
+        val sorted = sortItems(_state.value.items, option)
+        _state.update { it.copy(items = sorted) }
     }
 
     private fun sortItems(items: List<WatchlistItem>, option: SortOption): List<WatchlistItem> {
