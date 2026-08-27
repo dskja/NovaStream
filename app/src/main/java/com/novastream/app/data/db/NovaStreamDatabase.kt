@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [WatchProgress::class, WatchlistItem::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class NovaStreamDatabase : RoomDatabase() {
@@ -42,6 +42,13 @@ abstract class NovaStreamDatabase : RoomDatabase() {
             }
         }
 
+        // Migration v4 -> v5: Add index on slug for getBySlug queries
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_slug ON watch_progress(slug)")
+            }
+        }
+
         fun get(context: Context): NovaStreamDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -49,7 +56,7 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     NovaStreamDatabase::class.java,
                     "novastream.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     // Fallback: Wenn eine Migration fehlt, DB neu erstellen
                     .fallbackToDestructiveMigration()
                     // WAL Mode für bessere concurrent read/write Performance

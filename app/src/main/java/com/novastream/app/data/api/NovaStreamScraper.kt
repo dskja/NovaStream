@@ -29,6 +29,7 @@ object NovaStreamScraper {
 
     /** Parst eine Liste von Serien (Startseite, Suche). */
     fun parseSeriesList(html: String): List<Series> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val results = linkedMapOf<String, Series>()
 
@@ -126,6 +127,9 @@ object NovaStreamScraper {
 
     /** Parst die Serien-Detail-/Staffel-Seite. */
     fun parseSeriesDetail(html: String, slug: String): Pair<Series, List<Season>> {
+        if (html.isBlank()) {
+            return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/serie/$slug") to emptyList()
+        }
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
 
         val title = doc.selectFirst("h1")?.text()?.trim() ?: slugToTitle(slug)

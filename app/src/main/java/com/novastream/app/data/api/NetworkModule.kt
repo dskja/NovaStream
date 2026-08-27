@@ -115,9 +115,9 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(NovaStreamConfig.CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .readTimeout(NovaStreamConfig.READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .writeTimeout(NovaStreamConfig.WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .callTimeout(45, TimeUnit.SECONDS)  // Total call timeout - prevents infinite hangs
             .connectionPool(okhttp3.ConnectionPool(5, 5, TimeUnit.MINUTES))  // 5 connections, 5 min keep-alive
             .retryOnConnectionFailure(true)

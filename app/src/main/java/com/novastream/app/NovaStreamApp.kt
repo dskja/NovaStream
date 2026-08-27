@@ -8,6 +8,7 @@ import coil.memory.MemoryCache
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.util.VoeWebViewResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,15 +21,22 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        // Set VoeWebViewResolver context for VOE hoster resolution
+        VoeWebViewResolver.setContext(this)
         // Load saved provider preference on app start
         appScope.launch {
-            // Erste Emission abwarten damit ActiveProvider sofort gesetzt wird
-            // (ViewModels könnten sonst den Default Provider nutzen)
-            val firstProviderId = ProviderManager.activeProviderIdFlow(this@NovaStreamApp).first()
-            ActiveProvider.setById(firstProviderId)
-            // Danach weiter collectieren für Änderungen
-            ProviderManager.activeProviderIdFlow(this@NovaStreamApp).collect { providerId ->
-                ActiveProvider.setById(providerId)
+            try {
+                // Erste Emission abwarten damit ActiveProvider sofort gesetzt wird
+                // (ViewModels könnten sonst den Default Provider nutzen)
+                val firstProviderId = ProviderManager.activeProviderIdFlow(this@NovaStreamApp).first()
+                ActiveProvider.setById(firstProviderId)
+                // Danach weiter collectieren für Änderungen
+                ProviderManager.activeProviderIdFlow(this@NovaStreamApp).collect { providerId ->
+                    ActiveProvider.setById(providerId)
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("NovaStreamApp", "Provider init failed", e)
+                ActiveProvider.setById(ProviderManager.defaultProvider.id)
             }
         }
         // Cleanup: Entferne abgeschlossene Episoden die älter als 30 Tage sind
@@ -45,6 +53,19 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
             }
         }
     }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        VoeWebViewResolver.clearContext()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        // Clear Coil memory cache on low memory
+        coilSingleton?.memoryCache?.clear()
+    }
+
+    private var coilSingleton: ImageLoader? = null
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
@@ -63,6 +84,6 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
                     .maxSizeBytes(500L * 1024 * 1024)  // 500MB disk cache
                     .build()
             }
-            .build()
+            .build().also { coilSingleton = it }
     }
 }
