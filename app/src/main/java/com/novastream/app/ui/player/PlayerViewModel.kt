@@ -118,12 +118,7 @@ class PlayerViewModel(
             }
 
             // Build episode URL based on active provider
-            val activeProvider = com.novastream.app.data.provider.ActiveProvider.get()
-            val epUrl = when (activeProvider.id) {
-                "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
-                "kinoger" -> "/stream/$slug.html"
-                else -> "/serie/$slug/staffel-$season/episode-$episode"
-            }
+            val epUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, episode)
             val ep = Episode(
                 number = episode,
                 title = title,
@@ -194,13 +189,8 @@ class PlayerViewModel(
     }
 
     private suspend fun loadNextEpisode() {
-        val activeProvider = com.novastream.app.data.provider.ActiveProvider.get()
         val nextEp = episode + 1
-        val nextEpUrl = when (activeProvider.id) {
-            "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$nextEp"
-            "kinoger" -> "/stream/$slug.html"
-            else -> "/serie/$slug/staffel-$season/episode-$nextEp"
-        }
+        val nextEpUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, nextEp)
         val ep = Episode(
             number = nextEp,
             title = "",
@@ -222,11 +212,7 @@ class PlayerViewModel(
                 } else {
                     // Try next season
                     val nextSeason = season + 1
-                    val nextSeasonUrl = when (activeProvider.id) {
-                        "aniworld" -> "/anime/stream/$slug/staffel-$nextSeason/episode-1"
-                        "kinoger" -> "/stream/$slug.html"
-                        else -> "/serie/$slug/staffel-$nextSeason/episode-1"
-                    }
+                    val nextSeasonUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, nextSeason, 1)
                     val nextSeasonEpisode = Episode(
                         number = 1,
                         title = "",
