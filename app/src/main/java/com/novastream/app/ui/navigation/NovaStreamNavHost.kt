@@ -2,6 +2,7 @@ package com.novastream.app.ui.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -21,11 +23,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.novastream.app.ui.components.PremiumBottomBar
+import com.novastream.app.ui.components.PremiumTopTabBar
 import com.novastream.app.ui.detail.DetailScreen
 import com.novastream.app.ui.home.HomeScreen
 import com.novastream.app.ui.player.PlayerScreen
 import com.novastream.app.ui.search.SearchScreen
 import com.novastream.app.ui.settings.SettingsScreen
+import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.watchlist.WatchlistScreen
 
 object Routes {
@@ -58,20 +62,23 @@ fun NovaStreamNavHost() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route?.substringBefore("?")
+    val context = LocalContext.current
 
-    val showBottomBar = currentRoute in listOf(Routes.HOME, Routes.WATCHLIST, Routes.SEARCH, Routes.SETTINGS)
+    // TV detection - auf TV Geräten wird eine Top Tab Bar statt Bottom Bar verwendet
+    val isTvDevice = remember { TvUtils.isTvDevice(context) }
+
+    val showNavBars = currentRoute in listOf(Routes.HOME, Routes.WATCHLIST, Routes.SEARCH, Routes.SETTINGS)
 
     // Double-back to exit on home screen
     val snackbarHostState = remember { SnackbarHostState() }
     var backPressedTime by remember { mutableLongStateOf(0L) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
 
     BackHandler(enabled = currentRoute == Routes.HOME) {
-        val now = System.currentTimeMillis()
-        if (now - backPressedTime < 2000L) {
-            // Exit app
-            (context as? android.app.Activity)?.finish()
+        val now = System.nanoTime()
+        if (now - backPressedTime < 2_000_000_000L) {
+            // Exit app - safe cast
+            context.findActivity()?.finish()
         } else {
             backPressedTime = now
             scope.launch {
@@ -85,8 +92,26 @@ fun NovaStreamNavHost() {
 
     androidx.compose.material3.Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            if (showNavBars && isTvDevice) {
+                // TV: Top Tab Bar statt Bottom Bar (Amazon/Google TV Guidelines)
+                PremiumTopTabBar(
+                    currentRoute = currentRoute ?: Routes.HOME,
+                    onNavigate = { route ->
+                        if (route != currentRoute) {
+                            nav.navigate(route) {
+                                popUpTo(Routes.HOME) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
+                )
+            }
+        },
         bottomBar = {
-            if (showBottomBar) {
+            if (showNavBars && !isTvDevice) {
+                // Phone/Tablet: Bottom Bar
                 PremiumBottomBar(
                     currentRoute = currentRoute ?: Routes.HOME,
                     onNavigate = { route ->
@@ -101,11 +126,11 @@ fun NovaStreamNavHost() {
                 )
             }
         }
-    ) { _ ->
+    ) { padding ->
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
             composable(Routes.HOME) {
                 HomeScreen(
@@ -165,8 +190,13 @@ fun NovaStreamNavHost() {
                 val seasonArg = it.arguments?.getInt("season") ?: 1
                 val episodeArg = it.arguments?.getInt("episode") ?: 1
                 if (slugArg.isBlank() || seasonArg < 1 || episodeArg < 1) {
-                    // Invalid params - navigate back
-                    LaunchedEffect(Unit) { nav.popBackStack() }
+                    LaunchedEffect(Unit) {
+                        snackbarHostState.showSnackbar(
+                            message = "Ungültige Wiedergabeparameter",
+                            duration = SnackbarDuration.Short
+                        )
+                        nav.popBackStack()
+                    }
                     return@composable
                 }
                 PlayerScreen(
@@ -180,4 +210,14 @@ fun NovaStreamNavHost() {
             }
         }
     }
+}
+
+/** Findet die Activity aus einem Context (sicherer Cast). */
+private fun android.content.Context.findActivity(): android.app.Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

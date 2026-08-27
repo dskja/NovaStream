@@ -238,7 +238,8 @@ class AniWorldProvider(
         if (seasonNumbers.isEmpty()) seasonNumbers.add(1)
 
         // Episoden der ersten Staffel parsen (die auf der Detail-Seite angezeigt wird)
-        val currentEpisodes = parseAniWorldEpisodes(doc.toString(), slug, seasonNumbers.minOrNull() ?: 1)
+        // Verwende das bereits geparste Document - kein double parsing
+        val currentEpisodes = parseAniWorldEpisodesFromDoc(doc, slug, seasonNumbers.minOrNull() ?: 1)
 
         val seasons = mutableListOf<Season>()
         for (n in seasonNumbers.sorted()) {
@@ -260,6 +261,11 @@ class AniWorldProvider(
     /** Parst Episoden aus einer AniWorld Staffel-Seite. */
     private fun parseAniWorldEpisodes(html: String, slug: String, season: Int): List<Episode> {
         val doc = Jsoup.parse(html, baseUrl)
+        return parseAniWorldEpisodesFromDoc(doc, slug, season)
+    }
+
+    /** Parst Episoden aus einem bereits geparsten Jsoup Document (verhindert double parsing). */
+    private fun parseAniWorldEpisodesFromDoc(doc: org.jsoup.nodes.Document, slug: String, season: Int): List<Episode> {
         val episodes = mutableListOf<Episode>()
         val seen = mutableSetOf<Int>()
 

@@ -295,7 +295,7 @@ private fun DetailContent(
                         if (totalEpisodes > 0) {
                             StatPill("$totalEpisodes Episoden")
                         }
-                        if (watchedEpisodes > 0) {
+                        if (watchedEpisodes > 0 && totalEpisodes > 0) {
                             val percent = (watchedEpisodes * 100 / totalEpisodes).coerceIn(0, 100)
                             StatPill("$watchedEpisodes gesehen ($percent%)")
                         }
@@ -449,7 +449,7 @@ private fun DetailContent(
                 }
             }
 
-            items(filteredEpisodes, key = { it.number }) { ep ->
+            items(filteredEpisodes, key = { "${state.selectedSeason?.number}-${it.number}" }) { ep ->
                 val epProgress = state.episodeProgress["$slug-${season.number}-${ep.number}"]
                 PremiumEpisodeRow(
                     episode = ep,

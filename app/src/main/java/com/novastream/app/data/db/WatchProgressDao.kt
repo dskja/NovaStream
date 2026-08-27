@@ -30,8 +30,12 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress WHERE durationMs > 0")
     suspend fun getWithProgress(): List<WatchProgress>
 
-    /** Löscht alle Episoden die zu >90% geschaut wurden (direkt in SQL, floating point zur Vermeidung von Overflow). */
-    @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND (positionMs * 100.0 / durationMs) >= 90.0")
+    /**
+     * Löscht alle Episoden die zu >=90% geschaut wurden.
+     * Verwendet positionMs >= durationMs * 0.9 um floating-point overflow zu vermeiden
+     * (positionMs * 100.0 konnte bei großen Werten overflowen).
+     */
+    @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9")
     suspend fun deleteCompleted()
 
     @Query("DELETE FROM watch_progress WHERE episodeKey IN (:keys)")

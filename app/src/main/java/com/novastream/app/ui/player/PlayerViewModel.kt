@@ -31,7 +31,7 @@ data class PlayerUiState(
     val hosterSwitching: Boolean = false
 ) {
     val currentSource: StreamSource?
-        get() = sources.getOrNull(0)
+        get() = sources.getOrNull(selectedHosterIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
 }
 
 data class NextEpisodeInfo(
@@ -276,6 +276,6 @@ class PlayerViewModel(
     }
 
     companion object {
-        private const val HOSTER_RESOLVE_TIMEOUT_MS = 30000L
+        private const val HOSTER_RESOLVE_TIMEOUT_MS = 20000L
     }
 }

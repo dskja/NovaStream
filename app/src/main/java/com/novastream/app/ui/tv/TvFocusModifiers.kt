@@ -1,5 +1,7 @@
 package com.novastream.app.ui.tv
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -20,16 +22,17 @@ import androidx.compose.ui.focus.focusRestorer
  * Compose's 2D spatial focus engine handled das meiste automatisch, aber wir brauchen:
  * 1. focusable() auf allen interaktiven Elementen
  * 2. focusRestorer() auf LazyRow/LazyColumn für Focus-Wiederherstellung
- * 3. Focus-Scaling für bessere Visibility (10-foot UI)
+ * 3. Focus-Scaling für bessere Visibility (10-foot UI) - 10% scale für TV
  */
 
 /**
  * Macht ein Element focusable für D-Pad Navigation.
- * Auf TV wird beim Fokus ein leichter Scale-Effekt angewendet.
+ * Auf TV wird beim Fokus ein Scale-Effekt angewendet (10% für 10-foot UI).
  */
 fun Modifier.tvFocusable(
     focusRequester: FocusRequester? = null,
-    scaleOnFocus: Boolean = true
+    scaleOnFocus: Boolean = true,
+    scaleAmount: Float = 1.1f
 ): Modifier = composed {
     var modifier: Modifier = this
 
@@ -40,7 +43,12 @@ fun Modifier.tvFocusable(
     if (scaleOnFocus) {
         val interactionSource = remember { MutableInteractionSource() }
         val isFocused by interactionSource.collectIsFocusedAsState()
-        val scale = if (isFocused) 1.05f else 1.0f
+        // Animated scale für smooth focus transitions
+        val scale by animateFloatAsState(
+            targetValue = if (isFocused) scaleAmount else 1.0f,
+            animationSpec = tween(200),
+            label = "tvFocusScale"
+        )
         modifier = modifier
             .scale(scale)
             .focusable(interactionSource = interactionSource)
