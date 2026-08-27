@@ -8,6 +8,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,7 +108,8 @@ fun SeriesPosterCard(
     series: Series,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    cardWidth: Int = 130
+    cardWidth: Int = 130,
+    inWatchlist: Boolean = false
 ) {
     val context = LocalContext.current
     var isLoading by remember(series.id, series.coverUrl) { mutableStateOf(true) }
@@ -138,8 +141,8 @@ fun SeriesPosterCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(series.coverUrl)
-                        .crossfade(false)
-                        .size(400, 600)  // Higher resolution for sharper covers
+                        .crossfade(true)
+                        .size(400, 600)
                         .build(),
                     contentDescription = series.title,
                     contentScale = ContentScale.Crop,
@@ -171,10 +174,30 @@ fun SeriesPosterCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = series.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
+                        text = series.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—",
                         color = Accent,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Black
+                    )
+                }
+            }
+
+            // Watchlist indicator badge (top-right corner)
+            if (inWatchlist) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(Primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        androidx.compose.material.icons.Icons.Filled.Bookmark,
+                        contentDescription = "In Watchlist",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }

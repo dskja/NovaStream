@@ -24,9 +24,11 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.Verified
@@ -65,11 +67,16 @@ data class SettingsUiState(
     val continueWatchingCount: Int = 0,
     val activeProviderId: String = "serienstream",
     val availableProviders: List<com.novastream.app.data.provider.ProviderInfo> = emptyList(),
+    val autoplayNext: Boolean = true,
+    val dynamicColor: Boolean = true,
+    val playbackSpeed: Float = 1.0f,
+    val skipIntroButton: Boolean = true,
     val message: String? = null
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val watchRepo = WatchRepository(application)
+    private val appSettings = com.novastream.app.data.prefs.AppSettings(application)
 
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
@@ -93,6 +100,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
                 _state.update { it.copy(activeProviderId = providerId) }
             }
+        }
+        // App Settings flows
+        viewModelScope.launch {
+            appSettings.autoplayNext.collect { v -> _state.update { it.copy(autoplayNext = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.dynamicColor.collect { v -> _state.update { it.copy(dynamicColor = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.playbackSpeed.collect { v -> _state.update { it.copy(playbackSpeed = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.skipIntroButton.collect { v -> _state.update { it.copy(skipIntroButton = v) } }
         }
     }
 
@@ -132,6 +152,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val name = com.novastream.app.data.provider.ProviderManager.getProvider(providerId).displayName
             _state.update { it.copy(message = "Provider gewechselt zu $name") }
         }
+    }
+
+    fun setAutoplayNext(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setAutoplayNext(enabled) }
+    }
+
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setDynamicColor(enabled) }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        viewModelScope.launch { appSettings.setPlaybackSpeed(speed) }
+    }
+
+    fun setSkipIntroButton(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setSkipIntroButton(enabled) }
     }
 }
 
@@ -270,6 +306,171 @@ fun SettingsScreen() {
                         }
                     }
                 }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Section: Wiedergabe
+            SettingsSectionHeader("Wiedergabe")
+
+            // Autoplay toggle
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Autoplay nächste Folge", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text("Nächste Episode automatisch abspielen", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Switch(
+                    checked = state.autoplayNext,
+                    onCheckedChange = { vm.setAutoplayNext(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Primary,
+                        checkedTrackColor = Primary.copy(alpha = 0.3f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = BgSurfaceElevated
+                    )
+                )
+            }
+
+            // Skip Intro button toggle
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.SkipNext, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Intro überspringen", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text("Skip-Button im Player anzeigen", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Switch(
+                    checked = state.skipIntroButton,
+                    onCheckedChange = { vm.setSkipIntroButton(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Primary,
+                        checkedTrackColor = Primary.copy(alpha = 0.3f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = BgSurfaceElevated
+                    )
+                )
+            }
+
+            // Playback Speed selector
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Speed, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Wiedergabegeschwindigkeit", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text("Standard-Tempo für neue Videos", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Text(
+                    "${state.playbackSpeed}x",
+                    color = Primary,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            // Speed options
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                    val selected = kotlin.math.abs(state.playbackSpeed - speed) < 0.01f
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) Primary.copy(alpha = 0.15f) else BgSurface)
+                            .clickable { vm.setPlaybackSpeed(speed) }
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "${speed}x",
+                            color = if (selected) Primary else TextTertiary,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Section: Design
+            SettingsSectionHeader("Design")
+
+            // Dynamic Color toggle
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Palette, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Dynamic Color", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text("Material You - Farben an Wallpaper anpassen (Android 12+)", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Switch(
+                    checked = state.dynamicColor,
+                    onCheckedChange = { vm.setDynamicColor(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Primary,
+                        checkedTrackColor = Primary.copy(alpha = 0.3f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = BgSurfaceElevated
+                    )
+                )
             }
 
             Spacer(Modifier.height(8.dp))
@@ -635,7 +836,7 @@ private fun ClickableSettingsItem(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
         }
         Icon(
-            Icons.Default.OpenInNew,
+            Icons.AutoMirrored.Filled.OpenInNew,
             contentDescription = null,
             tint = TextTertiary,
             modifier = Modifier.size(18.dp)

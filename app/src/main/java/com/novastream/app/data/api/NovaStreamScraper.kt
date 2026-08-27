@@ -281,7 +281,7 @@ object NovaStreamScraper {
                     hosters = hosters,
                     slug = slug,
                     season = season,
-                    episodeUrl = epUrl,
+                    episodeUrl = epUrl ?: "",
                     thumbnailUrl = thumbnail
                 ))
             }
@@ -303,7 +303,7 @@ object NovaStreamScraper {
                             title = a.text().trim().ifBlank { "Episode $epNum" },
                             slug = slug,
                             season = season,
-                            episodeUrl = m.group(0)
+                            episodeUrl = m.group(0) ?: ""
                         ))
                     }
                 }

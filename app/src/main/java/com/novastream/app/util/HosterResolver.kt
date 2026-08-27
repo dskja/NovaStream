@@ -149,12 +149,15 @@ class HosterResolver(
             hoster.contains("fsst", ignoreCase = true) || pageUrl.contains("fsst", ignoreCase = true) ->
                 sources.addAll(extractFsst(html, hoster, pageUrl))
             else -> {
-                // Generic: search for m3u8 and mp4
+                // Generic: search for m3u8, mp4, and webm
                 Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
                     sources.add(StreamSource(hoster = hoster, url = m.value, isHls = true))
                 }
                 Regex("https?://[^\"'\\s]+\\.mp4[^\"'\\s]*").findAll(html).forEach { m ->
                     sources.add(StreamSource(hoster = hoster, url = m.value, isHls = false, mimeType = "video/mp4"))
+                }
+                Regex("https?://[^\"'\\s]+\\.webm[^\"'\\s]*").findAll(html).forEach { m ->
+                    sources.add(StreamSource(hoster = hoster, url = m.value, isHls = false, mimeType = "video/webm"))
                 }
             }
         }
@@ -193,13 +196,18 @@ class HosterResolver(
             } catch (_: Exception) {}
         }
 
-        // Strategie 3: Direct m3u8/mp4 URLs in the page
+        // Strategie 3: Direct m3u8/mp4/webm URLs in the page
         Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
             out.add(StreamSource(hoster, m.value, isHls = true))
         }
         Regex("https?://[^\"'\\s]+\\.mp4[^\"'\\s]*").findAll(html).forEach { m ->
             if (!m.value.contains("test-videos.co.uk")) {
                 out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/mp4"))
+            }
+        }
+        Regex("https?://[^\"'\\s]+\\.webm[^\"'\\s]*").findAll(html).forEach { m ->
+            if (!m.value.contains("test-videos")) {
+                out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/webm"))
             }
         }
 
@@ -286,12 +294,15 @@ class HosterResolver(
     /** FSST.online - KinoGer's primärer Hoster. */
     private fun extractFsst(html: String, hoster: String, pageUrl: String): List<StreamSource> {
         val out = mutableListOf<StreamSource>()
-        // m3u8/mp4 URLs
+        // m3u8/mp4/webm URLs
         Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
             out.add(StreamSource(hoster, m.value, isHls = true))
         }
         Regex("https?://[^\"'\\s]+\\.mp4[^\"'\\s]*").findAll(html).forEach { m ->
             out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/mp4"))
+        }
+        Regex("https?://[^\"'\\s]+\\.webm[^\"'\\s]*").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/webm"))
         }
         // file: 'url'
         Regex("file:\\s*['\"]([^'\"]+)['\"]").findAll(html).forEach { m ->

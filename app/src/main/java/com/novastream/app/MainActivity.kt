@@ -8,8 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.ui.navigation.NovaStreamNavHost
 import com.novastream.app.ui.theme.NovaStreamTheme
 import com.novastream.app.ui.tv.TvUtils
@@ -29,7 +32,9 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            NovaStreamTheme {
+            val appSettings = remember { com.novastream.app.data.prefs.AppSettings(this) }
+            val dynamicColor by appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = true)
+            NovaStreamTheme(useDynamicColor = dynamicColor) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

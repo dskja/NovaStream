@@ -1,10 +1,13 @@
 package com.novastream.app.ui.theme
 
+import android.os.Build
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -85,9 +88,28 @@ private val Type = Typography(
 )
 
 @Composable
-fun NovaStreamTheme(content: @Composable () -> Unit) {
+fun NovaStreamTheme(
+    useDynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    // Dynamic Color (Material You) auf Android 12+ - behält unsere Palette als Basis
+    // aber passt Accent Colors an den Wallpaper des Users an
+    val colorScheme = if (useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        dynamicDarkColorScheme(context).copy(
+            // Behalte unsere Premium-Palette für die wichtigsten Colors
+            primary = Primary,
+            primaryContainer = PrimaryDark,
+            background = BgPure,
+            surface = BgSurface,
+            surfaceVariant = BgSurfaceElevated
+        )
+    } else {
+        ColorScheme
+    }
+
     MaterialTheme(
-        colorScheme = ColorScheme,
+        colorScheme = colorScheme,
         typography = Type,
         content = content
     )
