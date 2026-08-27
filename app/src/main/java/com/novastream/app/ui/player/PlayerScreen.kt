@@ -74,7 +74,7 @@ fun PlayerScreen(
         }
 
         onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             if (originalSystemBarsBehavior != null) {
                 controller?.systemBarsBehavior = originalSystemBarsBehavior

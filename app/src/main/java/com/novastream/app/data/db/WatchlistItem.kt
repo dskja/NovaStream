@@ -50,6 +50,3 @@ data class WatchlistItem(
             else -> "Vor über einem Jahr hinzugefügt"
         }
 }
-
-// Extension: WatchlistItem -> Series mit inWatchlist Flag für UI Badges
-fun WatchlistItem.toSeriesWithFlag(): Series = toSeries().copy()

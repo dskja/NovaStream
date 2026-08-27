@@ -49,11 +49,23 @@ object ActiveProvider {
     /** True wenn KinoGer der aktive Provider ist. */
     val isKinoGer: Boolean get() = current.id == "kinoger"
 
+    /** True wenn BurningSeries der aktive Provider ist. */
+    val isBurningSeries: Boolean get() = current.id == "burningseries"
+
+    /** True wenn MegaKino der aktive Provider ist. */
+    val isMegaKino: Boolean get() = current.id == "megakino"
+
+    /** True wenn StreamKiste der aktive Provider ist. */
+    val isStreamKiste: Boolean get() = current.id == "streamkiste"
+
     /** Baut eine Episode-URL für den aktiven Provider. */
     fun episodeUrl(slug: String, season: Int, episode: Int): String {
         return when (current.id) {
             "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
             "kinoger" -> "/stream/$slug.html"
+            "burningseries" -> "/serie/$slug/$season/$episode"
+            "megakino" -> "/title/$slug/staffel/$season/episode/$episode"
+            "streamkiste" -> "/serien/$slug/staffel-$season/episode-$episode"
             else -> "/serie/$slug/staffel-$season/episode-$episode"
         }
     }
@@ -63,6 +75,9 @@ object ActiveProvider {
         return when (current.id) {
             "aniworld" -> "/anime/stream/$slug/staffel-$season"
             "kinoger" -> "/stream/$slug.html"
+            "burningseries" -> "/serie/$slug/$season"
+            "megakino" -> "/title/$slug/staffel/$season"
+            "streamkiste" -> "/serien/$slug/staffel-$season"
             else -> "/serie/$slug/staffel-$season"
         }
     }
@@ -72,6 +87,9 @@ object ActiveProvider {
         return when (current.id) {
             "aniworld" -> "/anime/stream/$slug"
             "kinoger" -> "/stream/$slug.html"
+            "burningseries" -> "/serie/$slug"
+            "megakino" -> "/title/$slug"
+            "streamkiste" -> "/serien/$slug"
             else -> "/serie/$slug"
         }
     }

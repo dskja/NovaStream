@@ -5,21 +5,33 @@ import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 
 /**
  * Repository für Watch-Progress und Watchlist.
  * Speichert lokal in Room Database.
  */
-class WatchRepository(context: Context) {
+class WatchRepository private constructor(context: Context) {
 
     private val db = NovaStreamDatabase.get(context)
     private val progressDao = db.watchProgressDao()
     private val watchlistDao = db.watchlistDao()
 
+    companion object {
+        @Volatile
+        private var INSTANCE: WatchRepository? = null
+
+        fun get(context: Context): WatchRepository =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: WatchRepository(context.applicationContext).also { INSTANCE = it }
+            }
+    }
+
     // ─── Continue Watching ──────────────────────────────────────────
 
     /** Alle Watch-Progress-Einträge (neueste zuerst) als Flow. */
     fun watchProgress(): Flow<List<WatchProgress>> = progressDao.getAll()
+        .catch { e -> emit(emptyList()) }
 
     /** Speichert/aktualisiert den Fortschritt einer Episode. */
     suspend fun saveProgress(
@@ -106,6 +118,7 @@ class WatchRepository(context: Context) {
 
     /** Alle Watchlist-Einträge als Flow. */
     fun watchlist(): Flow<List<WatchlistItem>> = watchlistDao.getAll()
+        .catch { e -> emit(emptyList()) }
 
     /** Prüft ob eine Serie in der Watchlist ist. */
     fun isInWatchlist(slug: String): Flow<Boolean> = watchlistDao.isInWatchlist(slug)

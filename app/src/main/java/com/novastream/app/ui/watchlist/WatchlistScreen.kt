@@ -46,7 +46,8 @@ data class WatchlistUiState(
     val items: List<WatchlistItem> = emptyList(),
     val loading: Boolean = true,
     val sortOption: SortOption = SortOption.ADDED_DESC,
-    val watchingSlugs: Set<String> = emptySet()
+    val watchingSlugs: Set<String> = emptySet(),
+    val error: String? = null
 )
 
 enum class SortOption(val label: String) {
@@ -57,7 +58,7 @@ enum class SortOption(val label: String) {
 }
 
 class WatchlistViewModel(application: Application) : AndroidViewModel(application) {
-    private val watchRepo = WatchRepository(application)
+    private val watchRepo = WatchRepository.get(application)
 
     private val _state = MutableStateFlow(WatchlistUiState())
     val state: StateFlow<WatchlistUiState> = _state.asStateFlow()
@@ -71,7 +72,7 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
-                _state.update { it.copy(loading = false) }
+                _state.update { it.copy(loading = false, error = "Fehler beim Laden der Watchlist") }
             }
         }
         // Track which slugs have active watch progress

@@ -82,7 +82,7 @@ class PlayerViewModel(
     }?.takeIf { it.isNotBlank() }
 
     private val repo = NovaStreamRepository()
-    private val watchRepo = WatchRepository(application)
+    private val watchRepo = WatchRepository.get(application)
     private val appSettings = com.novastream.app.data.prefs.AppSettings(application)
 
     private val _state = MutableStateFlow(PlayerUiState(
