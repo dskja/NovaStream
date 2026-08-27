@@ -667,7 +667,7 @@ fun SettingsScreen() {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version 2.6 · Build 17",
+                    "Version ${com.novastream.app.BuildConfig.VERSION_NAME} · Build ${com.novastream.app.BuildConfig.VERSION_CODE}",
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )

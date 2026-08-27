@@ -438,7 +438,7 @@ fun PlayerScreen(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    itemsIndexed(state.hosters) { i, h ->
+                    itemsIndexed(state.hosters, key = { idx, h -> "hoster-$idx-${h.name}" }) { i, h ->
                         val selected = i == state.selectedHosterIndex
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
