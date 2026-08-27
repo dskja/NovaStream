@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,7 +103,12 @@ private fun DetailContent(
     val series = state.series ?: return
     val context = LocalContext.current
     var imageError by remember { mutableStateOf(false) }
-    var episodeFilter by remember(slug, state.selectedSeasonIndex) { mutableStateOf("") }
+    var episodeFilter by remember { mutableStateOf("") }
+
+    // Filter zurücksetzen wenn Staffel gewechselt wird
+    LaunchedEffect(state.selectedSeasonIndex) {
+        episodeFilter = ""
+    }
 
     LazyColumn(
         Modifier.fillMaxSize().background(BgPure)

@@ -49,7 +49,7 @@ fun ContinueWatchingCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var isError by remember(progress.episodeKey) { mutableStateOf(false) }
+    var isError by remember(progress.episodeKey, progress.coverUrl) { mutableStateOf(false) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     if (showConfirmDialog) {

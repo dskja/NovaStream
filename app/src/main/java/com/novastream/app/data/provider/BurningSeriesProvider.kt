@@ -43,11 +43,8 @@ class BurningSeriesProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val html = fetchUrl("$baseUrl/andelselect")
-        if (html.isBlank()) {
-            // Fallback: Startseite
-            fetchUrl(baseUrl)
-        }
-        parseBsSeriesList(html.ifBlank { fetchUrl(baseUrl) })
+        val finalHtml = if (html.isBlank()) fetchUrl(baseUrl) else html
+        parseBsSeriesList(finalHtml)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -278,7 +275,11 @@ class BurningSeriesProvider(
                 if (s != season) continue
                 val epSlug = m.group(2) ?: continue
                 // Episode number aus URL extrahieren: "1-Episode-Title" -> 1
-                val epNum = epSlug.substringBefore("-").toIntOrNull() ?: continue
+                val epNum = if (epSlug.contains("-")) {
+                    epSlug.substringBefore("-").toIntOrNull()
+                } else {
+                    epSlug.toIntOrNull()
+                } ?: continue
                 if (seen.add(epNum)) {
                     val title = a.text()?.trim()?.ifBlank { null }
                         ?: "Folge $epNum"
@@ -303,7 +304,11 @@ class BurningSeriesProvider(
                     val s = m.group(1)?.toIntOrNull() ?: continue
                     if (s != season) continue
                     val epSlug = m.group(2) ?: continue
-                    val epNum = epSlug.substringBefore("-").toIntOrNull() ?: continue
+                    val epNum = if (epSlug.contains("-")) {
+                    epSlug.substringBefore("-").toIntOrNull()
+                } else {
+                    epSlug.toIntOrNull()
+                } ?: continue
                     if (seen.add(epNum)) {
                         episodes.add(Episode(
                             number = epNum,

@@ -133,7 +133,7 @@ fun WatchlistScreen(
 ) {
     val vm: WatchlistViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
-    var pendingRemove by remember { mutableStateOf<WatchlistItem?>(null) }
+    var pendingRemove by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<WatchlistItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
 
     // Confirmation dialog for removal

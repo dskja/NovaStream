@@ -53,7 +53,6 @@ fun Modifier.tvPlayerKeyHandler(
         // Select / Play-Pause (Fire TV D-Pad Center = Select)
         Key.DirectionCenter, Key.Enter -> {
             onSelect()
-            onPlayPause()
             true
         }
         // Fire TV: Play/Pause Button (KEYCODE_MEDIA_PLAY_PAUSE = 179)
