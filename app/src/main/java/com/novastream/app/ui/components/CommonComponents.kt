@@ -174,7 +174,7 @@ fun SeriesPosterCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = series.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—",
+                        text = series.initials,
                         color = Accent,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Black

@@ -29,6 +29,10 @@ private val ColorScheme = darkColorScheme(
     onTertiary = BgPure,
     outline = Outline,
     outlineVariant = Divider,
+    error = Error,
+    onError = TextPrimary,
+    errorContainer = ErrorDark,
+    onErrorContainer = TextPrimary,
     scrim = Color(0x99000000)
 )
 
@@ -90,12 +94,14 @@ private val Type = Typography(
 @Composable
 fun NovaStreamTheme(
     useDynamicColor: Boolean = true,
+    isTvDevice: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
     // Dynamic Color (Material You) auf Android 12+ - behält unsere Palette als Basis
     // aber passt Accent Colors an den Wallpaper des Users an
-    val colorScheme = if (useDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    // Auf TV Geräten wird Dynamic Color deaktiviert (TV hat kein Wallpaper-basiertes Theme)
+    val colorScheme = if (useDynamicColor && !isTvDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         dynamicDarkColorScheme(context).copy(
             // Behalte unsere Premium-Palette für die wichtigsten Colors
             primary = Primary,
@@ -103,6 +109,15 @@ fun NovaStreamTheme(
             background = BgPure,
             surface = BgSurface,
             surfaceVariant = BgSurfaceElevated
+        )
+    } else if (isTvDevice) {
+        // TV: Nutze TV-optimierte Farben für bessere 10-foot UI Sichtbarkeit
+        ColorScheme.copy(
+            primary = TvPrimary,
+            background = TvBgPure,
+            surface = TvBgSurface,
+            onSurface = TvTextPrimary,
+            onSurfaceVariant = TvTextSecondary
         )
     } else {
         ColorScheme

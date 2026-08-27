@@ -9,7 +9,18 @@ data class Episode(
     val season: Int = 1,
     val episodeUrl: String = "",    // z.B. /serie/breaking-bad/staffel-1/episode-1
     val thumbnailUrl: String? = null // Episoden-Thumbnail
-)
+) {
+    /** True wenn diese Episode mindestens einen Hoster hat. */
+    val hasHosters: Boolean get() = hosters.isNotEmpty()
+
+    /** Display-Format: "S1E2 - Titel" */
+    val displayTitle: String
+        get() = "S${season}E${number} - $title"
+
+    /** Sortierschlüssel für korrekte Reihenfolge. */
+    val sortKey: Long
+        get() = season.toLong() * 1000L + number.toLong()
+}
 
 /**
  * Ein Hoster-Eintrag für eine Episode.
@@ -25,4 +36,11 @@ data class HosterLink(
     val language: String = "",  // z.B. "Deutsch"
     val linkId: String = "",    // data-link-id
     val index: Int = 0
-)
+) {
+    /** True wenn ein Redirect vorhanden ist. */
+    val hasRedirect: Boolean get() = redirectUrl.isNotBlank()
+
+    /** Display-Format: "VOE (Deutsch)" oder nur "VOE" wenn keine Sprache. */
+    val displayName: String
+        get() = if (language.isNotBlank()) "$name ($language)" else name
+}

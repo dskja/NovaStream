@@ -37,7 +37,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appSettings = remember { com.novastream.app.data.prefs.AppSettings(this) }
             val dynamicColor by appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = true)
-            NovaStreamTheme(useDynamicColor = dynamicColor) {
+            val isTv = remember { TvUtils.isTvDevice(this) }
+            NovaStreamTheme(useDynamicColor = dynamicColor, isTvDevice = isTv) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.novastream.app.ui.theme.*
 
 data class NavItem(
@@ -43,7 +44,8 @@ data class NavItem(
 @Composable
 fun PremiumBottomBar(
     currentRoute: String,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    watchlistCount: Int = 0
 ) {
     val items = listOf(
         NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
@@ -89,28 +91,49 @@ fun PremiumBottomBar(
                     label = "textColor"
                 )
 
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { if (!selected) onNavigate(item.route) }
-                        .focusable()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = if (selected) "${item.label}, ausgewählt" else item.label,
-                        tint = iconColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = item.label,
-                        color = textColor,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-                    )
+                Box {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { if (!selected) onNavigate(item.route) }
+                            .focusable()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                            contentDescription = if (selected) "${item.label}, ausgewählt" else item.label,
+                            tint = iconColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = item.label,
+                            color = textColor,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                    // Badge für Watchlist-Count
+                    if (item.route == "watchlist" && watchlistCount > 0) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(end = 4.dp, top = 0.dp)
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(Primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (watchlistCount > 99) "99+" else watchlistCount.toString(),
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }

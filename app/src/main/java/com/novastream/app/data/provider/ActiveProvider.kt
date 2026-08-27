@@ -24,4 +24,10 @@ object ActiveProvider {
 
     /** Aktueller Provider-Display-Name. */
     val displayName: String get() = current.displayName
+
+    /** Aktuelle Provider-Base-URL. */
+    val baseUrl: String get() = current.baseUrl
+
+    /** True wenn der aktuelle Provider Serien unterstützt. */
+    val supportsSeries: Boolean get() = current.supportsSeries
 }
