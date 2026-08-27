@@ -384,7 +384,7 @@ fun PlayerScreen(
                         onDismissRequest = { showSpeedMenu = false },
                         modifier = Modifier.background(Color(0xFF1A1A1A))
                     ) {
-                        listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                        listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f).forEach { speed ->
                             androidx.compose.material3.DropdownMenuItem(
                                 text = {
                                     Text(

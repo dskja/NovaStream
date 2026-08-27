@@ -4,6 +4,8 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
+import java.net.ConnectException
 
 /**
  * Zentralisierte Fehlerbehandlung - wandelt technische Exceptions in
@@ -16,10 +18,15 @@ object ErrorMapper {
         return when (error) {
             is SocketTimeoutException -> "Zeitüberschreitung beim Laden. Bitte überprüfe deine Internetverbindung."
             is UnknownHostException -> "Server nicht erreichbar. Überprüfe deine Internetverbindung oder versuche es später erneut."
+            is SSLHandshakeException -> "Sichere Verbindung fehlgeschlagen. Möglicherweise ist das Gerät-Datum falsch."
             is SSLException -> "Sichere Verbindung konnte nicht hergestellt werden. Versuche es erneut."
+            is ConnectException -> "Verbindung zum Server abgelehnt. Versuche es später erneut."
             is IOException -> "Netzwerkfehler: ${error.message ?: "Unbekannter Verbindungsfehler"}"
             is IllegalStateException -> "Die Website-Struktur hat sich geändert. Ein Update könnte helfen."
             is IllegalArgumentException -> "Ungültige Anfrage: ${error.message ?: ""}"
+            is NullPointerException -> "Ein interner Fehler ist aufgetreten. Versuche es erneut."
+            is IndexOutOfBoundsException -> "Daten konnten nicht verarbeitet werden. Versuche es erneut."
+            is SecurityException -> "Zugriff verweigert. Überprüfe deine Berechtigungen."
             else -> {
                 val msg = error.message
                 if (msg.isNullOrBlank()) "Ein unbekannter Fehler ist aufgetreten"
@@ -33,6 +40,7 @@ object ErrorMapper {
         return error is SocketTimeoutException ||
                error is UnknownHostException ||
                error is SSLException ||
+               error is ConnectException ||
                error is IOException
     }
 
@@ -40,6 +48,33 @@ object ErrorMapper {
     fun isRetryable(error: Throwable): Boolean {
         return error is SocketTimeoutException ||
                error is UnknownHostException ||
+               error is ConnectException ||
                error is IOException
+    }
+
+    /** True wenn der Fehler permanent ist (kein Retry sinnvoll). */
+    fun isPermanent(error: Throwable): Boolean {
+        return error is IllegalStateException ||
+               error is IllegalArgumentException ||
+               error is NullPointerException ||
+               error is IndexOutOfBoundsException ||
+               error is SecurityException
+    }
+
+    /** Gibt einen kurzen Error-Typ zurück (für Logging/Analytics). */
+    fun errorCategory(error: Throwable): String {
+        return when (error) {
+            is SocketTimeoutException -> "TIMEOUT"
+            is UnknownHostException -> "DNS"
+            is SSLException -> "SSL"
+            is ConnectException -> "CONNECT"
+            is IOException -> "NETWORK"
+            is IllegalStateException -> "PARSE"
+            is IllegalArgumentException -> "VALIDATION"
+            is NullPointerException -> "NPE"
+            is IndexOutOfBoundsException -> "INDEX"
+            is SecurityException -> "SECURITY"
+            else -> "UNKNOWN"
+        }
     }
 }

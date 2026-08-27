@@ -58,6 +58,22 @@ class WatchRepository(context: Context) {
     suspend fun getProgress(slug: String, season: Int, episode: Int): WatchProgress? =
         progressDao.getByEpisode(slug, season, episode)
 
+    /** Lädt alle Progress-Einträge für eine Serie. */
+    suspend fun getProgressBySlug(slug: String): List<WatchProgress> = try {
+        progressDao.getBySlug(slug)
+    } catch (e: Exception) {
+        if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "getProgressBySlug failed", e)
+        emptyList()
+    }
+
+    /** Lädt den aktuellsten Progress-Eintrag für eine Serie. */
+    suspend fun getLatestProgress(slug: String): WatchProgress? = try {
+        progressDao.getLatestForSlug(slug)
+    } catch (e: Exception) {
+        if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "getLatestProgress failed", e)
+        null
+    }
+
     /** Entfernt einen Continue-Watching-Eintrag. */
     suspend fun removeProgress(key: String) {
         try { progressDao.delete(key) } catch (e: Exception) {

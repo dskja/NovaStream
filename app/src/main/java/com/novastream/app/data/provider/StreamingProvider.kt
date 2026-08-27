@@ -48,3 +48,11 @@ interface StreamingProvider {
         data class Error(val message: String, val cause: Throwable? = null) : ProviderResult<Nothing>()
     }
 }
+
+/** Helper Extensions für StreamingProvider. */
+val StreamingProvider.isSerienStream: Boolean get() = id == "serienstream"
+val StreamingProvider.isAniWorld: Boolean get() = id == "aniworld"
+val StreamingProvider.isKinoGer: Boolean get() = id == "kinoger"
+
+/** True wenn der Provider Filme unterstützt (basierend auf supportsSeries = false). */
+val StreamingProvider.supportsMovies: Boolean get() = !supportsSeries
