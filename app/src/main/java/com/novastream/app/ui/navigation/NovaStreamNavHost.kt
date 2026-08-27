@@ -55,6 +55,18 @@ object Routes {
         val cu = coverUrl?.let { enc(it) } ?: ""
         return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu"
     }
+
+    /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
+    val mainRoutes = listOf(HOME, WATCHLIST, SEARCH, SETTINGS)
+
+    /** True wenn eine Route eine der Haupt-Routes ist. */
+    fun isMainRoute(route: String?): Boolean = route != null && route in mainRoutes
+
+    /** True wenn eine Route ein Player-Route ist. */
+    fun isPlayerRoute(route: String?): Boolean = route?.startsWith("player/") == true
+
+    /** True wenn eine Route ein Detail-Route ist. */
+    fun isDetailRoute(route: String?): Boolean = route?.startsWith("detail/") == true
 }
 
 @Composable
@@ -67,7 +79,7 @@ fun NovaStreamNavHost() {
     // TV detection - auf TV Geräten wird eine Top Tab Bar statt Bottom Bar verwendet
     val isTvDevice = remember { TvUtils.isTvDevice(context) }
 
-    val showNavBars = currentRoute in listOf(Routes.HOME, Routes.WATCHLIST, Routes.SEARCH, Routes.SETTINGS)
+    val showNavBars = Routes.isMainRoute(currentRoute)
 
     // Double-back to exit on home screen
     val snackbarHostState = remember { SnackbarHostState() }

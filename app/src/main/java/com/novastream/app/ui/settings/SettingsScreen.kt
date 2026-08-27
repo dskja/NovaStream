@@ -663,7 +663,7 @@ fun SettingsScreen() {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version 1.8 · Build 9",
+                    "Version 1.9 · Build 10",
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )

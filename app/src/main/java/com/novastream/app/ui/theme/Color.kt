@@ -48,6 +48,11 @@ val AccentGradient = Brush.horizontalGradient(
 val ShimmerBase = Color(0xFF1A1F2B)
 val ShimmerHighlight = Color(0xFF2D3444)
 
+// ─── Additional Card Colors ──────────────────────────────────────────────────
+val BgCardHover = Color(0xFF232938)     // Hover state for cards
+val BgCardActive = Color(0xFF2A3142)    // Active/pressed state
+val BgCardSelected = Color(0xFF1F2533)  // Selected state
+
 // ─── Status Colors ──────────────────────────────────────────────────────────
 val Success = Color(0xFF22C55E)        // Green for success states
 val SuccessDark = Color(0xFF16A34A)
