@@ -287,7 +287,7 @@ class AniWorldProvider(
                         title = title,
                         slug = slug,
                         season = s,
-                        episodeUrl = m.group(0)
+                        episodeUrl = m.group(0) ?: ""
                     ))
                 }
             }

@@ -66,19 +66,19 @@ fun PlayerScreen(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
         val window = activity?.window
-        val originalSystemUiVisibility = window?.decorView?.systemUiVisibility
-        window?.decorView?.systemUiVisibility = (
-            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-        )
+        val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+        val originalSystemBarsBehavior = controller?.systemBarsBehavior
+        controller?.let {
+            it.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            it.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
 
         onDispose {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            window?.decorView?.systemUiVisibility = originalSystemUiVisibility ?: 0
+            controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            if (originalSystemBarsBehavior != null) {
+                controller?.systemBarsBehavior = originalSystemBarsBehavior
+            }
         }
     }
 
@@ -159,17 +159,19 @@ fun PlayerScreen(
         showHosters = false
     }
 
-    // Save progress periodically
+    // Save progress periodically (only when position changed - avoids unnecessary DB writes)
     LaunchedEffect(exoPlayer) {
         val player = exoPlayer ?: return@LaunchedEffect
+        var lastSavedPos = 0L
         try {
             while (true) {
                 kotlinx.coroutines.delay(5000)
                 if (!player.isPlaying) continue
                 val pos = player.currentPosition
                 val dur = player.duration
-                if (dur > 0 && pos > 0) {
+                if (dur > 0 && pos > 0 && kotlin.math.abs(pos - lastSavedPos) > 3000) {
                     vm.saveProgress(pos, dur)
+                    lastSavedPos = pos
                 }
             }
         } catch (_: kotlinx.coroutines.CancellationException) {}
@@ -216,7 +218,7 @@ fun PlayerScreen(
                 },
                 onSeekForward = {
                     val p = exoPlayer
-                    if (p != null) {
+                    if (p != null && p.duration > 0) {
                         p.seekTo((p.currentPosition + 10000).coerceAtMost(p.duration))
                     }
                 },

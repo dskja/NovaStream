@@ -36,18 +36,18 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .okHttpClient(NetworkModule.okHttpClient)
-            .crossfade(150)
+            .crossfade(200)
             .respectCacheHeaders(false)
             .allowHardware(true)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.25)
+                    .maxSizePercent(0.30)  // 30% of app memory for image cache
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(300L * 1024 * 1024)
+                    .maxSizeBytes(500L * 1024 * 1024)  // 500MB disk cache
                     .build()
             }
             .build()
