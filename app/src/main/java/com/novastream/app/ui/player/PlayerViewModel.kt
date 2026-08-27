@@ -28,7 +28,10 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val isFinished: Boolean = false,
     val nextEpisode: NextEpisodeInfo? = null,
-    val hosterSwitching: Boolean = false
+    val hosterSwitching: Boolean = false,
+    val autoplayNext: Boolean = true,
+    val playbackSpeed: Float = 1.0f,
+    val skipIntroButton: Boolean = true
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(selectedHosterIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
@@ -63,6 +66,7 @@ class PlayerViewModel(
 
     private val repo = NovaStreamRepository()
     private val watchRepo = WatchRepository(application)
+    private val appSettings = com.novastream.app.data.prefs.AppSettings(application)
 
     private val _state = MutableStateFlow(PlayerUiState(
         episodeTitle = title,
@@ -71,7 +75,19 @@ class PlayerViewModel(
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
-    init { load() }
+    init {
+        // Load user settings
+        viewModelScope.launch {
+            appSettings.autoplayNext.collect { v -> _state.update { it.copy(autoplayNext = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.playbackSpeed.collect { v -> _state.update { it.copy(playbackSpeed = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.skipIntroButton.collect { v -> _state.update { it.copy(skipIntroButton = v) } }
+        }
+        load()
+    }
 
     private fun load() {
         _state.update { it.copy(loading = true, error = null) }

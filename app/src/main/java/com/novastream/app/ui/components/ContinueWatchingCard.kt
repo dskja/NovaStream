@@ -90,7 +90,7 @@ fun ContinueWatchingCard(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(progress.coverUrl)
-                        .crossfade(false)
+                        .crossfade(true)
                         .build(),
                     contentDescription = progress.seriesTitle,
                     contentScale = ContentScale.Crop,
@@ -103,7 +103,7 @@ fun ContinueWatchingCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = progress.seriesTitle.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
+                        text = progress.seriesTitle.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—",
                         color = Accent,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Black

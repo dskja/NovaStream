@@ -157,6 +157,11 @@ fun PlayerScreen(
         lastLoadedUrl = url
         playerVisible = true
         showHosters = false
+        // Apply playback speed from settings
+        try {
+            val params = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
+            player.playbackParameters = params
+        } catch (_: Exception) {}
     }
 
     // Save progress periodically (only when position changed - avoids unnecessary DB writes)
@@ -354,6 +359,49 @@ fun PlayerScreen(
                     )
                 }
             }
+            // Playback speed button
+            if (playerVisible && exoPlayer != null) {
+                var showSpeedMenu by remember { mutableStateOf(false) }
+                Box {
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(GlassMedium)
+                            .clickable { showSpeedMenu = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "${state.playbackSpeed}x",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = showSpeedMenu,
+                        onDismissRequest = { showSpeedMenu = false },
+                        modifier = Modifier.background(Color(0xFF1A1A1A))
+                    ) {
+                        listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "${speed}x",
+                                        color = if (kotlin.math.abs(state.playbackSpeed - speed) < 0.01f) Primary else Color.White,
+                                        fontWeight = if (kotlin.math.abs(state.playbackSpeed - speed) < 0.01f) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(speed)
+                                    showSpeedMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Bottom overlay: Hoster pills
@@ -442,9 +490,9 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay
+        // Next Episode overlay (only if autoplay is enabled in settings)
         AnimatedVisibility(
-            visible = showNextEpisodeOverlay && state.nextEpisode != null,
+            visible = showNextEpisodeOverlay && state.nextEpisode != null && state.autoplayNext,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center)

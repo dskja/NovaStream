@@ -31,6 +31,19 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
                 ActiveProvider.setById(providerId)
             }
         }
+        // Cleanup: Entferne abgeschlossene Episoden die älter als 30 Tage sind
+        appScope.launch {
+            try {
+                val db = com.novastream.app.data.db.NovaStreamDatabase.get(this@NovaStreamApp)
+                val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+                val count = db.watchProgressDao().deleteOldCompleted(cutoff)
+                if (com.novastream.app.BuildConfig.DEBUG && count > 0) {
+                    android.util.Log.i("NovaStreamApp", "Cleaned up $count old completed episodes")
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NovaStreamApp", "Cleanup failed", e)
+            }
+        }
     }
 
     override fun newImageLoader(): ImageLoader {

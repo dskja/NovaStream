@@ -7,6 +7,7 @@ import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.StreamingProvider
+import kotlinx.coroutines.delay
 
 /**
  * Repository: kapselt den aktiven Streaming-Provider.
@@ -15,6 +16,7 @@ import com.novastream.app.data.provider.StreamingProvider
  * auch bei bereits erstellten ViewModels.
  *
  * Fängt alle Fehler als [RepoResult] ab.
+ * Beinhaltet automatische Retry-Logik für transient Network-Fehler.
  */
 class NovaStreamRepository {
 
@@ -27,22 +29,43 @@ class NovaStreamRepository {
     }
 
     suspend fun loadHome(): RepoResult<List<Series>> =
-        provider.loadHome().toRepoResult()
+        withRetry { provider.loadHome().toRepoResult() }
 
     suspend fun search(query: String): RepoResult<List<Series>> =
-        provider.search(query).toRepoResult()
+        withRetry { provider.search(query).toRepoResult() }
 
     suspend fun loadSeriesDetail(slug: String): RepoResult<Pair<Series, List<Season>>> =
-        provider.loadSeriesDetail(slug).toRepoResult()
+        withRetry { provider.loadSeriesDetail(slug).toRepoResult() }
 
     suspend fun loadSeason(slug: String, season: Int): RepoResult<List<Episode>> =
-        provider.loadSeason(slug, season).toRepoResult()
+        withRetry { provider.loadSeason(slug, season).toRepoResult() }
 
     suspend fun loadHosters(episode: Episode): RepoResult<List<HosterLink>> =
-        provider.loadHosters(episode).toRepoResult()
+        withRetry { provider.loadHosters(episode).toRepoResult() }
 
     suspend fun resolveHoster(hoster: HosterLink): RepoResult<List<StreamSource>> =
         provider.resolveHoster(hoster).toRepoResult()
+
+    /**
+     * Retry-Wrapper: versucht eine Operation bis zu 2x erneut bei Fehler.
+     * Wartet 500ms bzw. 1000ms zwischen Versuchen.
+     * Nur für idempotente Lese-Operationen geeignet.
+     */
+    private suspend fun <T> withRetry(
+        maxRetries: Int = 2,
+        block: suspend () -> RepoResult<T>
+    ): RepoResult<T> {
+        var lastError: RepoResult.Error? = null
+        repeat(maxRetries + 1) { attempt ->
+            if (attempt > 0) {
+                delay(attempt * 500L)
+            }
+            val result = block()
+            if (result is RepoResult.Success) return result
+            lastError = result as RepoResult.Error
+        }
+        return lastError ?: RepoResult.Error("Unbekannter Fehler")
+    }
 
     private fun <T> StreamingProvider.ProviderResult<T>.toRepoResult(): RepoResult<T> =
         when (this) {

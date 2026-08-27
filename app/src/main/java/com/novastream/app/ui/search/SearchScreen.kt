@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -61,7 +62,8 @@ data class SearchUiState(
     val loading: Boolean = false,
     val results: List<com.novastream.app.data.model.Series> = emptyList(),
     val error: String? = null,
-    val recentSearches: List<String> = emptyList()
+    val recentSearches: List<String> = emptyList(),
+    val trending: List<com.novastream.app.data.model.Series> = emptyList()
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -89,6 +91,17 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     _state.update { it.copy(recentSearches = emptyList()) }
                 }
             }
+        }
+        // Load trending series for empty-state discovery
+        viewModelScope.launch {
+            try {
+                when (val res = repo.loadHome()) {
+                    is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
+                        _state.update { it.copy(trending = res.data.take(20)) }
+                    }
+                    else -> {}
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -242,9 +255,9 @@ fun SearchScreen(
                 }
                 state.error != null -> PremiumError(state.error ?: "Unbekannter Fehler")
                 state.query.isBlank() -> {
-                    // Show recent searches when query is blank
-                    if (state.recentSearches.isNotEmpty()) {
-                        Column {
+                    // Show recent searches + trending when query is blank
+                    Column {
+                        if (state.recentSearches.isNotEmpty()) {
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -276,8 +289,24 @@ fun SearchScreen(
                                 }
                             }
                         }
-                    } else {
-                        PremiumEmpty("Suche nach deiner Lieblingsserie", icon = Icons.Default.Search)
+                        // Trending section
+                        if (state.trending.isNotEmpty()) {
+                            SectionHeader("Beliebt jetzt", modifier = Modifier.padding(top = 8.dp))
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 130.dp),
+                                contentPadding = PaddingValues(12.dp, bottom = 80.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.height(((state.trending.size / 3 + 1) * 260).dp)
+                            ) {
+                                items(state.trending, key = { it.id }) { s ->
+                                    SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
+                                }
+                            }
+                        }
+                        if (state.recentSearches.isEmpty() && state.trending.isEmpty()) {
+                            PremiumEmpty("Suche nach deiner Lieblingsserie", icon = Icons.Default.Search)
+                        }
                     }
                 }
                 state.results.isEmpty() -> PremiumEmpty("Keine Treffer für '${state.query}'", icon = Icons.Default.Search)
