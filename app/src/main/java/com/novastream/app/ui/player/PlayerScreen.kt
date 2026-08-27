@@ -60,12 +60,28 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
 
-    // Lock to landscape orientation while in player
+    // Lock to landscape orientation while in player + immersive fullscreen mode
     DisposableEffect(Unit) {
         val originalOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+
+        // Immersive fullscreen - hide status bar + nav bar
+        val window = activity?.window
+        val originalSystemUiVisibility = window?.decorView?.systemUiVisibility
+        window?.decorView?.systemUiVisibility = (
+            android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        )
+
         onDispose {
-            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // Restore orientation - use UNSPECIFIED so system handles it properly
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // Restore system UI
+            window?.decorView?.systemUiVisibility = originalSystemUiVisibility ?: 0
         }
     }
 
@@ -96,53 +112,46 @@ fun PlayerScreen(
         }
     }
 
-    // Create player when source changes
+    // Create player when source changes - ALWAYS release old player and create new one
+    // Reusing ExoPlayer with setMediaItem causes black screen + audio only on hoster switch
     LaunchedEffect(currentSource?.url) {
         showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
 
-        // Reuse existing player if possible, else create new
-        val existing = exoPlayer
-        if (existing != null) {
+        // Release old player first (fixes black screen on hoster switch)
+        exoPlayer?.let { old ->
+            try {
+                old.removeListener(episodeEndListener)
+                old.release()
+            } catch (_: Exception) {}
+        }
+        exoPlayer = null
+
+        // Create new player for the new source
+        val player = ExoPlayer.Builder(context)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true  // handleAudioFocus = true
+            )
+            .build().apply {
             val mediaItem = MediaItem.Builder()
                 .setUri(src.url)
                 .setMimeType(src.mimeType)
                 .build()
-            existing.setMediaItem(mediaItem)
-            if (state.resumePositionMs > 0) existing.seekTo(state.resumePositionMs)
-            existing.prepare()
-            existing.playWhenReady = true
-            // Ensure listener is attached (safe to remove+add)
-            existing.removeListener(episodeEndListener)
-            existing.addListener(episodeEndListener)
-            playerVisible = true
-            showHosters = false
-        } else {
-            val player = ExoPlayer.Builder(context)
-                .setAudioAttributes(
-                    androidx.media3.common.AudioAttributes.Builder()
-                        .setUsage(androidx.media3.common.C.USAGE_MEDIA)
-                        .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
-                        .build(),
-                    true  // handleAudioFocus = true
-                )
-                .build().apply {
-                val mediaItem = MediaItem.Builder()
-                    .setUri(src.url)
-                    .setMimeType(src.mimeType)
-                    .build()
-                setMediaItem(mediaItem)
-                prepare()
-                playWhenReady = true
-                if (state.resumePositionMs > 0) {
-                    seekTo(state.resumePositionMs)
-                }
+            setMediaItem(mediaItem)
+            prepare()
+            playWhenReady = true
+            if (state.resumePositionMs > 0) {
+                seekTo(state.resumePositionMs)
             }
-            player.addListener(episodeEndListener)
-            exoPlayer = player
-            playerVisible = true
-            showHosters = false
         }
+        player.addListener(episodeEndListener)
+        exoPlayer = player
+        playerVisible = true
+        showHosters = false
     }
 
     // Save progress periodically
@@ -181,6 +190,8 @@ fun PlayerScreen(
                 player.release()
             }
             exoPlayer = null
+            playerVisible = false  // Reset visibility to prevent ghost
+            showHosters = false
         }
     }
 
@@ -428,7 +439,7 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay (shown when episode ends) - with auto-play countdown
+        // Next Episode overlay (shown when episode ends) - with cover image + auto-play countdown
         AnimatedVisibility(
             visible = showNextEpisodeOverlay && state.nextEpisode != null,
             enter = fadeIn(),
@@ -448,24 +459,18 @@ fun PlayerScreen(
                                 kotlinx.coroutines.yield()
                                 countdown--
                             }
-                            // Only auto-play if overlay is still showing
                             if (showNextEpisodeOverlay) {
                                 showNextEpisodeOverlay = false
                                 onNextEpisode(next.season, next.episode, next.title)
                             }
-                        } catch (_: kotlinx.coroutines.CancellationException) {
-                            // Overlay dismissed or screen left - countdown cancelled
-                        }
+                        } catch (_: kotlinx.coroutines.CancellationException) {}
                     }
                 }
                 Box(
                     Modifier
                         .fillMaxSize()
                         .background(Color(0xE6000000))
-                        .clickable {
-                            // Tap anywhere to cancel auto-play and stay
-                            showNextEpisodeOverlay = false
-                        },
+                        .clickable { showNextEpisodeOverlay = false },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -477,14 +482,57 @@ fun PlayerScreen(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "S${next.season} E${next.episode} · ${next.title}",
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                        Spacer(Modifier.height(16.dp))
+
+                        // Cover thumbnail (16:9)
+                        Box(
+                            Modifier
+                                .size(280.dp, 158.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0x22FFFFFF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!next.coverUrl.isNullOrBlank()) {
+                                coil.compose.AsyncImage(
+                                    model = coil.request.ImageRequest.Builder(context)
+                                        .data(next.coverUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = next.title,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            // Dark gradient overlay
+                            Box(
+                                Modifier.fillMaxSize().background(
+                                    Brush.verticalGradient(
+                                        0.4f to Color.Transparent,
+                                        1f to Color(0xCC000000)
+                                    )
+                                )
+                            )
+                            // Episode info on thumbnail
+                            Column(
+                                Modifier.align(Alignment.BottomStart).padding(16.dp)
+                            ) {
+                                Text(
+                                    "S${next.season} E${next.episode}",
+                                    color = Color.White.copy(0.7f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    next.title,
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
                         Spacer(Modifier.height(24.dp))
                         Row(
                             Modifier

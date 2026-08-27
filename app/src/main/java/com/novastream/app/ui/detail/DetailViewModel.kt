@@ -177,6 +177,17 @@ class DetailViewModel(
         }
     }
 
+    /** Entfernt den "gesehen" Status für alle Episoden einer Staffel. */
+    fun markSeasonAsUnwatched(season: Int) {
+        val seasonObj = _state.value.seasons.find { it.number == season } ?: return
+        viewModelScope.launch {
+            seasonObj.episodes.forEach { ep ->
+                val key = "$slug-$season-${ep.number}"
+                watchRepo.removeProgress(key)
+            }
+        }
+    }
+
     private fun loadSeasonEpisodes(seasonNum: Int) {
         _state.update { it.copy(loadingSeason = true) }
         viewModelScope.launch {

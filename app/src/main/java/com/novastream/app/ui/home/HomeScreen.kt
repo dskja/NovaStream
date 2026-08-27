@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -196,14 +193,10 @@ fun HomeScreen(
                 SectionHeader("Neu hinzugefügt")
             }
             item {
-                LazyHorizontalGrid(
-                    modifier = Modifier
-                        .focusRestorer()
-                        .height(580.dp),
-                    rows = GridCells.Fixed(3),
+                LazyRow(
+                    Modifier.focusRestorer(),
                     contentPadding = PaddingValues(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(state.newest, key = { it.id }) { s ->
                         SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })

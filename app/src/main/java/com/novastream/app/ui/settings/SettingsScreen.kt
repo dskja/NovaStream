@@ -79,7 +79,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             watchRepo.watchlist().collect { list -> _state.update { it.copy(watchlistCount = list.size) } }
         }
         viewModelScope.launch {
-            watchRepo.watchProgress().collect { list -> _state.update { it.copy(continueWatchingCount = list.size) } }
+            watchRepo.watchProgress().collect { list -> _state.update { it.copy(continueWatchingCount = list.count { !it.isCompleted }) } }
         }
         // Load available providers
         _state.update {
@@ -152,7 +152,14 @@ fun SettingsScreen() {
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(
+                snackbarHostState,
+                modifier = Modifier.padding(
+                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                )
+            )
+        },
         containerColor = BgPure
     ) { padding ->
         Column(
@@ -270,24 +277,6 @@ fun SettingsScreen() {
             // Section: Datenverwaltung
             SettingsSectionHeader("Datenverwaltung")
 
-            // Stats Cards
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatCard(
-                    label = "Watchlist",
-                    value = state.watchlistCount,
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    label = "Weitersehen",
-                    value = state.continueWatchingCount,
-                    modifier = Modifier.weight(1f)
-                )
-            }
             SettingsItem(
                 icon = Icons.Default.PlayCircle,
                 title = "Weitersehen leeren",
@@ -450,12 +439,6 @@ fun SettingsScreen() {
                 title = "dskja",
                 subtitle = "GitHub Profil",
                 onClick = { openUrl(context, "https://github.com/dskja") { vm.showUrlError() } }
-            )
-            ClickableSettingsItem(
-                icon = Icons.Default.OpenInNew,
-                title = "Alle Projekte",
-                subtitle = "Weitere Repositories ansehen",
-                onClick = { openUrl(context, "https://github.com/dskja?tab=repositories") { vm.showUrlError() } }
             )
 
             Spacer(Modifier.height(24.dp))
