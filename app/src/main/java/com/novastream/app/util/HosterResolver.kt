@@ -27,6 +27,14 @@ class HosterResolver(
     private val baseUrl: String = NovaStreamConfig.BASE_URL
 ) {
 
+    companion object {
+        // Pre-compiled regex patterns (avoid recompilation on every call)
+        private val SRC_PATTERN = Regex("src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]")
+        private val DATA_SRC_PATTERN = Regex("data-src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]")
+        private val URL_COLON_PATTERN = Regex("url\\s*:\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]")
+        private val META_REFRESH_PATTERN = Regex("http-equiv=['\"]refresh['\"]\\s+content=['\"]\\d+;url=([^'\"\\s]+)['\"]")
+    }
+
     /** Macht eine relative URL absolut basierend auf der Provider-Base-URL. */
     private fun absUrl(path: String): String =
         if (path.startsWith("http")) path else baseUrl + path
@@ -88,7 +96,7 @@ class HosterResolver(
     private fun extractGenericUrls(html: String, hoster: String): List<StreamSource> {
         val sources = mutableListOf<StreamSource>()
         // Pattern 1: src="..." mit video-URL
-        Regex("src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
+        SRC_PATTERN.findAll(html).forEach { m ->
             var url = m.groupValues[1]
             if (url.startsWith("//")) url = "https:$url"
             if (!NovaStreamConfig.isTestVideo(url)) {
@@ -96,7 +104,7 @@ class HosterResolver(
             }
         }
         // Pattern 2: data-src="..." mit video-URL
-        Regex("data-src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
+        DATA_SRC_PATTERN.findAll(html).forEach { m ->
             var url = m.groupValues[1]
             if (url.startsWith("//")) url = "https:$url"
             if (!NovaStreamConfig.isTestVideo(url)) {
@@ -104,7 +112,7 @@ class HosterResolver(
             }
         }
         // Pattern 3: url:"..." mit video-URL
-        Regex("url\\s*:\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
+        URL_COLON_PATTERN.findAll(html).forEach { m ->
             var url = m.groupValues[1]
             if (url.startsWith("//")) url = "https:$url"
             if (!NovaStreamConfig.isTestVideo(url)) {
@@ -129,7 +137,7 @@ class HosterResolver(
             return it.groupValues[1]
         }
         // Pattern 4: <meta http-equiv="refresh" content="0;url=https://...">
-        Regex("http-equiv=['\"]refresh['\"]\\s+content=['\"]\\d+;url=([^'\"]+)['\"]").find(html)?.let {
+        META_REFRESH_PATTERN.find(html)?.let {
             return it.groupValues[1]
         }
         // Pattern 5: window.location.replace('https://...')

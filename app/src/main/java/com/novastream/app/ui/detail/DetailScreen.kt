@@ -319,7 +319,7 @@ private fun DetailContent(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(state.seasons) { i, season ->
+                itemsIndexed(state.seasons, key = { idx, s -> "season-$idx-${s.number}" }) { i, season ->
                     val selected = i == state.selectedSeasonIndex
                     Box(
                         Modifier
