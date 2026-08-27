@@ -19,8 +19,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        VoeWebViewResolver.setContext(this)
-        enableEdgeToEdge()
+
+        // Use application context for VoeWebViewResolver to avoid Activity memory leaks
+        VoeWebViewResolver.setContext(applicationContext)
+
+        // Edge-to-edge nur auf Nicht-TV Geräten (TV hat andere UI Requirements)
+        if (!TvUtils.isTvDevice(this)) {
+            enableEdgeToEdge()
+        }
+
         setContent {
             NovaStreamTheme {
                 Surface(
@@ -34,7 +41,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        VoeWebViewResolver.clearContext()
+        try {
+            super.onDestroy()
+        } finally {
+            VoeWebViewResolver.clearContext()
+        }
     }
 }

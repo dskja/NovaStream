@@ -10,7 +10,10 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "watch_progress",
-    indices = [Index(value = ["slug", "season", "episode"])]
+    indices = [
+        Index(value = ["slug", "season", "episode"]),
+        Index(value = ["updatedAt"])
+    ]
 )
 data class WatchProgress(
     @PrimaryKey
@@ -29,7 +32,7 @@ data class WatchProgress(
     val progressPercent: Float
         get() = if (durationMs > 0 && positionMs >= 0) (positionMs.toFloat() / durationMs * 100f).coerceIn(0f, 100f) else 0f
 
-    /** Ob die Episode als "gesehen" gilt (>90% geschaut) */
+    /** Ob die Episode als "gesehen" gilt (>=90% geschaut) */
     val isCompleted: Boolean
         get() = progressPercent >= 90f
 }

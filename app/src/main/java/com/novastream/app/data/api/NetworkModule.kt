@@ -10,10 +10,11 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Stellt OkHttp + Retrofit bereit.
- * Nutzt DNS-over-HTTPS (Cloudflare 1.1.1.1) um ISP-DNS-Blockaden zu umgehen.
+ * Nutzt DNS-over-HTTPS (Cloudflare 1.1.1.1 + Google 8.8.8.8 Fallback) um ISP-DNS-Blockaden zu umgehen.
  */
 object NetworkModule {
 
@@ -24,10 +25,7 @@ object NetworkModule {
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
 
-        // Referer nur setzen wenn nicht bereits von Provider/HosterResolver gesetzt
-        // (Multi-Provider: jeder Provider setzt seinen eigenen Referer)
         if (original.header("Referer") == null) {
-            // Default: Referer = Host der Request-URL (nicht hardcoded SerienStream)
             val host = original.url.host
             builder.header("Referer", "https://$host/")
         }
@@ -41,34 +39,73 @@ object NetworkModule {
     }
 
     /**
-     * DNS-over-HTTPS via Cloudflare (1.1.1.1).
+     * DNS-over-HTTPS via Cloudflare (1.1.1.1) mit Google (8.8.8.8) Fallback.
      * Umgeht ISP-DNS-Blockaden (z.B. O2/Telefonica cuii-Sperre).
-     * Bootstrap-IPs 1.1.1.1 / 1.0.0.1 stellen sicher, dass DoH auch ohne
-     * funktionierenden System-DNS erreichbar ist.
+     * Bootstrap-IPs stellen sicher, dass DoH auch ohne funktionierenden System-DNS erreichbar ist.
+     *
+     * DNS Resolution wird lazy gemacht um blocking auf dem main thread zu vermeiden.
      */
-    private val dohDns: Dns = run {
-        val bootstrap = listOf("1.1.1.1", "1.0.0.1").mapNotNull {
-            try { java.net.InetAddress.getByName(it) } catch (e: Exception) {
-                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "Bootstrap DNS failed: $it", e)
-                null
-            }
+    private val dohDnsRef = AtomicReference<Dns?>(null)
+
+    private val dohDns: Dns by lazy {
+        dohDnsRef.get() ?: run {
+            val resolved = resolveDohDns()
+            dohDnsRef.set(resolved)
+            resolved
+        }
+    }
+
+    private fun resolveDohDns(): Dns {
+        // Bootstrap IPs für Cloudflare + Google
+        val bootstrap = listOf("1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4").mapNotNull {
+            try { java.net.InetAddress.getByName(it) } catch (_: Exception) { null }
         }
         if (bootstrap.isEmpty()) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "All bootstrap DNS failed, falling back to system DNS")
-            Dns.SYSTEM
-        } else {
-            DnsOverHttps.Builder()
-                .client(
-                    OkHttpClient.Builder()
-                        .connectTimeout(10, TimeUnit.SECONDS)
-                        .readTimeout(10, TimeUnit.SECONDS)
-                        .build()
-                )
-                .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
-                .bootstrapDnsHosts(bootstrap)
-                .includeIPv6(true)
-                .build()
+            return Dns.SYSTEM
         }
+
+        // Primär: Cloudflare DoH
+        val cloudflareBootstrap = bootstrap.filter { it.hostAddress == "1.1.1.1" || it.hostAddress == "1.0.0.1" }
+        if (cloudflareBootstrap.isNotEmpty()) {
+            try {
+                return DnsOverHttps.Builder()
+                    .client(
+                        OkHttpClient.Builder()
+                            .connectTimeout(10, TimeUnit.SECONDS)
+                            .readTimeout(10, TimeUnit.SECONDS)
+                            .build()
+                    )
+                    .url("https://cloudflare-dns.com/dns-query".toHttpUrl())
+                    .bootstrapDnsHosts(cloudflareBootstrap)
+                    .includeIPv6(true)
+                    .build()
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "Cloudflare DoH failed, trying Google", e)
+            }
+        }
+
+        // Fallback: Google DoH
+        val googleBootstrap = bootstrap.filter { it.hostAddress == "8.8.8.8" || it.hostAddress == "8.8.4.4" }
+        if (googleBootstrap.isNotEmpty()) {
+            try {
+                return DnsOverHttps.Builder()
+                    .client(
+                        OkHttpClient.Builder()
+                            .connectTimeout(10, TimeUnit.SECONDS)
+                            .readTimeout(10, TimeUnit.SECONDS)
+                            .build()
+                    )
+                    .url("https://dns.google/dns-query".toHttpUrl())
+                    .bootstrapDnsHosts(googleBootstrap)
+                    .includeIPv6(true)
+                    .build()
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NetworkModule", "Google DoH failed, using system DNS", e)
+            }
+        }
+
+        return Dns.SYSTEM
     }
 
     val okHttpClient: OkHttpClient by lazy {

@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Hoster sind direkt als iframe-URLs in der Detail-Seite eingebettet.
  *
- * Performance: Detail-Seiten werden gecacht (ConcurrentHashMap) da KinoGer
+ * Performance: Detail-Seiten werden gecacht (LRU Cache mit max 20 Einträgen) da KinoGer
  * alle Episoden auf einer Seite hat und loadSeason/loadHosters sonst
  * mehrfach die gleiche Seite laden würden.
  */
@@ -40,9 +40,13 @@ class KinoGerProvider(
     private val api: KinoGerApi = createApi(baseUrl)
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
 
-    // In-Memory Cache für Detail-Seiten (slug -> HTML)
-    // Verhindert mehrfaches Laden der gleichen Seite für loadSeason/loadHosters
-    private val detailCache = ConcurrentHashMap<String, String>()
+    // LRU Cache mit maximal 20 Einträgen (verhindert unbounded Memory Growth)
+    private val detailCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+            return size > MAX_CACHE_SIZE
+        }
+    }
+    private val cacheLock = Any()
 
     private fun createApi(base: String): KinoGerApi {
         val retrofit = Retrofit.Builder()
@@ -54,7 +58,6 @@ class KinoGerProvider(
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        // KinoGer hat keine reine Serien-Startseite - nutze /stream/serie/
         KinoGerScraper.parseSeriesList(api.seriesHome())
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -80,8 +83,6 @@ class KinoGerProvider(
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
-        // KinoGer lädt alle Episoden auf einer Seite - keine separate Staffel-URL
-        // Nutze Cache um mehrfaches Laden zu vermeiden
         val html = fetchDetailPage(slug)
         val (_, seasons) = KinoGerScraper.parseSeriesDetail(html, slug)
         seasons.find { it.number == season }?.episodes ?: emptyList()
@@ -91,11 +92,9 @@ class KinoGerProvider(
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
-        // KinoGer: Hoster sind bereits als iframe-URLs in der Episode gespeichert
         if (episode.hosters.isNotEmpty()) {
             episode.hosters
         } else {
-            // Fallback: Lade Detail-Seite und parse Hoster
             val html = fetchDetailPage(episode.slug)
             KinoGerScraper.parseHosters(html)
         }
@@ -105,25 +104,37 @@ class KinoGerProvider(
     )
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
-        // KinoGer: redirectUrl ist bereits die direkte iframe-URL zum Hoster
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error("Stream-URL konnte nicht aufgelöst werden", it) }
     )
 
-    /** Lädt die Detail-Seite mit Caching. */
+    /** Lädt die Detail-Seite mit thread-safe LRU Caching. */
     private suspend fun fetchDetailPage(slug: String): String {
-        // Cache hit?
-        detailCache[slug]?.let { return it }
-        // Cache miss - lade und cache
+        // Cache hit (thread-safe)
+        synchronized(cacheLock) {
+            detailCache[slug]?.let { return it }
+        }
+        // Cache miss - lade
         val html = api.raw("stream/$slug.html")
-        detailCache[slug] = html
+        // Nur cachen wenn HTML nicht leer ist
+        if (html.isNotBlank()) {
+            synchronized(cacheLock) {
+                detailCache[slug] = html
+            }
+        }
         return html
     }
 
     /** Leert den Cache (z.B. bei Provider-Wechsel). */
     fun clearCache() {
-        detailCache.clear()
+        synchronized(cacheLock) {
+            detailCache.clear()
+        }
+    }
+
+    companion object {
+        private const val MAX_CACHE_SIZE = 20
     }
 }

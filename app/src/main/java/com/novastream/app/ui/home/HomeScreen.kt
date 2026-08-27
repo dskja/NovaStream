@@ -61,6 +61,7 @@ fun HomeScreen(
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val activeProviderName = remember { com.novastream.app.data.provider.ActiveProvider.displayName }
 
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
@@ -74,7 +75,43 @@ fun HomeScreen(
                 .fillMaxSize()
                 .background(BgPure)
         ) {
-            // Hero Banner Karussell
+            // Provider Badge - zeigt aktiven Provider
+        item {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PrimaryGradient)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        activeProviderName,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "•",
+                    color = TextTertiary,
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "${state.popular.size + state.newest.size + state.trending.size} Serien verfügbar",
+                    color = TextTertiary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        // Hero Banner Karussell
             item {
                 if (state.loading && state.hero.isEmpty()) {
                     ShimmerBox(

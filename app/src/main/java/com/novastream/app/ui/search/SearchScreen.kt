@@ -103,7 +103,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
         _state.update { it.copy(loading = true) }
         searchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(450) // Debounce
+            kotlinx.coroutines.delay(250) // Debounce (reduziert von 450ms für schnellere UX)
             currentCoroutineContext().ensureActive()
             if (_state.value.query != trimmed) return@launch  // Veraltete Query
             when (val res = repo.search(trimmed)) {

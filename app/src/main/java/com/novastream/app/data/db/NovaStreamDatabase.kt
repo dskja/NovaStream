@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [WatchProgress::class, WatchlistItem::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class NovaStreamDatabase : RoomDatabase() {
@@ -31,9 +31,14 @@ abstract class NovaStreamDatabase : RoomDatabase() {
         // Migration v2 -> v3: Safety migration für Schema-Korrekturen
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Stelle sicher dass der watchlist addedAt Index existiert
-                // (war in MIGRATION_1_2 ursprünglich vergessen)
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_watchlist_addedAt ON watchlist(addedAt)")
+            }
+        }
+
+        // Migration v3 -> v4: Add index on updatedAt for performance (ORDER BY updatedAt DESC)
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_updatedAt ON watch_progress(updatedAt)")
             }
         }
 
@@ -44,10 +49,11 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     NovaStreamDatabase::class.java,
                     "novastream.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     // Fallback: Wenn eine Migration fehlt, DB neu erstellen
-                    // (Watchlist/Watch Progress sind nicht kritisch - User kann sie neu aufbauen)
                     .fallbackToDestructiveMigration()
+                    // WAL Mode für bessere concurrent read/write Performance
+                    .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .build().also { INSTANCE = it }
             }
     }

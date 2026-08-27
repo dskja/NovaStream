@@ -116,3 +116,79 @@ fun PremiumBottomBar(
         }
     }
 }
+
+/**
+ * TV Top Tab Bar - für Android TV / Fire TV Navigation.
+ * Verwendet eine horizontale Tab-Leiste am oberen Bildschirmrand
+ * (Amazon Fire TV + Android TV Guidelines empfehlen Top-Navigation statt Bottom Bar).
+ */
+@Composable
+fun PremiumTopTabBar(
+    currentRoute: String,
+    onNavigate: (String) -> Unit
+) {
+    val items = listOf(
+        NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
+        NavItem("Liste", Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
+        NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search"),
+        NavItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
+    )
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(56.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+            .background(BgPure)
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                bottom = 8.dp
+            ),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEach { item ->
+            val selected = currentRoute == item.route
+            val iconColor by animateColorAsState(
+                targetValue = if (selected) Primary else TextTertiary,
+                animationSpec = tween(300),
+                label = "tvIconColor"
+            )
+            val textColor by animateColorAsState(
+                targetValue = if (selected) TextPrimary else TextTertiary,
+                animationSpec = tween(300),
+                label = "tvTextColor"
+            )
+            val bgColor by animateColorAsState(
+                targetValue = if (selected) Primary.copy(alpha = 0.15f) else Color.Transparent,
+                animationSpec = tween(300),
+                label = "tvBgColor"
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(bgColor)
+                    .clickable { if (!selected) onNavigate(item.route) }
+                    .focusable()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                    contentDescription = if (selected) "${item.label}, ausgewählt" else item.label,
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = item.label,
+                    color = textColor,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}

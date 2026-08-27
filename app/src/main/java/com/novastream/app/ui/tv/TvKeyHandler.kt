@@ -28,18 +28,14 @@ import androidx.compose.ui.input.key.type
  * - KEYCODE_MENU: Context Menu / Settings
  * - KEYCODE_MEDIA_NEXT: Next episode
  * - KEYCODE_MEDIA_PREVIOUS: Previous episode
- * - DPad Left/Right: Auch Seek im Player (Amazon Guideline)
  *
- * Fire TV Remote hat oft nur Play/Pause (kein separater Play/Pause Button).
- * Play/Pause, Rewind, FF sind Toggle-Buttons - nicht alle Remotes haben sie.
- * Daher D-Pad als Fallback für Seek verwenden.
+ * WICHTIG: D-Pad Left/Right im Player seeked NICHT mehr (verursachte double action).
+ * Stattdessen nur Media Rewind/FastForward für Seek.
  */
 
 /**
  * Modifier der D-Pad Key Events abfängt und an Callbacks weiterleitet.
  * Für Player-Specific Controls (Seek, Play/Pause, etc.)
- *
- * Unterstützt Fire TV + Android TV Remote Keys.
  */
 fun Modifier.tvPlayerKeyHandler(
     onPlayPause: () -> Unit = {},
@@ -84,15 +80,6 @@ fun Modifier.tvPlayerKeyHandler(
             onPrevious()
             true
         }
-        // Fire TV: D-Pad Left/Right = Seek im Player (Amazon Guideline)
-        Key.DirectionRight -> {
-            onSeekForward()
-            false // Lass Compose auch normal navigieren
-        }
-        Key.DirectionLeft -> {
-            onSeekBackward()
-            false
-        }
         // Fire TV: Menu Button (KEYCODE_MENU)
         Key.Menu -> {
             onMenu()
@@ -108,6 +95,8 @@ fun Modifier.tvPlayerKeyHandler(
             onBack()
             false // Lass System Back Handler laufen
         }
+        // D-Pad Left/Right: NICHT seeken - nur Navigation (verhindert double action)
+        // Seek nur über Media Rewind/FastForward Buttons
         else -> false
     }
 }
@@ -115,8 +104,6 @@ fun Modifier.tvPlayerKeyHandler(
 /**
  * Modifier der ein Element focusable macht und D-Pad Select Events abfängt.
  * Für generische UI Elemente (Cards, Buttons, etc.)
- *
- * Unterstützt Fire TV + Android TV D-Pad Center und Enter.
  */
 fun Modifier.tvSelectable(
     onSelect: () -> Unit = {},
