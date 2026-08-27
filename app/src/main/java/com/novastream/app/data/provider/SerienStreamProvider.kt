@@ -26,7 +26,6 @@ class SerienStreamProvider(
     override val id: String = "serienstream",
     override val displayName: String = "SerienStream",
     override val baseUrl: String = NovaStreamConfig.BASE_URL,
-    private val contentPath: String = "serie",
     override val supportsSeries: Boolean = true
 ) : StreamingProvider {
 

@@ -10,12 +10,16 @@ import com.novastream.app.data.provider.StreamingProvider
 
 /**
  * Repository: kapselt den aktiven Streaming-Provider.
- * Liest den aktiven Provider von ActiveProvider (Singleton).
+ * Liest den aktiven Provider bei JEDEM Aufruf von ActiveProvider (Singleton).
+ * So wird sichergestellt dass Provider-Wechsel sofort wirksam werden,
+ * auch bei bereits erstellten ViewModels.
+ *
  * Fängt alle Fehler als [RepoResult] ab.
  */
-class NovaStreamRepository(
-    private val provider: StreamingProvider = ActiveProvider.get()
-) {
+class NovaStreamRepository {
+
+    /** Holt den aktuellen Provider bei jedem Aufruf neu. */
+    private val provider: StreamingProvider get() = ActiveProvider.get()
 
     sealed class RepoResult<out T> {
         data class Success<T>(val data: T) : RepoResult<T>()
