@@ -105,8 +105,8 @@ private fun DetailContent(
     var imageError by remember { mutableStateOf(false) }
     var episodeFilter by remember { mutableStateOf("") }
 
-    // Filter zurücksetzen wenn Staffel gewechselt wird
-    LaunchedEffect(state.selectedSeasonIndex) {
+    // Filter zurücksetzen wenn Staffel oder Serie gewechselt wird
+    LaunchedEffect(state.selectedSeasonIndex, series.id) {
         episodeFilter = ""
     }
 
