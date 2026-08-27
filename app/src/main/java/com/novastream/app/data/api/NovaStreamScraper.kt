@@ -377,6 +377,31 @@ object NovaStreamScraper {
 
     // ─── Hilfsfunktionen ────────────────────────────────────────────────────
 
+    /** Parst eine Genre-Seite (gleiche Struktur wie Home/Suche). */
+    fun parseGenreList(html: String): List<Series> = parseSeriesList(html)
+
+    /** Parst die neuesten/beliebtesten Serien (gleiche Struktur). */
+    fun parseNewestList(html: String): List<Series> = parseSeriesList(html)
+
+    /** Parst die beliebtesten Serien (gleiche Struktur). */
+    fun parsePopularList(html: String): List<Series> = parseSeriesList(html)
+
+    /** Extrahiert alle verfügbaren Genre-Links aus einer Seite. */
+    fun parseGenres(html: String): List<Pair<String, String>> {
+        if (html.isBlank()) return emptyList()
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val genres = linkedMapOf<String, String>()
+        for (a in doc.select("a[href^=/genre/]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = href.substringAfter("/genre/").substringBefore("/").substringBefore("?")
+            if (slug.isNotBlank() && !genres.containsKey(slug)) {
+                val name = a.text().trim().ifBlank { slugToTitle(slug) }
+                genres[slug] = name
+            }
+        }
+        return genres.entries.map { (slug, name) -> slug to name }
+    }
+
     private fun extractSlug(url: String): String? {
         val m = SLUG_PATTERN.matcher(url)
         if (!m.find()) return null

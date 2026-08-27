@@ -77,6 +77,10 @@ class HosterResolver(
                 return voeWebViewResolver.resolve(hosterPageUrl, hosterName)
             }
 
+            // 7. Letzter Versuch: Generic extraction mit erweiterten Patterns
+            val genericSources = extractGenericUrls(html, hosterName)
+            if (genericSources.isNotEmpty()) return genericSources
+
             emptyList()
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) {
@@ -84,6 +88,33 @@ class HosterResolver(
             }
             emptyList()
         }
+    }
+
+    /** Generic URL extraction mit erweiterten Patterns als letzter Fallback. */
+    private fun extractGenericUrls(html: String, hoster: String): List<StreamSource> {
+        val sources = mutableListOf<StreamSource>()
+        // Pattern 1: src="..." mit video-URL
+        Regex("src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            if (!NovaStreamConfig.isTestVideo(url)) {
+                sources.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
+            }
+        }
+        // Pattern 2: data-src="..." mit video-URL
+        Regex("data-src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            if (!NovaStreamConfig.isTestVideo(url)) {
+                sources.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
+            }
+        }
+        // Pattern 3: url:"..." mit video-URL
+        Regex("url\\s*:\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
+            val url = m.groupValues[1]
+            if (!NovaStreamConfig.isTestVideo(url)) {
+                sources.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
+            }
+        }
+        return sources.distinctBy { it.url }
     }
 
     /** Extrahiert die JS-Redirect-URL aus dem Response-HTML. */

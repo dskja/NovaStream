@@ -42,10 +42,37 @@ interface StreamingProvider {
     /** Löst einen Hoster-Link zu Stream-Quellen auf. */
     suspend fun resolveHoster(hoster: HosterLink): ProviderResult<List<StreamSource>>
 
+    /** Lädt Serien nach Genre (optional, default: emptyList). */
+    suspend fun loadGenre(genre: String): ProviderResult<List<Series>> =
+        ProviderResult.Success(emptyList())
+
+    /** Lädt die neuesten Serien (optional, default: loadHome). */
+    suspend fun loadNewest(): ProviderResult<List<Series>> = loadHome()
+
+    /** Lädt die beliebtesten Serien (optional, default: loadHome). */
+    suspend fun loadPopular(): ProviderResult<List<Series>> = loadHome()
+
     /** Result-Wrapper für Provider-Operationen. */
     sealed class ProviderResult<out T> {
         data class Success<T>(val data: T) : ProviderResult<T>()
         data class Error(val message: String, val cause: Throwable? = null) : ProviderResult<Nothing>()
+
+        /** True wenn dies ein Success ist. */
+        val isSuccess: Boolean get() = this is Success
+        /** True wenn dies ein Error ist. */
+        val isError: Boolean get() = this is Error
+
+        /** Mappt den Success-Wert oder gibt null bei Error zurück. */
+        inline fun <R> map(transform: (T) -> R): ProviderResult<R> = when (this) {
+            is Success -> Success(transform(data))
+            is Error -> this
+        }
+
+        /** Gibt den Success-Wert oder null zurück. */
+        fun getOrNull(): T? = (this as? Success)?.data
+
+        /** Gibt die Fehlermeldung oder null zurück. */
+        fun errorOrNull(): String? = (this as? Error)?.message
     }
 }
 

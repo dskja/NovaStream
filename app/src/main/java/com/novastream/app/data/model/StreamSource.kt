@@ -24,4 +24,36 @@ data class StreamSource(
             url.contains("360", ignoreCase = true) -> "360p"
             else -> null
         }
+
+    /** True wenn es ein HLS-Stream ist (m3u8). */
+    val isHlsStream: Boolean get() = isHls || url.contains(".m3u8")
+
+    /** True wenn es ein MP4-Stream ist. */
+    val isMp4Stream: Boolean get() = !isHls && url.contains(".mp4")
+
+    /** True wenn es ein WebM-Stream ist. */
+    val isWebmStream: Boolean get() = url.contains(".webm")
+
+    /** Quality-Ranking (höher = besser) für Sortierung. */
+    val qualityRank: Int
+        get() = when (qualityHint) {
+            "1080p" -> 4
+            "720p" -> 3
+            "480p" -> 2
+            "360p" -> 1
+            else -> 0
+        }
+
+    /** True wenn die URL eine Test/Placeholder-Video ist. */
+    val isTestVideo: Boolean
+        get() = NovaStreamConfig.isTestVideo(url)
+
+    /** Datei-Endung der Stream-URL. */
+    val fileExtension: String
+        get() = when {
+            isHlsStream -> "m3u8"
+            isMp4Stream -> "mp4"
+            isWebmStream -> "webm"
+            else -> "unknown"
+        }
 }
