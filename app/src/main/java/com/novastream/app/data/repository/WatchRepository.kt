@@ -59,16 +59,32 @@ class WatchRepository(context: Context) {
         progressDao.getByEpisode(slug, season, episode)
 
     /** Entfernt einen Continue-Watching-Eintrag. */
-    suspend fun removeProgress(key: String) = progressDao.delete(key)
+    suspend fun removeProgress(key: String) {
+        try { progressDao.delete(key) } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeProgress failed", e)
+        }
+    }
 
     /** Entfernt alle Einträge einer Serie. */
-    suspend fun removeProgressBySlug(slug: String) = progressDao.deleteBySlug(slug)
+    suspend fun removeProgressBySlug(slug: String) {
+        try { progressDao.deleteBySlug(slug) } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeProgressBySlug failed", e)
+        }
+    }
 
     /** Entfernt alle abgeschlossenen Episoden (>90% geschaut) - direkt in SQL. */
-    suspend fun removeCompleted() = progressDao.deleteCompleted()
+    suspend fun removeCompleted() {
+        try { progressDao.deleteCompleted() } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeCompleted failed", e)
+        }
+    }
 
     /** Löscht alle Watch-Progress-Daten. */
-    suspend fun clearAllProgress() = progressDao.deleteAll()
+    suspend fun clearAllProgress() {
+        try { progressDao.deleteAll() } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearAllProgress failed", e)
+        }
+    }
 
     // ─── Watchlist ──────────────────────────────────────────────────
 
@@ -80,15 +96,32 @@ class WatchRepository(context: Context) {
 
     /** Fügt eine Serie zur Watchlist hinzu. */
     suspend fun addToWatchlist(slug: String, title: String, coverUrl: String?) {
-        watchlistDao.add(WatchlistItem(slug = slug, title = title, coverUrl = coverUrl))
+        try {
+            watchlistDao.add(WatchlistItem(slug = slug, title = title, coverUrl = coverUrl))
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "addToWatchlist failed", e)
+        }
     }
 
     /** Entfernt eine Serie aus der Watchlist. */
-    suspend fun removeFromWatchlist(slug: String) = watchlistDao.remove(slug)
+    suspend fun removeFromWatchlist(slug: String) {
+        try { watchlistDao.remove(slug) } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeFromWatchlist failed", e)
+        }
+    }
 
     /** Prüft ob eine Serie in der Watchlist ist (suspend). */
-    suspend fun containsInWatchlist(slug: String): Boolean = watchlistDao.contains(slug)
+    suspend fun containsInWatchlist(slug: String): Boolean = try {
+        watchlistDao.contains(slug)
+    } catch (e: Exception) {
+        if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "containsInWatchlist failed", e)
+        false
+    }
 
     /** Leert die Watchlist. */
-    suspend fun clearWatchlist() = watchlistDao.clear()
+    suspend fun clearWatchlist() {
+        try { watchlistDao.clear() } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearWatchlist failed", e)
+        }
+    }
 }

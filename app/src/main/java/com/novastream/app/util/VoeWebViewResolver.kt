@@ -10,7 +10,6 @@ import com.novastream.app.data.model.StreamSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Löst VOE-Hoster-URLs durch Ausführung der JavaScript-Player-Logik in einem WebView auf.
@@ -37,7 +36,7 @@ class VoeWebViewResolver {
             return emptyList()
         }
         return withContext(Dispatchers.Main) {
-            val capturedUrl = AtomicReference<String?>(null)
+            val capturedUrls = java.util.concurrent.ConcurrentLinkedQueue<String>()
 
             val webView = try {
                 WebView(context)
@@ -55,6 +54,9 @@ class VoeWebViewResolver {
                 blockNetworkImage = true
                 // TV-optimierter User Agent
                 userAgentString = com.novastream.app.data.model.NovaStreamConfig.USER_AGENT
+                // Enable faster page loading
+                cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                setSupportZoom(false)
             }
             webView.webChromeClient = WebChromeClient()
             webView.webViewClient = object : WebViewClient() {
@@ -63,7 +65,7 @@ class VoeWebViewResolver {
                         val url = request?.url?.toString() ?: return null
                         if (url.contains(".m3u8") || url.contains(".mp4") || url.contains(".webm")) {
                             if (!url.contains("test-videos") && !url.contains("bigbuckbunny") && !url.contains("sample-")) {
-                                capturedUrl.compareAndSet(null, url)
+                                capturedUrls.add(url)
                             }
                         }
                     } catch (_: Exception) {}
@@ -105,6 +107,12 @@ class VoeWebViewResolver {
                         """.trimIndent(), null)
                     } catch (_: Exception) {}
                 }
+
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                    if (com.novastream.app.BuildConfig.DEBUG) {
+                        android.util.Log.w("VoeWebViewResolver", "WebView error: ${error?.description}")
+                    }
+                }
             }
 
             webView.addJavascriptInterface(object {
@@ -112,7 +120,7 @@ class VoeWebViewResolver {
                 fun onVideoUrl(url: String) {
                     if (url.contains(".m3u8") || url.contains(".mp4") || url.contains(".webm")) {
                         if (!url.contains("test-videos") && !url.contains("bigbuckbunny") && !url.contains("sample-")) {
-                            capturedUrl.compareAndSet(null, url)
+                            capturedUrls.add(url)
                         }
                     }
                 }
@@ -120,12 +128,15 @@ class VoeWebViewResolver {
 
             webView.loadUrl(hosterPageUrl)
 
-            val videoUrl = try {
+            // Wait for URLs with timeout - check every 200ms, return as soon as we have any
+            val videoUrls = try {
                 withTimeoutOrNull(20000L) {
-                    while (capturedUrl.get() == null) {
-                        kotlinx.coroutines.delay(300)
+                    while (capturedUrls.isEmpty()) {
+                        kotlinx.coroutines.delay(200)
                     }
-                    capturedUrl.get()
+                    // Wait a bit more for additional URLs (quality options)
+                    kotlinx.coroutines.delay(1000)
+                    capturedUrls.toList()
                 }
             } finally {
                 // Cleanup - destroy als letztes
@@ -136,18 +147,19 @@ class VoeWebViewResolver {
                 try { webView.destroy() } catch (_: Exception) {}
             }
 
-            val finalUrl = videoUrl
-            if (finalUrl != null) {
-                val isHls = finalUrl.contains(".m3u8")
-                listOf(StreamSource(
+            videoUrls?.map { url ->
+                val isHls = url.contains(".m3u8")
+                StreamSource(
                     hoster = hosterName,
-                    url = finalUrl,
+                    url = url,
                     isHls = isHls,
-                    mimeType = if (isHls) "application/x-mpegURL" else "video/mp4"
-                ))
-            } else {
-                emptyList()
-            }
+                    mimeType = when {
+                        isHls -> "application/x-mpegURL"
+                        url.contains(".webm") -> "video/webm"
+                        else -> "video/mp4"
+                    }
+                )
+            }?.distinctBy { it.url } ?: emptyList()
         }
     }
 
