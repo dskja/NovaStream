@@ -102,6 +102,44 @@ class VoeWebViewResolver {
                                             AndroidVoe.onVideoUrl(src);
                                         }
                                     }
+                                    // Video.js player
+                                    if (typeof videojs !== 'undefined') {
+                                        var players = videojs.getPlayers();
+                                        for (var key in players) {
+                                            if (players.hasOwnProperty(key)) {
+                                                var pl = players[key];
+                                                if (pl && pl.src) {
+                                                    var s = pl.src();
+                                                    if (s && s.indexOf('test-videos') === -1) {
+                                                        AndroidVoe.onVideoUrl(s);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Plyr player
+                                    if (typeof Plyr !== 'undefined') {
+                                        var plyrPlayers = document.querySelectorAll('[data-plyr]');
+                                        for (var j = 0; j < plyrPlayers.length; j++) {
+                                            var pSrc = plyrPlayers[j].src || plyrPlayers[j].getAttribute('src');
+                                            if (pSrc && pSrc.indexOf('test-videos') === -1) {
+                                                AndroidVoe.onVideoUrl(pSrc);
+                                            }
+                                        }
+                                    }
+                                    // Generic: search all script tags for video URLs
+                                    var scripts = document.querySelectorAll('script');
+                                    for (var k = 0; k < scripts.length; k++) {
+                                        var text = scripts[k].textContent || '';
+                                        var matches = text.match(/https?:\/\/[^"'\\\s]+\.(?:m3u8|mp4|webm)[^"'\\\s]*/g);
+                                        if (matches) {
+                                            for (var l = 0; l < matches.length; l++) {
+                                                if (matches[l].indexOf('test-videos') === -1 && matches[l].indexOf('bigbuckbunny') === -1) {
+                                                    AndroidVoe.onVideoUrl(matches[l]);
+                                                }
+                                            }
+                                        }
+                                    }
                                 } catch(e) {}
                             })();
                         """.trimIndent(), null)

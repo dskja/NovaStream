@@ -47,6 +47,7 @@ class AniWorldProvider(
     // ─── Homepage Parsing ───────────────────────────────────────────────────
 
     private fun parseSeriesListAniWorld(html: String): List<Series> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, baseUrl)
         val results = linkedMapOf<String, Series>()
 
@@ -184,6 +185,9 @@ class AniWorldProvider(
 
     /** Parst AniWorld Detail-Seite. */
     private fun parseAniWorldDetail(html: String, slug: String): Pair<Series, List<Season>> {
+        if (html.isBlank()) {
+            return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/anime/stream/$slug") to emptyList()
+        }
         val doc = Jsoup.parse(html, baseUrl)
 
         // Titel: div.series-title h1
@@ -260,6 +264,7 @@ class AniWorldProvider(
 
     /** Parst Episoden aus einer AniWorld Staffel-Seite. */
     private fun parseAniWorldEpisodes(html: String, slug: String, season: Int): List<Episode> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, baseUrl)
         return parseAniWorldEpisodesFromDoc(doc, slug, season)
     }
@@ -301,6 +306,7 @@ class AniWorldProvider(
      * AniWorld nutzt li[data-link-target="/redirect/{id}"] mit i.icon.{HosterName}
      */
     private fun parseAniWorldHosters(html: String): List<HosterLink> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, baseUrl)
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
@@ -322,7 +328,10 @@ class AniWorldProvider(
                 "1" -> "Deutsch"
                 "2" -> "Ger-Sub"
                 "3" -> "Eng-Sub"
-                else -> ""
+                "4" -> "Eng-Dub"
+                "5" -> "Ger-Dub"
+                "6" -> "Jap-Sub"
+                else -> langKey.ifBlank { "" }
             }
 
             val key = "$name-$redirectUrl"

@@ -302,6 +302,7 @@ object KinoGerScraper {
 
     /** Auf KinoGer sind die Hoster direkt als iframe-URLs verfügbar. */
     fun parseHosters(html: String): List<HosterLink> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, BASE_URL)
         val hosters = mutableListOf<HosterLink>()
 
@@ -329,6 +330,13 @@ object KinoGerScraper {
             url.contains("speedo", ignoreCase = true) -> "Speedo"
             url.contains("fsst.online", ignoreCase = true) -> "FSST"
             url.contains("kinoger", ignoreCase = true) -> "KinoGer"
+            url.contains("mixdrop", ignoreCase = true) -> "Mixdrop"
+            url.contains("upstream", ignoreCase = true) -> "Upstream"
+            url.contains("streamlare", ignoreCase = true) -> "Streamlare"
+            url.contains("ddownload", ignoreCase = true) -> "DDownload"
+            url.contains("mega.nz", ignoreCase = true) -> "Mega"
+            url.contains("streamzz", ignoreCase = true) -> "StreamZZ"
+            url.contains("streamcrypt", ignoreCase = true) -> "StreamCrypt"
             else -> {
                 try {
                     val uri = java.net.URI(url)

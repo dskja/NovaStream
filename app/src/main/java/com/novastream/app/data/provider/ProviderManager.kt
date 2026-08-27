@@ -66,6 +66,26 @@ object ProviderManager {
             supportsSeries = it.supportsSeries
         )
     }
+
+    /** Holt den Provider anhand der Display-Name (case-insensitive). */
+    fun getProviderByName(displayName: String): StreamingProvider? =
+        providers.find { it.displayName.equals(displayName, ignoreCase = true) }
+
+    /** Holt den Provider anhand der Base-URL. */
+    fun getProviderByBaseUrl(baseUrl: String): StreamingProvider? =
+        providers.find { it.baseUrl == baseUrl }
+
+    /** Anzahl der registrierten Provider. */
+    val providerCount: Int get() = providers.size
+
+    /** True wenn mehr als ein Provider verfügbar ist. */
+    val hasMultipleProviders: Boolean get() = providers.size > 1
+
+    /** Holt alle Provider-Display-Namen. */
+    fun getProviderDisplayNames(): List<String> = providers.map { it.displayName }
+
+    /** Holt die Default-Provider-ID. */
+    val defaultProviderId: String get() = defaultProvider.id
 }
 
 /** UI-Repräsentation eines Providers. */
