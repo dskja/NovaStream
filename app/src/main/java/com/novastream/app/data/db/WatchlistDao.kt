@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -40,12 +41,14 @@ interface WatchlistDao {
     suspend fun add(item: WatchlistItem)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Transaction
     suspend fun addAll(items: List<WatchlistItem>)
 
     @Query("DELETE FROM watchlist WHERE slug = :slug")
     suspend fun remove(slug: String)
 
     @Query("DELETE FROM watchlist WHERE slug IN (:slugs)")
+    @Transaction
     suspend fun removeAll(slugs: List<String>)
 
     @Query("DELETE FROM watchlist")

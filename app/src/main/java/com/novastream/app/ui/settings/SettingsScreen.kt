@@ -75,7 +75,7 @@ data class SettingsUiState(
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
-    private val watchRepo = WatchRepository(application)
+    private val watchRepo = WatchRepository.get(application)
     private val appSettings = com.novastream.app.data.prefs.AppSettings(application)
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -147,10 +147,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setProvider(providerId: String) {
         viewModelScope.launch {
+            val provider = com.novastream.app.data.provider.ProviderManager.getProviderOrNull(providerId)
+            if (provider == null) {
+                _state.update { it.copy(message = "Provider nicht gefunden") }
+                return@launch
+            }
             com.novastream.app.data.provider.ProviderManager.setActiveProvider(getApplication(), providerId)
             com.novastream.app.data.provider.ActiveProvider.setById(providerId)
-            val name = com.novastream.app.data.provider.ProviderManager.getProvider(providerId).displayName
-            _state.update { it.copy(message = "Provider gewechselt zu $name") }
+            _state.update { it.copy(message = "Provider gewechselt zu ${provider.displayName}") }
         }
     }
 
@@ -663,7 +667,7 @@ fun SettingsScreen() {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version 2.3 · Build 14",
+                    "Version 2.4 · Build 15",
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )

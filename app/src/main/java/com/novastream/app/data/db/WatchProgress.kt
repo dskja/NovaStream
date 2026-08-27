@@ -12,7 +12,8 @@ import androidx.room.PrimaryKey
     tableName = "watch_progress",
     indices = [
         Index(value = ["slug", "season", "episode"]),
-        Index(value = ["updatedAt"])
+        Index(value = ["updatedAt"]),
+        Index(value = ["slug"])
     ]
 )
 data class WatchProgress(

@@ -121,8 +121,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
         _state.update { it.copy(loading = true) }
         searchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(200) // Debounce (reduziert für schnellere UX)
+            kotlinx.coroutines.delay(300) // Debounce
             currentCoroutineContext().ensureActive()
+            // Race condition fix: Query könnte sich während delay geändert haben
             if (_state.value.query != trimmed) return@launch  // Veraltete Query
             when (val res = repo.search(trimmed)) {
                 is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {

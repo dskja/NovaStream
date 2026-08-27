@@ -21,7 +21,10 @@ object ProviderManager {
         listOf(
             SerienStreamProvider(),
             AniWorldProvider(),
-            KinoGerProvider()
+            KinoGerProvider(),
+            BurningSeriesProvider(),
+            MegaKinoProvider(),
+            StreamKisteProvider()
         )
     }
 

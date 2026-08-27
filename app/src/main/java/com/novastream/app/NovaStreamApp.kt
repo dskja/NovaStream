@@ -12,7 +12,7 @@ import com.novastream.app.util.VoeWebViewResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class NovaStreamApp : Application(), ImageLoaderFactory {
@@ -26,11 +26,8 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         // Load saved provider preference on app start
         appScope.launch {
             try {
-                // Erste Emission abwarten damit ActiveProvider sofort gesetzt wird
-                // (ViewModels könnten sonst den Default Provider nutzen)
-                val firstProviderId = ProviderManager.activeProviderIdFlow(this@NovaStreamApp).first()
-                ActiveProvider.setById(firstProviderId)
-                // Danach weiter collectieren für Änderungen
+                // ActiveProvider bei jeder Emission setzen (erste Emission initialisiert,
+                // danach werden Änderungen reaktiv verarbeitet)
                 ProviderManager.activeProviderIdFlow(this@NovaStreamApp).collect { providerId ->
                     ActiveProvider.setById(providerId)
                 }
@@ -56,6 +53,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     override fun onTerminate() {
         super.onTerminate()
+        appScope.cancel()
         VoeWebViewResolver.clearContext()
     }
 

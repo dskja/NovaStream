@@ -69,7 +69,7 @@ class DetailViewModel(
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
     private val repo = NovaStreamRepository()
-    private val watchRepo = WatchRepository(application)
+    private val watchRepo = WatchRepository.get(application)
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -226,7 +226,7 @@ class DetailViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "loadSeason error", e)
-                _state.update { it.copy(loadingSeason = false, error = "Staffel konnte nicht geladen werden") }
+                _state.update { it.copy(loadingSeason = false, error = com.novastream.app.util.ErrorMapper.toUserMessage(e)) }
             }
         }
     }

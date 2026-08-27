@@ -35,7 +35,7 @@ class HomeViewModel(
 ) : AndroidViewModel(application) {
 
     private val repo = NovaStreamRepository()
-    private val watchRepo = WatchRepository(application)
+    private val watchRepo = WatchRepository.get(application)
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
@@ -49,6 +49,7 @@ class HomeViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchProgress flow error", e)
+                _state.update { it.copy(error = "Fehler beim Laden...") }
             }
         }
         // Watchlist reactive
@@ -59,6 +60,7 @@ class HomeViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchlist flow error", e)
+                _state.update { it.copy(error = "Fehler beim Laden...") }
             }
         }
         // Provider changes - reload home
@@ -71,6 +73,7 @@ class HomeViewModel(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "provider flow error", e)
+                _state.update { it.copy(error = "Fehler beim Laden...") }
             }
         }
         load()

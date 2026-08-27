@@ -87,8 +87,8 @@ fun NovaStreamNavHost() {
     val scope = rememberCoroutineScope()
 
     BackHandler(enabled = currentRoute == Routes.HOME) {
-        val now = System.nanoTime()
-        if (now - backPressedTime < 2_000_000_000L) {
+        val now = System.currentTimeMillis()
+        if (now - backPressedTime < 2000L) {
             // Exit app - safe cast
             context.findActivity()?.finish()
         } else {
