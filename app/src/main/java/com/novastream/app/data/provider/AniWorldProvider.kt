@@ -48,7 +48,8 @@ class AniWorldProvider(
         val results = linkedMapOf<String, Series>()
 
         // AniWorld nutzt ähnliche Selektoren wie SerienStream
-        val anchors = doc.select("a[href~=/anime/stream/[\\w%.-]+]")
+        // Nutze starts-with (^=) statt contains-word (~=) für href Matching
+        val anchors = doc.select("a[href^=/anime/stream/]")
         for (a in anchors) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
             val slug = extractAniWorldSlug(href) ?: continue
@@ -101,7 +102,8 @@ class AniWorldProvider(
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        parseSeriesListAniWorld(api.home())
+        // AniWorld Startseite: /animes für die Anime-Liste
+        parseSeriesListAniWorld(fetchUrl("$baseUrl/animes"))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Startseite konnte nicht geladen werden", it) }
@@ -110,7 +112,11 @@ class AniWorldProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
-            parseSeriesListAniWorld(api.search(query.trim()))
+            // AniWorld nutzt /search?term=... (nicht /suche wie SerienStream)
+            // Direkter OkHttp Call da Retrofit @GET("{path}") mit Query-String problematisch sein kann
+            val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
+            val html = fetchUrl("$baseUrl/search?term=$encoded")
+            parseSeriesListAniWorld(html)
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error("AniWorld Suche fehlgeschlagen", it) }
@@ -154,6 +160,22 @@ class AniWorldProvider(
     private suspend fun fetchCustomPath(path: String): String {
         // Nutze NovaStreamApi.raw mit angepasstem Pfad
         return api.raw(path.removePrefix("/"))
+    }
+
+    /** Lädt eine absolute URL via OkHttp (für Query-String URLs). */
+    private suspend fun fetchUrl(url: String): String {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
+                .header("Referer", baseUrl + "/")
+                .header("Accept", "text/html,application/xhtml+xml,*/*")
+                .build()
+            com.novastream.app.data.api.NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) resp.body?.string() ?: ""
+                else ""
+            }
+        }
     }
 
     /** Parst AniWorld Detail-Seite (angepasst für /anime/stream/ Pfade). */
@@ -212,7 +234,7 @@ class AniWorldProvider(
         // Fallback: href pattern /anime/stream/{slug}/staffel-{n}
         if (seasonNumbers.isEmpty()) {
             val pattern = java.util.regex.Pattern.compile("/anime/stream/[\\w%.-]+/staffel-(\\d+)")
-            doc.select("a[href~=/anime/stream/[\\w%.-]+/staffel-\\d+]").forEach { a ->
+            doc.select("a[href^=/anime/stream/]").forEach { a ->
                 val href = a.absUrl("href").ifBlank { a.attr("href") }
                 val m = pattern.matcher(href)
                 if (m.find()) m.group(1).toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }

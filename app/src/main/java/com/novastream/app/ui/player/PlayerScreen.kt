@@ -30,8 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -245,13 +243,6 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .focusable()
-                    .onKeyEvent { keyEvent ->
-                        // Fire TV / Android TV: Delegiere Key Events an PlayerView
-                        // damit die Player Controls (Seekbar, Play/Pause Button) navigierbar sind
-                        val nativeKeyEvent = keyEvent.nativeKeyEvent
-                        // PlayerView.dispatchKeyEvent behandelt D-Pad Navigation intern
-                        false // Lass tvPlayerKeyHandler auf der Box die Keys behandeln
-                    }
             )
         } else if (state.loading) {
             PremiumLoading(label = "Stream wird aufgelöst…")

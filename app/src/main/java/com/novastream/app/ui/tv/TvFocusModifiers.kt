@@ -12,7 +12,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.unit.dp
 
 /**
  * TV-spezifische Modifier Extensions für D-Pad Navigation.

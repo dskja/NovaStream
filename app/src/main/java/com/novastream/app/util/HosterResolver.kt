@@ -5,8 +5,6 @@ import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.NovaStreamConfig
 import com.novastream.app.data.model.StreamSource
 import okhttp3.Request
-import org.jsoup.Jsoup
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

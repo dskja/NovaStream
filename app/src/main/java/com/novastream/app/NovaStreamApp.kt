@@ -11,6 +11,7 @@ import com.novastream.app.data.provider.ProviderManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class NovaStreamApp : Application(), ImageLoaderFactory {
@@ -21,6 +22,11 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         super.onCreate()
         // Load saved provider preference on app start
         appScope.launch {
+            // Erste Emission abwarten damit ActiveProvider sofort gesetzt wird
+            // (ViewModels könnten sonst den Default Provider nutzen)
+            val firstProviderId = ProviderManager.activeProviderIdFlow(this@NovaStreamApp).first()
+            ActiveProvider.setById(firstProviderId)
+            // Danach weiter collectieren für Änderungen
             ProviderManager.activeProviderIdFlow(this@NovaStreamApp).collect { providerId ->
                 ActiveProvider.setById(providerId)
             }

@@ -16,15 +16,17 @@ object ProviderManager {
     private val Context.providerDataStore by preferencesDataStore("provider_prefs")
     private val ACTIVE_PROVIDER_KEY = stringPreferencesKey("active_provider")
 
-    /** Alle registrierten Provider. */
-    val providers: List<StreamingProvider> = listOf(
-        SerienStreamProvider(),
-        AniWorldProvider(),
-        KinoGerProvider()
-    )
+    /** Alle registrierten Provider (lazy - wird nur einmal erstellt). */
+    val providers: List<StreamingProvider> by lazy {
+        listOf(
+            SerienStreamProvider(),
+            AniWorldProvider(),
+            KinoGerProvider()
+        )
+    }
 
-    /** Default Provider. */
-    val defaultProvider: StreamingProvider = providers.first()
+    /** Default Provider (lazy). */
+    val defaultProvider: StreamingProvider by lazy { providers.first() }
 
     /** Flow der aktiven Provider-ID. */
     fun activeProviderIdFlow(context: Context): Flow<String> {

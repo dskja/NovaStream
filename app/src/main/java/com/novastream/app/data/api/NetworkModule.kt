@@ -18,13 +18,21 @@ import java.util.concurrent.TimeUnit
 object NetworkModule {
 
     private val userAgentInterceptor = Interceptor { chain ->
-        val req = chain.request().newBuilder()
+        val original = chain.request()
+        val builder = original.newBuilder()
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
-            .header("Referer", NovaStreamConfig.BASE_URL + "/")
-            .build()
-        chain.proceed(req)
+
+        // Referer nur setzen wenn nicht bereits von Provider/HosterResolver gesetzt
+        // (Multi-Provider: jeder Provider setzt seinen eigenen Referer)
+        if (original.header("Referer") == null) {
+            // Default: Referer = Host der Request-URL (nicht hardcoded SerienStream)
+            val host = original.url.host
+            builder.header("Referer", "https://$host/")
+        }
+
+        chain.proceed(builder.build())
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {

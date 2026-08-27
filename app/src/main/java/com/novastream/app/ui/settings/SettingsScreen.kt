@@ -88,10 +88,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 activeProviderId = com.novastream.app.data.provider.ActiveProvider.id
             )
         }
-        // Watch active provider changes
+        // Watch active provider changes (nur UI Update - ActiveProvider wird von NovaStreamApp gesetzt)
         viewModelScope.launch {
             com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
-                com.novastream.app.data.provider.ActiveProvider.setById(providerId)
                 _state.update { it.copy(activeProviderId = providerId) }
             }
         }

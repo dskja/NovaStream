@@ -11,6 +11,7 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.HosterResolver
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Provider für KinoGer.to.
@@ -24,6 +25,10 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
  *   /?do=search&subaction=search&story={query} – Suche
  *
  * Hoster sind direkt als iframe-URLs in der Detail-Seite eingebettet.
+ *
+ * Performance: Detail-Seiten werden gecacht (ConcurrentHashMap) da KinoGer
+ * alle Episoden auf einer Seite hat und loadSeason/loadHosters sonst
+ * mehrfach die gleiche Seite laden würden.
  */
 class KinoGerProvider(
     override val id: String = "kinoger",
@@ -34,6 +39,10 @@ class KinoGerProvider(
 
     private val api: KinoGerApi = createApi(baseUrl)
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
+
+    // In-Memory Cache für Detail-Seiten (slug -> HTML)
+    // Verhindert mehrfaches Laden der gleichen Seite für loadSeason/loadHosters
+    private val detailCache = ConcurrentHashMap<String, String>()
 
     private fun createApi(base: String): KinoGerApi {
         val retrofit = Retrofit.Builder()
@@ -63,7 +72,7 @@ class KinoGerProvider(
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        val html = api.raw("stream/$slug.html")
+        val html = fetchDetailPage(slug)
         KinoGerScraper.parseSeriesDetail(html, slug)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -72,8 +81,8 @@ class KinoGerProvider(
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
         // KinoGer lädt alle Episoden auf einer Seite - keine separate Staffel-URL
-        // Staffel-Episoden werden aus der bereits geladenen Detail-Seite gefiltert
-        val html = api.raw("stream/$slug.html")
+        // Nutze Cache um mehrfaches Laden zu vermeiden
+        val html = fetchDetailPage(slug)
         val (_, seasons) = KinoGerScraper.parseSeriesDetail(html, slug)
         seasons.find { it.number == season }?.episodes ?: emptyList()
     }.fold(
@@ -87,7 +96,7 @@ class KinoGerProvider(
             episode.hosters
         } else {
             // Fallback: Lade Detail-Seite und parse Hoster
-            val html = api.raw("stream/${episode.slug}.html")
+            val html = fetchDetailPage(episode.slug)
             KinoGerScraper.parseHosters(html)
         }
     }.fold(
@@ -102,4 +111,19 @@ class KinoGerProvider(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error("Stream-URL konnte nicht aufgelöst werden", it) }
     )
+
+    /** Lädt die Detail-Seite mit Caching. */
+    private suspend fun fetchDetailPage(slug: String): String {
+        // Cache hit?
+        detailCache[slug]?.let { return it }
+        // Cache miss - lade und cache
+        val html = api.raw("stream/$slug.html")
+        detailCache[slug] = html
+        return html
+    }
+
+    /** Leert den Cache (z.B. bei Provider-Wechsel). */
+    fun clearCache() {
+        detailCache.clear()
+    }
 }
