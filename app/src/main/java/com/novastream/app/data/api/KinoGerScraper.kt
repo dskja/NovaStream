@@ -222,6 +222,7 @@ object KinoGerScraper {
         var inString = false
         var stringChar: Char? = null
         var depth = 0
+        val MAX_DEPTH = 50  // Schutz vor extremer Verschachtelung (malicious HTML)
 
         while (i < arrayStr.length) {
             val c = arrayStr[i]
@@ -243,7 +244,10 @@ object KinoGerScraper {
                 }
             } else {
                 when (c) {
-                    '[', '{' -> depth++
+                    '[', '{' -> {
+                        depth++
+                        if (depth > MAX_DEPTH) return emptyList()  // Abbruch bei malicious HTML
+                    }
                     ']', '}' -> {
                         depth--
                         if (depth == 1) {
