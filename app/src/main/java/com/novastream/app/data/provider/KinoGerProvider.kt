@@ -63,6 +63,39 @@ class KinoGerProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    /** Lädt Filme (nicht-Serien). */
+    suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        KinoGerScraper.parseSeriesList(api.movies())
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    /** Lädt TV-Shows. */
+    suspend fun loadTvShows(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        KinoGerScraper.parseSeriesList(api.tvShows())
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    /** Lädt Serien mit Pagination. */
+    suspend fun loadSeriesPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        KinoGerScraper.parseSeriesList(api.seriesPage(page.coerceAtLeast(1)))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    /** Lädt Genre mit Pagination. */
+    suspend fun loadGenrePaged(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        if (genre.isBlank()) return@runCatching emptyList()
+        KinoGerScraper.parseSeriesList(api.genrePage(genre.trim(), page.coerceAtLeast(1)))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {

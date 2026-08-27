@@ -122,6 +122,26 @@ class AniWorldProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    /** Lädt Serien nach Genre (z.B. "action", "drama", "comedy"). */
+    suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        if (genre.isBlank()) return@runCatching emptyList()
+        val html = fetchUrl("$baseUrl/genre/${genre.trim()}")
+        parseSeriesListAniWorld(html)
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    /** Lädt Animes nach Alphabet (z.B. "A", "B", ...). */
+    suspend fun loadByLetter(letter: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        if (letter.isBlank()) return@runCatching emptyList()
+        val html = fetchUrl("$baseUrl/animes?alphabet=${letter.trim().uppercase()}")
+        parseSeriesListAniWorld(html)
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {

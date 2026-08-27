@@ -47,6 +47,7 @@ class VoeWebViewResolver {
                 return@withContext emptyList()
             }
 
+            // Configure WebView with TV-optimized settings
             webView.settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -57,6 +58,10 @@ class VoeWebViewResolver {
                 // Enable faster page loading
                 cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 setSupportZoom(false)
+                // Enable database storage
+                databaseEnabled = true
+                // Allow mixed content (some hosters use http resources)
+                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             }
             webView.webChromeClient = WebChromeClient()
             webView.webViewClient = object : WebViewClient() {

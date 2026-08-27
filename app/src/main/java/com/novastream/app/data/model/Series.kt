@@ -18,4 +18,18 @@ data class Series(
     /** Initialen des Titels für Fallback-Anzeige (max 2 Zeichen). */
     val initials: String
         get() = title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—"
+
+    /** True wenn ein Jahr vorhanden ist. */
+    val hasYear: Boolean get() = !year.isNullOrBlank()
+
+    /** True wenn eine Beschreibung vorhanden ist. */
+    val hasDescription: Boolean get() = !description.isNullOrBlank()
+
+    /** Display-Format: "Title (2024)" oder nur "Title" wenn kein Jahr. */
+    val displayTitle: String
+        get() = if (hasYear) "$title ($year)" else title
+
+    /** Kurze Beschreibung (max 150 Zeichen) für Vorschau. */
+    val shortDescription: String
+        get() = description?.take(150)?.let { if (description.length > 150) "$it…" else it } ?: ""
 }
