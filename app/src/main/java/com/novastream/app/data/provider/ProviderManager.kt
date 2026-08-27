@@ -46,6 +46,17 @@ object ProviderManager {
     fun getProvider(id: String): StreamingProvider =
         providers.find { it.id == id } ?: defaultProvider
 
+    /** Holt den Provider anhand der ID oder null wenn nicht gefunden. */
+    fun getProviderOrNull(id: String): StreamingProvider? =
+        providers.find { it.id == id }
+
+    /** True wenn ein Provider mit der gegebenen ID existiert. */
+    fun isValidProviderId(id: String): Boolean =
+        providers.any { it.id == id }
+
+    /** Holt alle Provider-IDs. */
+    fun getProviderIds(): List<String> = providers.map { it.id }
+
     /** Holt alle Provider-Infos für die UI. */
     fun getProviderInfos(): List<ProviderInfo> = providers.map {
         ProviderInfo(

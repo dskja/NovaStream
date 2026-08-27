@@ -11,4 +11,11 @@ data class Series(
 ) {
     val absoluteDetailUrl: String
         get() = NovaStreamConfig.abs(detailUrl.ifBlank { "/serie/$id" })
+
+    /** True wenn ein Cover-Bild vorhanden ist. */
+    val hasCover: Boolean get() = !coverUrl.isNullOrBlank()
+
+    /** Initialen des Titels für Fallback-Anzeige (max 2 Zeichen). */
+    val initials: String
+        get() = title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—"
 }

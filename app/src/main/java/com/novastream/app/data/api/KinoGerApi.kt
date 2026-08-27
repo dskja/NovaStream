@@ -25,6 +25,9 @@ interface KinoGerApi {
     @GET("stream/tv-shows/")
     suspend fun tvShows(): String
 
+    @GET("stream/serie/page/{page}")
+    suspend fun seriesPage(@Path("page") page: Int = 1): String
+
     @GET("stream/{genre}/page/{page}")
     suspend fun genrePage(
         @Path("genre") genre: String,

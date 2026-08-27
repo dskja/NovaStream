@@ -34,6 +34,10 @@ interface NovaStreamApi {
         @Path("episode") episode: Int
     ): String
 
+    /** Lädt eine Genre-Seite (z.B. /genre/action für Action-Serien). */
+    @GET("/genre/{genre}")
+    suspend fun genre(@Path("genre") genre: String): String
+
     /** Lädt eine beliebige relative URL als HTML (für Redirect-Auflösung). */
     @GET("{path}")
     suspend fun raw(@Path("path") path: String): String
