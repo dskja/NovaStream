@@ -163,7 +163,25 @@ fun NovaStreamNavHost() {
 
             composable(
                 route = Routes.DETAIL,
-                arguments = listOf(navArgument("slug") { type = NavType.StringType })
+                arguments = listOf(navArgument("slug") { type = NavType.StringType }),
+                enterTransition = {
+                    androidx.compose.animation.slideInHorizontally(
+                        animationSpec = androidx.compose.animation.core.tween(300),
+                        initialOffsetX = { it }
+                    ) + androidx.compose.animation.fadeIn()
+                },
+                exitTransition = {
+                    androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
+                },
+                popEnterTransition = {
+                    androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(250))
+                },
+                popExitTransition = {
+                    androidx.compose.animation.slideOutHorizontally(
+                        animationSpec = androidx.compose.animation.core.tween(300),
+                        targetOffsetX = { it }
+                    ) + androidx.compose.animation.fadeOut()
+                }
             ) {
                 DetailScreen(
                     onBack = { nav.popBackStack() },
@@ -182,7 +200,25 @@ fun NovaStreamNavHost() {
                     navArgument("title") { type = NavType.StringType; defaultValue = "" },
                     navArgument("seriesTitle") { type = NavType.StringType; defaultValue = "" },
                     navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" }
-                )
+                ),
+                enterTransition = {
+                    androidx.compose.animation.slideInVertically(
+                        animationSpec = androidx.compose.animation.core.tween(350),
+                        initialOffsetY = { it }
+                    ) + androidx.compose.animation.fadeIn()
+                },
+                exitTransition = {
+                    androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
+                },
+                popEnterTransition = {
+                    androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(250))
+                },
+                popExitTransition = {
+                    androidx.compose.animation.slideOutVertically(
+                        animationSpec = androidx.compose.animation.core.tween(350),
+                        targetOffsetY = { it }
+                    ) + androidx.compose.animation.fadeOut()
+                }
             ) {
                 val slugArg = it.arguments?.getString("slug") ?: ""
                 val seriesTitleArg = it.arguments?.getString("seriesTitle") ?: ""

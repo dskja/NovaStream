@@ -115,8 +115,12 @@ object NetworkModule {
             .addInterceptor(loggingInterceptor)
             .followRedirects(true)
             .followSslRedirects(true)
-            .connectTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(45, TimeUnit.SECONDS)  // Total call timeout - prevents infinite hangs
+            .connectionPool(okhttp3.ConnectionPool(5, 5, TimeUnit.MINUTES))  // 5 connections, 5 min keep-alive
+            .retryOnConnectionFailure(true)
             .build()
     }
 

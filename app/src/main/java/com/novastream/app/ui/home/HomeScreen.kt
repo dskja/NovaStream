@@ -359,7 +359,7 @@ private fun HeroCarousel(
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(s.coverUrl)
-                            .crossfade(false)
+                            .crossfade(true)
                             .build(),
                         contentDescription = s.title,
                         contentScale = ContentScale.Crop,
@@ -375,7 +375,7 @@ private fun HeroCarousel(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            s.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "??",
+                            s.title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—",
                             color = Accent,
                             fontSize = 42.sp,
                             fontWeight = FontWeight.Black
@@ -402,6 +402,23 @@ private fun HeroCarousel(
                         )
                     )
                 )
+
+                // Loading shimmer overlay
+                if (isLoading && !isError) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color(0x11FFFFFF),
+                                        Color(0x22FFFFFF),
+                                        Color(0x11FFFFFF)
+                                    )
+                                )
+                            )
+                    )
+                }
 
                 // Title + Play button
                 Column(
