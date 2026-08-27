@@ -31,10 +31,27 @@ data class PlayerUiState(
     val hosterSwitching: Boolean = false,
     val autoplayNext: Boolean = true,
     val playbackSpeed: Float = 1.0f,
-    val skipIntroButton: Boolean = true
+    val skipIntroButton: Boolean = true,
+    val season: Int = 1,
+    val episode: Int = 1
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(selectedHosterIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
+
+    /** True wenn mindestens ein Hoster verfügbar ist. */
+    val hasHosters: Boolean get() = hosters.isNotEmpty()
+
+    /** True wenn der ausgewählte Hoster einen Source hat. */
+    val hasCurrentSource: Boolean get() = currentSource != null
+
+    /** Anzahl der verfügbaren Hosters. */
+    val hosterCount: Int get() = hosters.size
+
+    /** True wenn die nächste Episode verfügbar ist. */
+    val hasNextEpisode: Boolean get() = nextEpisode != null
+
+    /** Formatierte Episode-Anzeige (z.B. "S1 E5"). */
+    val episodeDisplay: String get() = "S$season E$episode"
 }
 
 data class NextEpisodeInfo(
@@ -71,7 +88,9 @@ class PlayerViewModel(
     private val _state = MutableStateFlow(PlayerUiState(
         episodeTitle = title,
         seriesTitle = seriesTitle,
-        coverUrl = coverUrl
+        coverUrl = coverUrl,
+        season = season,
+        episode = episode
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
@@ -249,7 +268,7 @@ class PlayerViewModel(
             return
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
-        val result = kotlinx.coroutines.withTimeoutOrNull(HOSTER_RESOLVE_TIMEOUT_MS) { repo.resolveHoster(hoster) }
+        val result = kotlinx.coroutines.withTimeoutOrNull(com.novastream.app.data.model.NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) { repo.resolveHoster(hoster) }
         when (result) {
             is NovaStreamRepository.RepoResult.Success -> {
                 if (result.data.isEmpty()) {
@@ -289,9 +308,5 @@ class PlayerViewModel(
                 )
             }
         }
-    }
-
-    companion object {
-        private const val HOSTER_RESOLVE_TIMEOUT_MS = 20000L
     }
 }

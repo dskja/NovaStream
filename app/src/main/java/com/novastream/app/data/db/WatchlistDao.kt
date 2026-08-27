@@ -15,6 +15,15 @@ interface WatchlistDao {
     @Query("SELECT * FROM watchlist ORDER BY addedAt DESC LIMIT :limit")
     fun getRecent(limit: Int): Flow<List<WatchlistItem>>
 
+    @Query("SELECT * FROM watchlist ORDER BY title ASC")
+    fun getAllByTitleAsc(): Flow<List<WatchlistItem>>
+
+    @Query("SELECT * FROM watchlist ORDER BY title DESC")
+    fun getAllByTitleDesc(): Flow<List<WatchlistItem>>
+
+    @Query("SELECT * FROM watchlist ORDER BY addedAt ASC")
+    fun getAllByAddedAsc(): Flow<List<WatchlistItem>>
+
     @Query("SELECT COUNT(*) FROM watchlist")
     fun count(): Flow<Int>
 
@@ -23,6 +32,9 @@ interface WatchlistDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
     suspend fun contains(slug: String): Boolean
+
+    @Query("SELECT slug FROM watchlist")
+    suspend fun getAllSlugs(): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun add(item: WatchlistItem)

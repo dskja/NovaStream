@@ -321,6 +321,7 @@ object NovaStreamScraper {
 
     /** Parst nur die Episoden aus einer Staffel-Seite. */
     fun parseSeasonEpisodes(html: String, slug: String, season: Int): List<Episode> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         return parseEpisodes(doc, slug)
     }
@@ -335,6 +336,7 @@ object NovaStreamScraper {
      *   data-language-label = Sprache
      */
     fun parseHosters(html: String): List<HosterLink> {
+        if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
