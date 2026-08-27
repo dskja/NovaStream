@@ -79,6 +79,8 @@ class MegaKinoProvider(
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
         val url = if (episode.episodeUrl.startsWith("http")) {
             episode.episodeUrl
+        } else if (episode.episodeUrl.startsWith("/")) {
+            baseUrl + episode.episodeUrl
         } else {
             "$baseUrl/title/${episode.slug}/staffel/${episode.season}/episode/${episode.number}"
         }

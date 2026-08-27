@@ -12,16 +12,16 @@ object ActiveProvider {
     fun get(): StreamingProvider = current
 
     fun set(provider: StreamingProvider) {
-        current = provider
+        synchronized(this) {
+            current = provider
+        }
     }
 
     /** Setzt den Provider anhand der ID. Fallback auf Default bei ungültiger ID. */
     fun setById(id: String) {
-        val provider = ProviderManager.getProviderOrNull(id)
-        if (provider != null) {
-            current = provider
-        } else {
-            current = ProviderManager.defaultProvider
+        synchronized(this) {
+            val provider = ProviderManager.getProviderOrNull(id)
+            current = provider ?: ProviderManager.defaultProvider
         }
     }
 

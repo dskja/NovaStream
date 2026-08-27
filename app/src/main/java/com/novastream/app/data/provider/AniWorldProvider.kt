@@ -71,7 +71,7 @@ class AniWorldProvider(
             val slug = extractAniWorldSlug(href) ?: continue
             if (results.containsKey(slug)) continue
             // Skip season/episode links
-            if (href.contains("/staffel-")) continue
+            if (href.contains("/staffel-") || href.contains("/episode-")) continue
 
             val title = a.selectFirst("h3")?.text()?.trim()?.ifBlank { null }
                 ?: a.selectFirst("h2")?.text()?.trim()?.ifBlank { null }

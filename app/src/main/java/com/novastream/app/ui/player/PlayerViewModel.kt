@@ -113,7 +113,7 @@ class PlayerViewModel(
         viewModelScope.launch {
             // Restore saved position
             val saved = watchRepo.getProgress(slug, season, episode)
-            if (saved != null && !saved.isCompleted) {
+            if (saved != null && !saved.isCompleted && saved.durationMs > 0) {
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
             }
 

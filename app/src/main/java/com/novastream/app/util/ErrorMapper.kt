@@ -28,6 +28,7 @@ object ErrorMapper {
             is IndexOutOfBoundsException -> "Daten konnten nicht verarbeitet werden. Versuche es erneut."
             is SecurityException -> "Zugriff verweigert. Überprüfe deine Berechtigungen."
             is kotlinx.coroutines.TimeoutCancellationException -> "Zeitüberschreitung. Der Server braucht zu lange zum Antworten."
+            is kotlinx.coroutines.CancellationException -> "Vorgang abgebrochen."
             is retrofit2.HttpException -> {
                 when (error.code()) {
                     403 -> "Zugriff verweigert (403). Die Website blockiert möglicherweise die App."

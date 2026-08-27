@@ -303,7 +303,7 @@ fun SearchScreen(
                                 contentPadding = PaddingValues(12.dp, bottom = 80.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.height(((state.trending.size / 3 + 1) * 260).dp)
+                                modifier = Modifier.height(((state.trending.size / 2 + 1) * 280).dp)
                             ) {
                                 items(state.trending, key = { it.id }) { s ->
                                     SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })

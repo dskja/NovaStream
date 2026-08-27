@@ -61,7 +61,15 @@ fun HomeScreen(
 ) {
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
-    val activeProviderName = remember { com.novastream.app.data.provider.ActiveProvider.displayName }
+    val context = LocalContext.current
+    var activeProviderName by remember { mutableStateOf(com.novastream.app.data.provider.ActiveProvider.displayName) }
+
+    // Provider-Name reaktiv aktualisieren bei Provider-Wechsel
+    LaunchedEffect(Unit) {
+        com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(context).collect {
+            activeProviderName = com.novastream.app.data.provider.ActiveProvider.displayName
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,

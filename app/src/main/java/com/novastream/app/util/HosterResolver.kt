@@ -43,15 +43,9 @@ class HosterResolver(
 
             // 2. JS-Redirect-URL aus dem HTML extrahieren (falls vorhanden)
             val hosterPageUrl = extractJsRedirect(redirectHtml).ifBlank {
-                // Prüfe ob die URL bereits zur Hoster-Seite führt (kein JS-Redirect nötig)
                 // OkHttp ist bereits durch followRedirects zur Hoster-Seite gefolgt
-                if (redirectHtml.contains(".m3u8") || redirectHtml.contains(".mp4") ||
-                    redirectHtml.contains("jwplayer") || redirectHtml.contains("videojs") ||
-                    redirectHtml.contains("player") || redirectHtml.contains("source")) {
-                    absoluteUrl
-                } else {
-                    absoluteUrl
-                }
+                // Wenn kein JS-Redirect gefunden wurde, verwenden wir die absolute URL
+                absoluteUrl
             }
 
             // 3. VOE: Nutze WebView-Resolver (Bot-Detection + obfuskiertes JS)
@@ -95,21 +89,24 @@ class HosterResolver(
         val sources = mutableListOf<StreamSource>()
         // Pattern 1: src="..." mit video-URL
         Regex("src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
-            val url = m.groupValues[1]
+            var url = m.groupValues[1]
+            if (url.startsWith("//")) url = "https:$url"
             if (!NovaStreamConfig.isTestVideo(url)) {
                 sources.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
             }
         }
         // Pattern 2: data-src="..." mit video-URL
         Regex("data-src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
-            val url = m.groupValues[1]
+            var url = m.groupValues[1]
+            if (url.startsWith("//")) url = "https:$url"
             if (!NovaStreamConfig.isTestVideo(url)) {
                 sources.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
             }
         }
         // Pattern 3: url:"..." mit video-URL
         Regex("url\\s*:\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]").findAll(html).forEach { m ->
-            val url = m.groupValues[1]
+            var url = m.groupValues[1]
+            if (url.startsWith("//")) url = "https:$url"
             if (!NovaStreamConfig.isTestVideo(url)) {
                 sources.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
             }

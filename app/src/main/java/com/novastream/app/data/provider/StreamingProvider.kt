@@ -80,6 +80,9 @@ interface StreamingProvider {
 val StreamingProvider.isSerienStream: Boolean get() = id == "serienstream"
 val StreamingProvider.isAniWorld: Boolean get() = id == "aniworld"
 val StreamingProvider.isKinoGer: Boolean get() = id == "kinoger"
+val StreamingProvider.isBurningSeries: Boolean get() = id == "burningseries"
+val StreamingProvider.isMegaKino: Boolean get() = id == "megakino"
+val StreamingProvider.isStreamKiste: Boolean get() = id == "streamkiste"
 
 /** True wenn der Provider Filme unterstützt (basierend auf supportsSeries = false). */
 val StreamingProvider.supportsMovies: Boolean get() = !supportsSeries

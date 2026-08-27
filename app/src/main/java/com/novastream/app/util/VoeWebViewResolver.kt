@@ -209,13 +209,18 @@ class VoeWebViewResolver {
     companion object {
         @Volatile
         private var currentContext: Context? = null
+        private val contextLock = Any()
 
         fun setContext(context: Context) {
-            currentContext = context.applicationContext
+            synchronized(contextLock) {
+                currentContext = context.applicationContext
+            }
         }
 
         fun clearContext() {
-            currentContext = null
+            synchronized(contextLock) {
+                currentContext = null
+            }
         }
     }
 }

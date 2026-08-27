@@ -507,6 +507,7 @@ fun PlayerScreen(
                             while (countdown > 0) {
                                 kotlinx.coroutines.delay(1000)
                                 kotlinx.coroutines.yield()
+                                if (!showNextEpisodeOverlay) return@LaunchedEffect
                                 countdown--
                             }
                             if (showNextEpisodeOverlay) {
