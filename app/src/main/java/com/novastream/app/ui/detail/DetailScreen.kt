@@ -285,6 +285,41 @@ private fun DetailContent(
                         )
                     }
                 }
+                // Free metadata (TVMaze) pills
+                if (series.genres.isNotEmpty() || state.metaRating != null || state.metaNetwork != null || state.imdbId != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                    ) {
+                        state.metaRating?.let { StatPill("★ ${String.format("%.1f", it)}") }
+                        series.year?.let { StatPill(it) }
+                        state.metaNetwork?.let { StatPill(it) }
+                        state.imdbId?.let { StatPill(it) }
+                    }
+                    if (series.genres.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            series.genres.take(6).joinToString(" · "),
+                            color = TextTertiary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                if (state.metaCast.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text("Cast", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        state.metaCast.take(8).joinToString(" · ") {
+                            if (!it.character.isNullOrBlank()) "${it.name} (${it.character})" else it.name
+                        },
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 // Series stats: seasons and total episodes
                 val totalEpisodes = state.seasons.sumOf { it.episodes.size }
                 val watchedEpisodes = state.seasons.sumOf { season ->

@@ -1,104 +1,80 @@
 # NovaStream
 
 <p align="center">
-  <strong>Ein moderner Android Streaming-Client für Serien</strong>
+  <strong>High-End Android Streaming Client · Multi-Provider · Free Metadata · Auto-Updates</strong>
 </p>
 
 ---
 
-## Features
+## Highlights (v4.0)
 
-- **Modernes UI** – Dark Theme mit Gradienten und flüssigen Animationen
-- **Continue Watching** – Setzt Wiedergabe genau dort fort, wo du aufgehört hast
-- **Watchlist** – Speichere Serien die du schauen möchtest
-- **Multi-Provider** – 9 Quellen: SerienStream (.to / .cx), AniWorld, KinoGer, Burning Series, MegaKino, StreamKiste, FilmPalast, KinoZ
-- **Massiv ausgebaute Scraper** – strukturierte Home-Sektionen, Genres, Neue Episoden, Beliebte, Katalog, Metadata (Jahr, Genres, Rating, Backdrop)
-- **Multi-Hoster Support** – VOE, Streamtape, FileMoon, Vidoza, Doodstream, Mixdrop, FireStream, Vidara, Vinovo, Playmate, Vidmoly, Upstream, …
-- **DNS-over-HTTPS** – Umgeht ISP-DNS-Blockaden (Cloudflare 1.1.1.1)
-- **Episoden-Thumbnails** – Vorschau-Bilder für jede Episode
-- **Fortschritts-Anzeige** – Sieh welche Episoden du bereits geschaut hast
-- **Auto-Play nächste Folge** – Nahtloser Übergang zur nächsten Episode
-- **Recent Searches** – Zuletzt gesuchte Serien schnell wiederfinden
-- **Landscape Player** – Automatische Drehung beim Abspielen
-- **Settings** – Provider-Wechsel, Datenverwaltung, Stats und Info
+- **17 Provider** – DE-Klassiker + FMHY-Quellen + Free Catalog
+- **Universal Html Scraper** – profilbasiert für alle Sites, nicht nur SerienStream
+- **Free Catalog (TVMaze)** – TMDb-Alternative **ohne API-Key**, inkl. Cast, Rating, Episoden
+- **Embed-Player-Stack** – VidSrc / 2Embed / VidLink / VidLove (IMDb/TMDb)
+- **GitHub Update-Checker** – erkennt neue Releases und APK-Downloads
+- **Metadata Enrichment** – Detail-Screen mit Genres, Cast, Network, IMDb
+- Continue Watching, Watchlist, Multi-Hoster, DNS-over-HTTPS, Autoplay
 
 ## Provider
 
-| Provider | Fokus | Base |
-|----------|-------|------|
-| SerienStream | Serien | serienstream.to |
-| SerienStream CX | Serien (Mirror) | serienstream.cx |
-| AniWorld | Anime | aniworld.to |
-| KinoGer | Filme/Serien | kinoger.to |
-| Burning Series | Serien | bs.to / burningseries.cx |
-| MegaKino | Filme/Serien | megakino.ms |
-| StreamKiste | Filme/Serien | stream-kiste.de |
-| FilmPalast | Filme/Serien | filmpalast.to |
-| KinoZ | Filme/Serien | kinoz.to |
-
-## Tech Stack
-
-- **Kotlin** 2.0.21
-- **Jetpack Compose** (Material 3)
-- **Media3 / ExoPlayer** 1.5.1 (HLS, MP4)
-- **Room Database** 2.6.1 (Watch Progress, Watchlist)
-- **DataStore Preferences** (Recent Searches, Provider)
-- **Coil** 2.7.0 (Image Loading)
-- **Retrofit + OkHttp** (Networking, DNS-over-HTTPS)
-- **Jsoup** 1.18.3 (HTML Parsing)
-- **Navigation Compose** 2.8.5
-- **KSP** (Kotlin Symbol Processing)
+| Provider | Typ |
+|----------|-----|
+| SerienStream / CX | Serien (DE) |
+| AniWorld | Anime |
+| KinoGer | Filme/Serien |
+| Burning Series | Serien |
+| MegaKino | Filme/Serien |
+| StreamKiste | Filme/Serien |
+| FilmPalast | Filme/Serien |
+| KinoZ | Filme/Serien |
+| **Free Catalog (TVMaze)** | Globaler Katalog + Embeds |
+| HydraHD | FMHY |
+| Cinezo | FMHY / TMDb-IDs |
+| Shows.st | FMHY |
+| PhantomFlix | FMHY |
+| Flixer | FMHY |
+| DramaCool | Asian Drama |
+| PressPlay | FMHY |
 
 ## Architektur
 
 ```
-app/src/main/java/com/novastream/app/
-├── data/
-│   ├── api/          # NetworkModule, Scrapers, API Interfaces
-│   ├── db/           # Room Database, Entities, DAOs
-│   ├── model/        # Series, Episode, HomeCatalog, StreamSource, …
-│   ├── provider/     # StreamingProvider-Implementierungen
-│   ├── prefs/        # AppSettings
-│   └── repository/   # NovaStreamRepository, WatchRepository
-├── ui/
-│   ├── components/   # Shared Composables
-│   ├── detail/       # Detail Screen + ViewModel
-│   ├── home/         # Home Screen + ViewModel
-│   ├── navigation/   # NavHost
-│   ├── player/       # Player Screen + ViewModel
-│   ├── search/       # Search Screen
-│   ├── settings/     # Settings / Provider-Auswahl
-│   ├── theme/        # Colors, Theme
-│   └── watchlist/    # Watchlist Screen
-└── util/             # HosterResolver, VoeWebViewResolver, ErrorMapper
+data/
+  api/          NovaStreamScraper, NetworkModule
+  scraper/      UniversalHtmlScraper + SiteProfiles (alle Provider)
+  meta/         FreeMetaService (TVMaze, kein Key)
+  provider/     17 StreamingProvider-Implementierungen
+  repository/   NovaStreamRepository
+util/
+  HosterResolver, EmbedStreamResolver, UpdateChecker
+ui/
+  home, detail (+ Meta), settings (+ Updates), player, search, watchlist
 ```
 
 ## Build
 
 ```bash
-# Debug APK
 ./gradlew :app:assembleDebug
-
-# Release APK
 ./gradlew :app:assembleRelease
 ```
 
-## Installation
+## Updates
 
-1. APK auf Android-Gerät (7.0+) übertragen
-2. "Aus unbekannten Quellen installieren" erlauben
-3. App öffnen, Provider wählen und Serien streamen
+Die App prüft automatisch `https://github.com/dskja/NovaStream/releases/latest`.
+Unter Settings → App-Updates kannst du manuell prüfen und die APK öffnen.
 
-## System Requirements
+## Requirements
 
-- Android 7.0 (API 24) oder höher
-- Internetverbindung
-- Codec-Unterstützung für HLS/MP4
+- Android 7.0+ (API 24)
+- Internet
+- HLS/MP4 Codec-Support
 
 ## Disclaimer
 
-NovaStream ist ein inoffizieller Client und nicht mit den Quellen-Websites affiliated. Die App ist nur für Bildungszwecke. Verwende sie auf eigene Verantwortung.
+Inoffizieller Client zu Bildungszwecken. Nutzung auf eigene Verantwortung.
+Quellen-Websites sind nicht affiliated.
 
 ## License
 
-Dieses Projekt ist Open Source unter der MIT License.
+MIT
