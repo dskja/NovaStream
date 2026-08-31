@@ -1,0 +1,142 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build NovaStream APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Ensure Android debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Build Release APK
+        # Ohne Upload-Keystore: Release wird mit Debug-Key signiert (installierbar).
+        run: ./gradlew :app:assembleRelease --stacktrace --no-daemon
+        env:
+          CI_USE_DEBUG_SIGNING: "true"
+
+      - name: Locate APKs
+        id: apks
+        run: |
+          set -euo pipefail
+          echo "== Debug outputs =="
+          find app/build/outputs/apk/debug -type f -name "*.apk" -print || true
+          echo "== Release outputs =="
+          find app/build/outputs/apk/release -type f -name "*.apk" -print || true
+
+          DEBUG_UNIVERSAL=$(find app/build/outputs/apk/debug -type f -name "*universal*.apk" | head -n 1 || true)
+          RELEASE_UNIVERSAL=$(find app/build/outputs/apk/release -type f -name "*universal*.apk" | head -n 1 || true)
+
+          if [ -z "${DEBUG_UNIVERSAL}" ]; then
+            DEBUG_UNIVERSAL=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1 || true)
+          fi
+          if [ -z "${RELEASE_UNIVERSAL}" ]; then
+            RELEASE_UNIVERSAL=$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1 || true)
+          fi
+
+          mkdir -p dist
+          VERSION_NAME=$(grep -E 'versionName\s+"' app/build.gradle | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          VERSION_CODE=$(grep -E 'versionCode\s+' app/build.gradle | head -n1 | sed -E 's/[^0-9]//g')
+
+          if [ -n "${DEBUG_UNIVERSAL}" ]; then
+            DEBUG_OUT="dist/NovaStream-${VERSION_NAME}-${VERSION_CODE}-debug.apk"
+            cp "${DEBUG_UNIVERSAL}" "${DEBUG_OUT}"
+            echo "debug_apk=${DEBUG_OUT}" >> "$GITHUB_OUTPUT"
+            echo "Debug APK: ${DEBUG_OUT}"
+          fi
+
+          if [ -n "${RELEASE_UNIVERSAL}" ]; then
+            RELEASE_OUT="dist/NovaStream-${VERSION_NAME}-${VERSION_CODE}-release.apk"
+            cp "${RELEASE_UNIVERSAL}" "${RELEASE_OUT}"
+            echo "release_apk=${RELEASE_OUT}" >> "$GITHUB_OUTPUT"
+            echo "Release APK: ${RELEASE_OUT}"
+          fi
+
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          ls -lh dist/
+
+      - name: Upload Debug APK
+        if: steps.apks.outputs.debug_apk != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaStream-debug-apk
+          path: ${{ steps.apks.outputs.debug_apk }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Release APK
+        if: steps.apks.outputs.release_apk != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaStream-release-apk
+          path: ${{ steps.apks.outputs.release_apk }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload all APK variants
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaStream-all-apks
+          path: |
+            app/build/outputs/apk/debug/**/*.apk
+            app/build/outputs/apk/release/**/*.apk
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Create GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/') && steps.apks.outputs.release_apk != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NovaStream ${{ steps.apks.outputs.version_name }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            ${{ steps.apks.outputs.release_apk }}
+            ${{ steps.apks.outputs.debug_apk }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
