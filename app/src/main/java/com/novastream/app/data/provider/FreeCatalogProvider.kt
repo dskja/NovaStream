@@ -36,7 +36,7 @@ class FreeCatalogProvider(
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val schedule = FreeMetaService.schedule("US")
         val page = FreeMetaService.catalogPage(0)
-        (schedule + page).distinctBy { it.id }.map { it.toSeries() }
+        (schedule + page).distinctBy { it.id }.map { mapShow(it) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -171,22 +171,19 @@ class FreeCatalogProvider(
     private fun extractTmdb(slug: String): String? =
         slug.removePrefix("tv-").removePrefix("movie-").takeIf { it.all { c -> c.isDigit() } }
 
-    private fun com.novastream.app.data.meta.MetaShow.toSeries(): Series {
-        val pid = frank.g@example.org
-        return Series(
-            id = id,
-            title = title,
-            coverUrl = posterUrl,
-            backdropUrl = backdropUrl,
-            detailUrl = "/shows/$id",
-            year = year,
-            description = summary,
-            genres = genres,
-            rating = rating?.let { String.format("%.1f", it) },
-            status = status,
-            providerId = pid,
-            seasonCount = seasonCount,
-            originalTitle = title
-        )
-    }
+    private fun mapShow(show: com.novastream.app.data.meta.MetaShow): Series = Series(
+        id = show.id,
+        title = show.title,
+        coverUrl = show.posterUrl,
+        backdropUrl = show.backdropUrl,
+        detailUrl = "/shows/${show.id}",
+        year = show.year,
+        description = show.summary,
+        genres = show.genres,
+        rating = show.rating?.let { String.format("%.1f", it) },
+        status = show.status,
+        providerId = id,
+        seasonCount = show.seasonCount,
+        originalTitle = show.title
+    )
 }
