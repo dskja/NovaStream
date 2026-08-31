@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stream
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -71,7 +72,10 @@ data class SettingsUiState(
     val dynamicColor: Boolean = true,
     val playbackSpeed: Float = 1.0f,
     val skipIntroButton: Boolean = true,
-    val message: String? = null
+    val message: String? = null,
+    val updateChecking: Boolean = false,
+    val updateInfo: com.novastream.app.util.UpdateChecker.UpdateInfo? = null,
+    val updateChecked: Boolean = false
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -113,6 +117,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
         viewModelScope.launch {
             appSettings.skipIntroButton.collect { v -> _state.update { it.copy(skipIntroButton = v) } }
+        }
+        // Auto-check for updates once
+        checkForUpdates()
+    }
+
+    fun checkForUpdates() {
+        viewModelScope.launch {
+            _state.update { it.copy(updateChecking = true) }
+            val info = try {
+                com.novastream.app.util.UpdateChecker.check()
+            } catch (_: Exception) {
+                null
+            }
+            _state.update {
+                it.copy(
+                    updateChecking = false,
+                    updateChecked = true,
+                    updateInfo = info,
+                    message = when {
+                        info == null -> "Update-Check fehlgeschlagen oder keine Releases"
+                        info.isNewer -> "Update verfügbar: v${info.latestVersion}"
+                        else -> "Du bist auf dem neuesten Stand (v${info.currentVersion})"
+                    }
+                )
+            }
         }
     }
 
@@ -509,6 +538,91 @@ fun SettingsScreen() {
                     pendingAction = { vm.clearWatchlist() }
                 }
             )
+
+            Spacer(Modifier.height(24.dp))
+
+            // Section: Updates
+            SettingsSectionHeader("App-Updates")
+            val update = state.updateInfo
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (update?.isNewer == true) Primary.copy(alpha = 0.18f)
+                        else BgSurfaceElevated
+                    )
+                    .clickable { vm.checkForUpdates() }
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = if (update?.isNewer == true) Primary else TextSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                when {
+                                    state.updateChecking -> "Prüfe auf Updates…"
+                                    update?.isNewer == true -> "Update verfügbar: v${update.latestVersion}"
+                                    update != null -> "Aktuell: v${update.currentVersion}"
+                                    else -> "Nach Updates suchen"
+                                },
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                "GitHub Releases · ${com.novastream.app.util.UpdateChecker.GITHUB_REPO}",
+                                color = TextTertiary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    if (update?.isNewer == true) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val ctx = LocalContext.current
+                            Button(
+                                onClick = {
+                                    val url = update.downloadUrl ?: update.releaseUrl
+                                    try {
+                                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    } catch (_: Exception) {
+                                        vm.showUrlError()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                            ) {
+                                Text(if (update.downloadUrl != null) "APK laden" else "Release öffnen")
+                            }
+                            OutlinedButton(onClick = {
+                                try {
+                                    ctx.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse(update.releaseUrl)
+                                        )
+                                    )
+                                } catch (_: Exception) {
+                                    vm.showUrlError()
+                                }
+                            }) {
+                                Text("Changelog")
+                            }
+                        }
+                        update.releaseNotes?.take(280)?.let { notes ->
+                            Spacer(Modifier.height(8.dp))
+                            Text(notes, color = TextSecondary, fontSize = 12.sp, maxLines = 6)
+                        }
+                    }
+                }
+            }
 
             Spacer(Modifier.height(24.dp))
 

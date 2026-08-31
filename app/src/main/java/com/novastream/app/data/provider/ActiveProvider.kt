@@ -2,8 +2,6 @@ package com.novastream.app.data.provider
 
 /**
  * Hält den aktuell aktiven Provider als Singleton.
- * Wird von SettingsScreen aktualisiert wenn der User den Provider wechselt.
- * ViewModels lesen den Provider von hier.
  */
 object ActiveProvider {
     @Volatile
@@ -12,15 +10,12 @@ object ActiveProvider {
     fun get(): StreamingProvider = current
 
     fun set(provider: StreamingProvider) {
-        synchronized(this) {
-            current = provider
-        }
+        synchronized(this) { current = provider }
     }
 
     fun setById(id: String) {
         synchronized(this) {
-            val provider = ProviderManager.getProviderOrNull(id)
-            current = provider ?: ProviderManager.defaultProvider
+            current = ProviderManager.getProviderOrNull(id) ?: ProviderManager.defaultProvider
         }
     }
 
@@ -38,8 +33,8 @@ object ActiveProvider {
     val isStreamKiste: Boolean get() = current.id == "streamkiste"
     val isFilmPalast: Boolean get() = current.id == "filmpalast"
     val isKinoZ: Boolean get() = current.id == "kinoz"
+    val isFreeCatalog: Boolean get() = current.id == "freecatalog"
 
-    /** Baut eine Episode-URL für den aktiven Provider. */
     fun episodeUrl(slug: String, season: Int, episode: Int): String {
         return when (current.id) {
             "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
@@ -53,6 +48,13 @@ object ActiveProvider {
                 "/stream/$slug-s${s}e$e"
             }
             "kinoz" -> "/Stream/$slug.html"
+            "freecatalog" -> "imdb://$slug/$season/$episode"
+            "cinezo", "showsst" -> {
+                val id = slug.removePrefix("tv-").removePrefix("movie-")
+                if (slug.startsWith("movie")) "/movie/$id" else "/watch/tv/$id"
+            }
+            "hydrahd" -> "/watchseries/$slug"
+            "dramacool" -> "/$slug-episode-$episode/"
             else -> "/serie/$slug/staffel-$season/episode-$episode"
         }
     }
@@ -66,6 +68,7 @@ object ActiveProvider {
             "streamkiste" -> "/serien/$slug/staffel-$season"
             "filmpalast" -> "/stream/$slug"
             "kinoz" -> "/Stream/$slug.html"
+            "freecatalog" -> "/shows/$slug"
             else -> "/serie/$slug/staffel-$season"
         }
     }
@@ -79,6 +82,11 @@ object ActiveProvider {
             "streamkiste" -> "/serien/$slug"
             "filmpalast" -> "/stream/$slug"
             "kinoz" -> "/Stream/$slug.html"
+            "freecatalog" -> "/shows/$slug"
+            "cinezo" -> if (slug.startsWith("movie")) "/movie/${slug.removePrefix("movie-")}" else "/tv/${slug.removePrefix("tv-")}"
+            "showsst" -> "/watch/tv/${slug.removePrefix("tv-")}"
+            "hydrahd" -> "/watchseries/$slug"
+            "dramacool" -> "/$slug/"
             else -> "/serie/$slug"
         }
     }
