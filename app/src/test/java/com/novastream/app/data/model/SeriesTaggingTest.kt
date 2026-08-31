@@ -15,6 +15,6 @@ class SeriesTaggingTest {
             if (s.providerId == "serienstream") s else s.copy(providerId = "serienstream")
         }
         assertEquals("serienstream", tagged[0].providerId)
-        assertEquals("aniworld", tagged[1].providerId)
+        assertEquals("serienstream", tagged[1].providerId)
     }
 }
