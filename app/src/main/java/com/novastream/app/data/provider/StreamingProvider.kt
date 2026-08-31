@@ -77,12 +77,15 @@ interface StreamingProvider {
 }
 
 /** Helper Extensions für StreamingProvider. */
-val StreamingProvider.isSerienStream: Boolean get() = id == "serienstream"
+val StreamingProvider.isSerienStream: Boolean
+    get() = id == "serienstream" || id == "serienstream_cx"
 val StreamingProvider.isAniWorld: Boolean get() = id == "aniworld"
 val StreamingProvider.isKinoGer: Boolean get() = id == "kinoger"
 val StreamingProvider.isBurningSeries: Boolean get() = id == "burningseries"
 val StreamingProvider.isMegaKino: Boolean get() = id == "megakino"
 val StreamingProvider.isStreamKiste: Boolean get() = id == "streamkiste"
+val StreamingProvider.isFilmPalast: Boolean get() = id == "filmpalast"
+val StreamingProvider.isKinoZ: Boolean get() = id == "kinoz"
 
 /** True wenn der Provider Filme unterstützt (basierend auf supportsSeries = false). */
 val StreamingProvider.supportsMovies: Boolean get() = !supportsSeries

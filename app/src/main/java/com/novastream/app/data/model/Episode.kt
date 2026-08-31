@@ -82,6 +82,13 @@ data class HosterLink(
     /** True wenn es ein Filemoon-Hoster ist. */
     val isFilemoon: Boolean get() = name.contains("filemoon", ignoreCase = true)
 
+    val isFirestream: Boolean get() = name.contains("firestream", ignoreCase = true)
+    val isVidara: Boolean get() = name.contains("vidara", ignoreCase = true)
+    val isVinovo: Boolean get() = name.contains("vinovo", ignoreCase = true)
+    val isPlaymate: Boolean get() = name.contains("playmate", ignoreCase = true)
+    val isVidmoly: Boolean get() = name.contains("vidmoly", ignoreCase = true)
+    val isMixdrop: Boolean get() = name.contains("mixdrop", ignoreCase = true)
+
     /** True wenn die Sprache Deutsch ist. */
     val isGerman: Boolean get() = language.contains("Deutsch", ignoreCase = true)
 
