@@ -366,7 +366,14 @@ fun SearchScreen(
                         }
                     }
                 }
-                state.results.isEmpty() -> PremiumEmpty("Keine Treffer für '${state.query}'", icon = Icons.Default.Search)
+                state.results.isEmpty() -> PremiumEmpty(
+                    if (com.novastream.app.data.provider.ActiveProvider.isBurningSeries) {
+                        "Keine Treffer. Burning Series blockiert oft Bot-Suchen (Captcha) – bitte später erneut versuchen."
+                    } else {
+                        "Keine Treffer für '${state.query}'"
+                    },
+                    icon = Icons.Default.Search
+                )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 130.dp),
                     contentPadding = PaddingValues(12.dp, bottom = 80.dp),
