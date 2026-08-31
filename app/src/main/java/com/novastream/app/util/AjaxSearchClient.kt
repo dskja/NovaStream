@@ -60,7 +60,7 @@ object AjaxSearchClient {
         emptyList()
     }
 
-    internal fun parseJsonResults(
+    private fun parseJsonResults(
         json: String,
         baseUrl: String,
         linkHint: String?,
@@ -151,6 +151,8 @@ object AjaxSearchClient {
         }
         return out.values.toList()
     }
+
+    internal fun extractSlugForTest(url: String, isAnime: Boolean): String? = extractSlug(url, isAnime)
 
     private fun extractSlug(url: String, isAnime: Boolean): String? {
         val patterns = if (isAnime) {
