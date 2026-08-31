@@ -19,7 +19,7 @@ import retrofit2.converter.scalars.ScalarsConverterFactory
  * Provider für SerienStream.to / s.to (und Mirror .cx).
  * Nutzt den massiv ausgebauten [NovaStreamScraper].
  */
-class SerienStreamProvider(
+open class SerienStreamProvider(
     override val id: String = "serienstream",
     override val displayName: String = "SerienStream",
     override val baseUrl: String = NovaStreamConfig.BASE_URL,

@@ -336,9 +336,10 @@ class KinoZProvider(
         return try {
             val json = JSONObject(body)
             val streamHtml = json.optString("Stream", "")
-            val iframeSrc = if (streamHtml.isNotBlank()) extractIframeSrc(streamHtml) else null
-                ?: extractIframeSrc(body)
-                ?: return null
+            val iframeSrc = when {
+                streamHtml.isNotBlank() -> extractIframeSrc(streamHtml)
+                else -> null
+            } ?: extractIframeSrc(body) ?: return null
             val hosterName = json.optString("HosterName", "").ifBlank { null }
             MirrorResult(makeAbsolute(iframeSrc), hosterName)
         } catch (_: Exception) {

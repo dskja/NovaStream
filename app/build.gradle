@@ -24,6 +24,10 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // In CI (CI_USE_DEBUG_SIGNING=true) mit Debug-Key signieren, damit die APK installierbar ist.
+            if (System.getenv("CI_USE_DEBUG_SIGNING") == "true") {
+                signingConfig signingConfigs.debug
+            }
         }
         debug {
             minifyEnabled false
