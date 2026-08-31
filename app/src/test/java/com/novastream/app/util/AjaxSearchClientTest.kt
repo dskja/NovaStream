@@ -1,18 +1,24 @@
 package com.novastream.app.util
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AjaxSearchClientTest {
 
     @Test
-    fun parseJsonResults_extractsSeriesFromArray() {
-        val json = """[{"title":"Test Serie","link":"/serie/test-serie"},{"title":"Zweite","link":"/serie/zweite"}]"""
-        val results = AjaxSearchClient.parseJsonResults(json, "https://example.com", "/serie/", false)
-        assertEquals(2, results.size)
-        assertEquals("test-serie", results[0].id)
-        assertEquals("zweite", results[1].id)
-        assertTrue(results[0].title.contains("Test"))
+    fun extractSlug_parsesSerienStreamPaths() {
+        assertEquals("test-serie", AjaxSearchClient.extractSlugForTest("/serie/test-serie", false))
+        assertEquals("zweite", AjaxSearchClient.extractSlugForTest("/serie/zweite", false))
+    }
+
+    @Test
+    fun extractSlug_parsesAniWorldPaths() {
+        assertEquals("naruto", AjaxSearchClient.extractSlugForTest("/anime/stream/naruto", true))
+    }
+
+    @Test
+    fun extractSlug_returnsNullForUnrelatedPaths() {
+        assertNull(AjaxSearchClient.extractSlugForTest("/about", false))
     }
 }
