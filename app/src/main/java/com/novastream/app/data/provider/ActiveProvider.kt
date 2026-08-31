@@ -2,20 +2,30 @@ package com.novastream.app.data.provider
 
 /**
  * Hält den aktuell aktiven Provider als Singleton.
+ * Alle Katalog-/Detail-Aufrufe MÜSSEN über [get] laufen – nie hardcodierte Base-URLs.
  */
 object ActiveProvider {
     @Volatile
     private var current: StreamingProvider = ProviderManager.defaultProvider
 
+    @Volatile
+    private var initialized: Boolean = false
+
     fun get(): StreamingProvider = current
 
+    fun isInitialized(): Boolean = initialized
+
     fun set(provider: StreamingProvider) {
-        synchronized(this) { current = provider }
+        synchronized(this) {
+            current = provider
+            initialized = true
+        }
     }
 
     fun setById(id: String) {
         synchronized(this) {
             current = ProviderManager.getProviderOrNull(id) ?: ProviderManager.defaultProvider
+            initialized = true
         }
     }
 
@@ -23,7 +33,9 @@ object ActiveProvider {
     val displayName: String get() = current.displayName
     val baseUrl: String get() = current.baseUrl
     val supportsSeries: Boolean get() = current.supportsSeries
-    val supportsMovies: Boolean get() = !current.supportsSeries
+    val supportsMovies: Boolean get() = current.supportsMovies
+    val availableGenres get() = current.availableGenres
+    val catalogHint: String? get() = current.catalogHint
 
     val isSerienStream: Boolean get() = current.id == "serienstream" || current.id == "serienstream_cx"
     val isAniWorld: Boolean get() = current.id == "aniworld"

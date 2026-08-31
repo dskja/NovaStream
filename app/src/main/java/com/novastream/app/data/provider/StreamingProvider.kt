@@ -21,16 +21,28 @@ interface StreamingProvider {
     /** Basis-URL des Providers. */
     val baseUrl: String
 
-    /** Ob dieser Provider Serien unterstützt (vs. nur Filme). */
+    /** Ob dieser Provider Serien unterstützt. */
     val supportsSeries: Boolean
 
-    /** Lädt die Startseite mit empfohlenen/populären Serien. */
+    /** Ob dieser Provider Filme unterstützt (unabhängig von Serien). */
+    val supportsMovies: Boolean
+        get() = !supportsSeries
+
+    /** Genres die dieser Provider wirklich anbietet (leere Liste = keine Genre-Sektion). */
+    val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = emptyList()
+
+    /** Geschätzte Kataloggröße für UI (null = unbekannt). */
+    val catalogHint: String?
+        get() = null
+
+    /** Lädt die Startseite mit empfohlenen/populären Titeln. */
     suspend fun loadHome(): ProviderResult<List<Series>>
 
-    /** Sucht nach Serien. */
+    /** Sucht nach Serien/Filmen. */
     suspend fun search(query: String): ProviderResult<List<Series>>
 
-    /** Lädt Details + Staffeln einer Serie. */
+    /** Lädt Details + Staffeln einer Serie / eines Films. */
     suspend fun loadSeriesDetail(slug: String): ProviderResult<Pair<Series, List<Season>>>
 
     /** Lädt Episoden einer bestimmten Staffel. */
@@ -42,15 +54,23 @@ interface StreamingProvider {
     /** Löst einen Hoster-Link zu Stream-Quellen auf. */
     suspend fun resolveHoster(hoster: HosterLink): ProviderResult<List<StreamSource>>
 
-    /** Lädt Serien nach Genre (optional, default: emptyList). */
+    /** Lädt Titel nach Genre (optional, default: emptyList). */
     suspend fun loadGenre(genre: String): ProviderResult<List<Series>> =
         ProviderResult.Success(emptyList())
 
-    /** Lädt die neuesten Serien (optional, default: loadHome). */
+    /** Lädt die neuesten Titel (optional, default: loadHome). */
     suspend fun loadNewest(): ProviderResult<List<Series>> = loadHome()
 
-    /** Lädt die beliebtesten Serien (optional, default: loadHome). */
+    /** Lädt die beliebtesten Titel (optional, default: loadHome). */
     suspend fun loadPopular(): ProviderResult<List<Series>> = loadHome()
+
+    /** Lädt Film-Katalog (optional). */
+    suspend fun loadMovies(): ProviderResult<List<Series>> =
+        ProviderResult.Success(emptyList())
+
+    /** Erweiterter Katalog (z.B. Alphabet-Seiten) für vollere Home-Listen. */
+    suspend fun loadExtendedCatalog(): ProviderResult<List<Series>> =
+        ProviderResult.Success(emptyList())
 
     /** Result-Wrapper für Provider-Operationen. */
     sealed class ProviderResult<out T> {
@@ -91,5 +111,6 @@ val StreamingProvider.isHydraHd: Boolean get() = id == "hydrahd"
 val StreamingProvider.isCinezo: Boolean get() = id == "cinezo"
 val StreamingProvider.isDramaCool: Boolean get() = id == "dramacool"
 
-/** True wenn der Provider Filme unterstützt (basierend auf supportsSeries = false). */
-val StreamingProvider.supportsMovies: Boolean get() = !supportsSeries
+/** Provider die sowohl Filme als auch Serien anbieten. */
+val StreamingProvider.hasMovies: Boolean get() = supportsMovies
+val StreamingProvider.hasSeries: Boolean get() = supportsSeries

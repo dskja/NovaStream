@@ -143,6 +143,11 @@ fun SeriesPosterCard(
                         .data(series.coverUrl)
                         .crossfade(true)
                         .size(400, 600)
+                        .addHeader(
+                            "Referer",
+                            com.novastream.app.util.MediaUrls.refererFor(series.coverUrl)
+                        )
+                        .addHeader("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
                         .build(),
                     contentDescription = series.title,
                     contentScale = ContentScale.Crop,

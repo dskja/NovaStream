@@ -22,6 +22,17 @@ class FreeCatalogProvider(
     override val supportsSeries: Boolean = true
 ) : StreamingProvider {
 
+    override val supportsMovies: Boolean = false
+    override val catalogHint: String = "Tausende Serien via TVMaze"
+    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
+        com.novastream.app.data.model.Genre("Action", "Action"),
+        com.novastream.app.data.model.Genre("Comedy", "Comedy"),
+        com.novastream.app.data.model.Genre("Drama", "Drama"),
+        com.novastream.app.data.model.Genre("Science-Fiction", "Sci-Fi"),
+        com.novastream.app.data.model.Genre("Horror", "Horror"),
+        com.novastream.app.data.model.Genre("Thriller", "Thriller")
+    )
+
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val schedule = FreeMetaService.schedule("US")
         val page = FreeMetaService.catalogPage(0)
@@ -171,6 +182,7 @@ class FreeCatalogProvider(
         genres = genres,
         rating = rating?.let { String.format("%.1f", it) },
         status = status,
+        providerId = julia.r@example.org,
         seasonCount = seasonCount,
         originalTitle = title
     )

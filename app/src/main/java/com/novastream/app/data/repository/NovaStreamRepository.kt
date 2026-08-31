@@ -28,7 +28,7 @@ class NovaStreamRepository {
     }
 
     suspend fun loadHome(): RepoResult<List<Series>> =
-        withRetry { provider.loadHome().toRepoResult() }
+        withRetry { provider.loadHome().tag().toRepoResult() }
 
     /**
      * Lädt Home parallel mit Popular/Newest/Genres wenn der Provider das unterstützt.
@@ -36,24 +36,29 @@ class NovaStreamRepository {
      */
     suspend fun loadHomeCatalog(): RepoResult<HomeCatalog> = withRetry {
         val p = provider
+        val expectedId = p.id
         if (p is SerienStreamProvider) {
-            p.loadHomeCatalog().toRepoResult()
+            p.loadHomeCatalog().map { it.tagAll(expectedId) }.toRepoResult()
         } else {
-            // Generischer Aufbau aus parallel geladenen Listen
             coroutineScope {
                 val homeDef = async { p.loadHome() }
                 val popularDef = async { p.loadPopular() }
                 val newestDef = async { p.loadNewest() }
-                val home = homeDef.await().getOrNull().orEmpty()
-                val popular = popularDef.await().getOrNull().orEmpty()
-                val newest = newestDef.await().getOrNull().orEmpty()
+                val moviesDef = async { if (p.supportsMovies) p.loadMovies() else null }
+                val extendedDef = async { p.loadExtendedCatalog() }
+                val home = homeDef.await().getOrNull().orEmpty().tagAll(expectedId)
+                val popular = popularDef.await().getOrNull().orEmpty().tagAll(expectedId)
+                val newest = newestDef.await().getOrNull().orEmpty().tagAll(expectedId)
+                val movies = moviesDef.await()?.getOrNull().orEmpty().tagAll(expectedId)
+                val extended = extendedDef.await().getOrNull().orEmpty().tagAll(expectedId)
+                val all = (home + popular + newest + movies + extended).distinctBy { it.id }
                 RepoResult.Success(
                     HomeCatalog(
-                        hero = home.take(8),
+                        hero = home.take(8).ifEmpty { all.take(8) },
                         popular = popular.ifEmpty { home.take(24) },
                         newest = newest.ifEmpty { home.drop(8).take(24) },
-                        trending = home.drop(16).take(24),
-                        all = home
+                        trending = home.drop(16).take(24).ifEmpty { popular.take(24) },
+                        all = all
                     )
                 )
             }
@@ -61,13 +66,19 @@ class NovaStreamRepository {
     }
 
     suspend fun loadGenre(genre: String): RepoResult<List<Series>> =
-        withRetry { provider.loadGenre(genre).toRepoResult() }
+        withRetry { provider.loadGenre(genre).tag().toRepoResult() }
 
     suspend fun loadNewest(): RepoResult<List<Series>> =
-        withRetry { provider.loadNewest().toRepoResult() }
+        withRetry { provider.loadNewest().tag().toRepoResult() }
 
     suspend fun loadPopular(): RepoResult<List<Series>> =
-        withRetry { provider.loadPopular().toRepoResult() }
+        withRetry { provider.loadPopular().tag().toRepoResult() }
+
+    suspend fun loadMovies(): RepoResult<List<Series>> =
+        withRetry { provider.loadMovies().tag().toRepoResult() }
+
+    suspend fun loadExtendedCatalog(): RepoResult<List<Series>> =
+        withRetry { provider.loadExtendedCatalog().tag().toRepoResult() }
 
     suspend fun loadLatestEpisodes(): RepoResult<List<LatestEpisode>> = withRetry {
         val p = provider
@@ -79,10 +90,14 @@ class NovaStreamRepository {
     }
 
     suspend fun search(query: String): RepoResult<List<Series>> =
-        withRetry { provider.search(query).toRepoResult() }
+        withRetry { provider.search(query).tag().toRepoResult() }
 
     suspend fun loadSeriesDetail(slug: String): RepoResult<Pair<Series, List<Season>>> =
-        withRetry { provider.loadSeriesDetail(slug).toRepoResult() }
+        withRetry {
+            provider.loadSeriesDetail(slug).map { (series, seasons) ->
+                series.copy(providerId = provider.id) to seasons
+            }.toRepoResult()
+        }
 
     suspend fun loadSeason(slug: String, season: Int): RepoResult<List<Episode>> =
         withRetry { provider.loadSeason(slug, season).toRepoResult() }
@@ -115,4 +130,21 @@ class NovaStreamRepository {
                 cause
             )
         }
+
+    private fun StreamingProvider.ProviderResult<List<Series>>.tag(): StreamingProvider.ProviderResult<List<Series>> {
+        val pid = provider.id
+        return map { list -> list.tagAll(pid) }
+    }
+
+    private fun List<Series>.tagAll(providerId: String): List<Series> =
+        map { s -> if (s.providerId == providerId) s else s.copy(providerId = providerId) }
+
+    private fun HomeCatalog.tagAll(providerId: String): HomeCatalog = copy(
+        hero = hero.tagAll(providerId),
+        popular = popular.tagAll(providerId),
+        newest = newest.tagAll(providerId),
+        trending = trending.tagAll(providerId),
+        topShows = topShows.tagAll(providerId),
+        all = all.tagAll(providerId)
+    )
 }

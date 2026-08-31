@@ -73,9 +73,10 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
     private var searchJob: kotlinx.coroutines.Job? = null
+    private var trendingJob: kotlinx.coroutines.Job? = null
+    private var activeProviderId: String? = null
 
     init {
-        // Load recent searches - stored as ordered list (newest first)
         viewModelScope.launch {
             getApplication<Application>().dataStore.data.collect { prefs ->
                 try {
@@ -83,7 +84,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     val searches = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
                     _state.update { it.copy(recentSearches = searches) }
                 } catch (e: Exception) {
-                    // Type mismatch (z.B. alte Version hat Set gespeichert) - reset
                     if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("SearchVM", "Recent searches parse error, resetting", e)
                     try {
                         getApplication<Application>().dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
@@ -92,21 +92,61 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         }
-        // Load trending series for empty-state discovery
         viewModelScope.launch {
             try {
-                when (val res = repo.loadHome()) {
-                    is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
-                        _state.update { it.copy(trending = res.data.take(20)) }
+                com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
+                    com.novastream.app.data.provider.ActiveProvider.setById(providerId)
+                    if (activeProviderId != providerId) {
+                        activeProviderId = providerId
+                        searchJob?.cancel()
+                        _state.update {
+                            it.copy(
+                                results = emptyList(),
+                                trending = emptyList(),
+                                error = null,
+                                loading = false
+                            )
+                        }
+                        loadTrending()
+                        // Aktuelle Query erneut suchen
+                        val q = _state.value.query
+                        if (q.length >= 2) onQueryChange(q)
                     }
-                    else -> {}
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("SearchVM", "provider flow error", e)
+                loadTrending()
+            }
+        }
+    }
+
+    private fun loadTrending() {
+        trendingJob?.cancel()
+        val expected = com.novastream.app.data.provider.ActiveProvider.id
+        trendingJob = viewModelScope.launch {
+            try {
+                when (val res = repo.loadPopular()) {
+                    is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
+                        if (com.novastream.app.data.provider.ActiveProvider.id == expected) {
+                            _state.update { it.copy(trending = res.data.take(20)) }
+                        }
+                    }
+                    else -> {
+                        when (val home = repo.loadHome()) {
+                            is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
+                                if (com.novastream.app.data.provider.ActiveProvider.id == expected) {
+                                    _state.update { it.copy(trending = home.data.take(20)) }
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
                 }
             } catch (_: Exception) {}
         }
     }
 
     fun onQueryChange(q: String) {
-        // Limit query length to prevent issues with extremely long queries
         val trimmed = q.trim().take(100)
         _state.update { it.copy(query = trimmed, error = null) }
         searchJob?.cancel()
@@ -114,20 +154,29 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
         }
-        // Minimum 2 characters before searching (reduces unnecessary API calls)
         if (trimmed.length < 2) {
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
         }
         _state.update { it.copy(loading = true) }
+        val expectedProvider = com.novastream.app.data.provider.ActiveProvider.id
         searchJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(300) // Debounce
+            kotlinx.coroutines.delay(300)
             currentCoroutineContext().ensureActive()
-            // Race condition fix: Query könnte sich während delay geändert haben
-            if (_state.value.query != trimmed) return@launch  // Veraltete Query
+            if (_state.value.query != trimmed) return@launch
+            if (com.novastream.app.data.provider.ActiveProvider.id != expectedProvider) return@launch
             when (val res = repo.search(trimmed)) {
                 is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
-                    _state.update { it.copy(loading = false, results = res.data, error = null) }
+                    if (com.novastream.app.data.provider.ActiveProvider.id != expectedProvider) return@launch
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            results = res.data.filter {
+                                it.providerId == null || it.providerId == expectedProvider
+                            },
+                            error = null
+                        )
+                    }
                 }
                 is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Error -> {
                     _state.update { it.copy(loading = false, error = res.message) }

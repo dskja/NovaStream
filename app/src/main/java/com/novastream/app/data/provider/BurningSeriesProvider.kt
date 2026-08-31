@@ -53,9 +53,29 @@ class BurningSeriesProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
-            val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-            val html = fetchUrl("$baseUrl/search?term=$encoded")
-            parseBsSeriesList(html)
+            val q = query.trim()
+            val encoded = java.net.URLEncoder.encode(q, "UTF-8")
+            // bs.to Varianten
+            val paths = listOf(
+                "$baseUrl/suche/$encoded",
+                "$baseUrl/search?q=$encoded",
+                "$baseUrl/search?term=$encoded",
+                "$baseUrl/andere-serien"
+            )
+            var results = emptyList<Series>()
+            for (url in paths) {
+                val html = fetchUrl(url)
+                results = parseBsSeriesList(html)
+                if (results.isNotEmpty() && url.contains("andere-serien")) {
+                    // Client-side Filter auf Alphabet-Liste
+                    val needle = q.lowercase()
+                    results = results.filter {
+                        it.title.lowercase().contains(needle) || it.id.contains(needle.replace(' ', '-'))
+                    }
+                }
+                if (results.isNotEmpty()) break
+            }
+            results.map { it.copy(providerId = id) }
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }

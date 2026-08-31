@@ -35,6 +35,17 @@ class FilmPalastProvider(
     override val supportsSeries: Boolean = true
 ) : StreamingProvider {
 
+    override val supportsMovies: Boolean = true
+    override val catalogHint: String = "Filme & Serien"
+    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
+        com.novastream.app.data.model.Genre("action", "Action"),
+        com.novastream.app.data.model.Genre("comedy", "Comedy"),
+        com.novastream.app.data.model.Genre("drama", "Drama"),
+        com.novastream.app.data.model.Genre("horror", "Horror"),
+        com.novastream.app.data.model.Genre("thriller", "Thriller"),
+        com.novastream.app.data.model.Genre("science-fiction", "Sci-Fi")
+    )
+
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
 
     private val episodeSlugRegex = Regex("""-s(\d+)e(\d+)$""", RegexOption.IGNORE_CASE)
@@ -45,11 +56,23 @@ class FilmPalastProvider(
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val home = fetchUrl(baseUrl)
         val serien = fetchUrl("$baseUrl/serien/view")
+        val moviesHtml = fetchUrl("$baseUrl/movies/new").ifBlank { fetchUrl("$baseUrl/movies") }
         val merged = linkedMapOf<String, Series>()
         for (s in parseFilmPalastList(home) + parseFilmPalastList(serien)) {
-            if (!merged.containsKey(s.id)) merged[s.id] = s
+            if (!merged.containsKey(s.id)) merged[s.id] = s.copy(providerId = id)
+        }
+        for (s in parseFilmPalastList(moviesHtml)) {
+            if (!merged.containsKey(s.id)) merged[s.id] = s.copy(isMovie = true, providerId = id)
         }
         merged.values.toList()
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val html = fetchUrl("$baseUrl/movies/new").ifBlank { fetchUrl("$baseUrl/movies") }
+        parseFilmPalastList(html).map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }

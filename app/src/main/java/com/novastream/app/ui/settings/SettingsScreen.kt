@@ -318,10 +318,17 @@ fun SettingsScreen() {
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
-                            providerInfo.baseUrl,
+                            "${providerInfo.contentLabel} · ${providerInfo.hostLabel}",
                             color = TextTertiary,
                             style = MaterialTheme.typography.labelSmall
                         )
+                        providerInfo.catalogHint?.let { hint ->
+                            Text(
+                                hint,
+                                color = TextTertiary,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
                     if (isSelected) {
                         Box(
