@@ -60,7 +60,7 @@ object AjaxSearchClient {
         emptyList()
     }
 
-    private fun parseJsonResults(
+    internal fun parseJsonResults(
         json: String,
         baseUrl: String,
         linkHint: String?,

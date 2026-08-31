@@ -28,7 +28,7 @@ open class ConfigurableSiteProvider(
     override val displayName: String get() = profile.displayName
     override val baseUrl: String get() = profile.baseUrl
     override val supportsSeries: Boolean get() = profile.supportsSeries
-    override val supportsMovies: Boolean get() = profile.isMovieFocused || !profile.supportsSeries
+    override val supportsMovies: Boolean get() = profile.supportsMovies
     override val catalogHint: String?
         get() = if (supportsMovies && supportsSeries) "Filme & Serien"
         else if (supportsMovies) "Filme"
@@ -39,6 +39,15 @@ open class ConfigurableSiteProvider(
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl + profile.homePath), profile)
     }.toResult()
+
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
+        if (!supportsMovies) return StreamingProvider.ProviderResult.Success(emptyList())
+        return runCatching {
+            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl + profile.homePath), profile)
+                .filter { it.isMovie || it.detailUrl.contains("/movie", ignoreCase = true) }
+                .map { it.copy(isMovie = true) }
+        }.toResult()
+    }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")

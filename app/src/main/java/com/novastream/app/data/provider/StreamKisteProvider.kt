@@ -33,7 +33,8 @@ class StreamKisteProvider(
     override val id: String = "streamkiste",
     override val displayName: String = "StreamKiste",
     override val baseUrl: String = "https://stream-kiste.de",
-    override val supportsSeries: Boolean = true
+    override val supportsSeries: Boolean = true,
+    override val supportsMovies: Boolean = true
 ) : StreamingProvider {
 
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
@@ -42,7 +43,15 @@ class StreamKisteProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val html = fetchUrl("$baseUrl/serien")
-        parseStreamKisteSeriesList(html)
+        parseStreamKisteSeriesList(html).map { it.copy(isMovie = false, providerId = id) }
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val html = fetchUrl("$baseUrl/filme")
+        parseStreamKisteSeriesList(html).map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -61,8 +70,16 @@ class StreamKisteProvider(
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        val html = fetchUrl("$baseUrl/serien/$slug")
-        parseStreamKisteDetail(html, slug)
+        var html = fetchUrl("$baseUrl/serien/$slug")
+        var isMovie = false
+        if (html.isBlank() || !html.contains("<h1")) {
+            val movieHtml = fetchUrl("$baseUrl/filme/$slug")
+            if (movieHtml.isNotBlank()) {
+                html = movieHtml
+                isMovie = true
+            }
+        }
+        parseStreamKisteDetail(html, slug, isMovie)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -139,7 +156,8 @@ class StreamKisteProvider(
                 id = slug,
                 title = title,
                 coverUrl = cover,
-                detailUrl = if (href.contains("/filme/")) "/filme/$slug" else "/serien/$slug"
+                detailUrl = if (href.contains("/filme/")) "/filme/$slug" else "/serien/$slug",
+                isMovie = href.contains("/filme/")
             )
         }
 
@@ -161,7 +179,8 @@ class StreamKisteProvider(
                     id = slug,
                     title = title,
                     coverUrl = cover,
-                    detailUrl = if (href.contains("/filme/")) "/filme/$slug" else "/serien/$slug"
+                    detailUrl = if (href.contains("/filme/")) "/filme/$slug" else "/serien/$slug",
+                    isMovie = href.contains("/filme/")
                 )
             }
         }
@@ -170,9 +189,10 @@ class StreamKisteProvider(
     }
 
     /** Parst die Detail-Seite. */
-    private fun parseStreamKisteDetail(html: String, slug: String): Pair<Series, List<Season>> {
+    private fun parseStreamKisteDetail(html: String, slug: String, isMovie: Boolean = false): Pair<Series, List<Season>> {
         if (html.isBlank()) {
-            return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/serien/$slug") to emptyList()
+            val detailUrl = if (isMovie) "/filme/$slug" else "/serien/$slug"
+            return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = detailUrl, isMovie = isMovie) to emptyList()
         }
         val doc = Jsoup.parse(html, baseUrl)
 
@@ -188,16 +208,24 @@ class StreamKisteProvider(
 
         val year = Regex("\\((\\d{4})\\)").find(title)?.groupValues?.get(1)
 
+        val detailUrl = if (isMovie) "/filme/$slug" else "/serien/$slug"
         val series = Series(
             id = slug,
             title = title,
             coverUrl = cover,
-            detailUrl = "/serien/$slug",
+            detailUrl = detailUrl,
             description = description,
-            year = year
+            year = year,
+            isMovie = isMovie
         )
 
-        val seasons = parseStreamKisteSeasons(doc, slug)
+        val seasons = if (isMovie) {
+            listOf(Season(number = 1, episodes = listOf(
+                Episode(number = 1, title = title, slug = slug, season = 1, episodeUrl = "/filme/$slug")
+            )))
+        } else {
+            parseStreamKisteSeasons(doc, slug)
+        }
         return series to seasons
     }
 

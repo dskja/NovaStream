@@ -269,7 +269,7 @@ fun WatchlistScreen(
                 }
                 state.items.isEmpty() -> {
                     PremiumEmpty(
-                        "Deine Watchlist ist leer.\nFüge Serien hinzu die du schauen möchtest.",
+                        "Deine Watchlist ist leer.\nFüge Filme & Serien hinzu die du schauen möchtest.",
                         icon = Icons.Filled.Bookmark
                     )
                 }

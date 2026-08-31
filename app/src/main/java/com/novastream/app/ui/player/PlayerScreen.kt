@@ -501,9 +501,9 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay (only if autoplay is enabled in settings)
+        // Next Episode overlay (only for series, not movies)
         AnimatedVisibility(
-            visible = showNextEpisodeOverlay && state.nextEpisode != null && state.autoplayNext,
+            visible = !state.isMovie && showNextEpisodeOverlay && state.nextEpisode != null && state.autoplayNext,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center)

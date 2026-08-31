@@ -155,6 +155,15 @@ class KinoGerProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> =
+        loadGenrePaged(genre, 1)
+
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> =
+        loadSeriesPage(page + 1)
+
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
+        loadGenrePaged(genre, page + 1)
+
     /** Lädt die Detail-Seite mit thread-safe LRU Caching. */
     private suspend fun fetchDetailPage(slug: String): String {
         // Cache hit (thread-safe)

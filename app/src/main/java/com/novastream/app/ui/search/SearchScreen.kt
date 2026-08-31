@@ -259,7 +259,7 @@ fun SearchScreen(
             TextField(
                 value = state.query,
                 onValueChange = vm::onQueryChange,
-                placeholder = { Text("Serie suchen…", color = TextTertiary) },
+                placeholder = { Text("Titel suchen…", color = TextTertiary) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
@@ -362,7 +362,7 @@ fun SearchScreen(
                             }
                         }
                         if (state.recentSearches.isEmpty() && state.trending.isEmpty()) {
-                            PremiumEmpty("Suche nach deiner Lieblingsserie", icon = Icons.Default.Search)
+                            PremiumEmpty("Suche nach Filmen & Serien", icon = Icons.Default.Search)
                         }
                     }
                 }

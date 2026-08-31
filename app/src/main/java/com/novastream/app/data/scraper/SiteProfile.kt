@@ -26,6 +26,11 @@ data class SiteProfile(
     val genrePathTemplate: String = "/genre/{genre}",
     val supportsSeries: Boolean = true,
     val isMovieFocused: Boolean = false,
+    /** True wenn der Katalog auch Filme enthält (z.B. /movie/-Links). */
+    val supportsMovies: Boolean = isMovieFocused ||
+        !supportsSeries ||
+        seriesLinkSelector.contains("movie", ignoreCase = true) ||
+        seriesLinkPattern.contains("movie", ignoreCase = true),
     /** Wenn gesetzt: Slugs aus URL-Gruppe 1 extrahieren. */
     val slugRegex: String = "",
     val absoluteLinkPrefix: String = ""

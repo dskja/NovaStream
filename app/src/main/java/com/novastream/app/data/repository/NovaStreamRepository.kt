@@ -80,6 +80,12 @@ class NovaStreamRepository {
     suspend fun loadExtendedCatalog(): RepoResult<List<Series>> =
         withRetry { provider.loadExtendedCatalog().tag().toRepoResult() }
 
+    suspend fun loadCatalogPage(page: Int): RepoResult<List<Series>> =
+        withRetry { provider.loadCatalogPage(page).tag().toRepoResult() }
+
+    suspend fun loadGenrePage(genre: String, page: Int): RepoResult<List<Series>> =
+        withRetry { provider.loadGenrePage(genre, page).tag().toRepoResult() }
+
     suspend fun loadLatestEpisodes(): RepoResult<List<LatestEpisode>> = withRetry {
         val p = provider
         if (p is SerienStreamProvider) {
