@@ -259,16 +259,15 @@ fun PlayerScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        useController = true
+                        useController = !showHosters
                         this.player = player
                         setPadding(0, 0, 0, navBarHeightPx)
-                        if (showHosters) hideController()
                     }
                 },
                 update = { pv ->
                     pv.player = player
+                    pv.useController = !showHosters
                     pv.setPadding(0, 0, 0, navBarHeightPx)
-                    if (showHosters) pv.hideController() else pv.showController()
                     pv.isFocusable = true
                     pv.isFocusableInTouchMode = true
                 },
