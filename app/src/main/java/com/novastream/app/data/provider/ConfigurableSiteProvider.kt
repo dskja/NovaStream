@@ -28,6 +28,11 @@ open class ConfigurableSiteProvider(
     override val displayName: String get() = profile.displayName
     override val baseUrl: String get() = profile.baseUrl
     override val supportsSeries: Boolean get() = profile.supportsSeries
+    override val supportsMovies: Boolean get() = profile.isMovieFocused || !profile.supportsSeries
+    override val catalogHint: String?
+        get() = if (supportsMovies && supportsSeries) "Filme & Serien"
+        else if (supportsMovies) "Filme"
+        else null
 
     private val hosterResolver = HosterResolver(baseUrl = profile.baseUrl)
 

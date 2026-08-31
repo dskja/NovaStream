@@ -324,8 +324,7 @@ private fun DetailContent(
                 val totalEpisodes = state.seasons.sumOf { it.episodes.size }
                 val watchedEpisodes = state.seasons.sumOf { season ->
                     season.episodes.count { ep ->
-                        val key = "$slug-${season.number}-${ep.number}"
-                        state.episodeProgress[key]?.isCompleted == true
+                        state.progressFor(season.number, ep.number)?.isCompleted == true
                     }
                 }
                 if (state.seasons.isNotEmpty()) {
@@ -492,7 +491,7 @@ private fun DetailContent(
             }
 
             items(filteredEpisodes, key = { "${state.selectedSeason?.number}-${it.number}" }) { ep ->
-                val epProgress = state.episodeProgress["$slug-${season.number}-${ep.number}"]
+                val epProgress = state.progressFor(season.number, ep.number)
                 PremiumEpisodeRow(
                     episode = ep,
                     progress = epProgress,

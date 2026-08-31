@@ -5,9 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
+import com.novastream.app.data.meta.FreeMetaService
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,8 +42,9 @@ data class DetailUiState(
             val season = selectedSeason ?: return 0
             val seriesSlug = series?.id ?: return 0
             return season.episodes.count { ep ->
-                val key = "$seriesSlug-${season.number}-${ep.number}"
-                episodeProgress[key]?.isCompleted == true
+                episodeProgress.values.any {
+                    it.slug == seriesSlug && it.season == season.number && it.episode == ep.number && it.isCompleted
+                }
             }
         }
 
@@ -55,8 +58,9 @@ data class DetailUiState(
             val seriesSlug = series?.id ?: return 0
             return seasons.sumOf { season ->
                 season.episodes.count { ep ->
-                    val key = "$seriesSlug-${season.number}-${ep.number}"
-                    episodeProgress[key]?.isCompleted == true
+                    episodeProgress.values.any {
+                        it.slug == seriesSlug && it.season == season.number && it.episode == ep.number && it.isCompleted
+                    }
                 }
             }
         }
@@ -64,6 +68,13 @@ data class DetailUiState(
     /** True if any season has episodes loaded. */
     val hasEpisodes: Boolean
         get() = seasons.any { it.episodes.isNotEmpty() }
+
+    fun progressFor(season: Int, episode: Int): WatchProgress? {
+        val seriesSlug = series?.id ?: return null
+        return episodeProgress.values.find {
+            it.slug == seriesSlug && it.season == season && it.episode == episode
+        }
+    }
 }
 
 class DetailViewModel(
@@ -146,7 +157,12 @@ class DetailViewModel(
             if (_state.value.inWatchlist) {
                 watchRepo.removeFromWatchlist(series.id)
             } else {
-                watchRepo.addToWatchlist(series.id, series.title, series.coverUrl)
+                watchRepo.addToWatchlist(
+                    slug = series.id,
+                    title = series.title,
+                    coverUrl = series.coverUrl,
+                    isMovie = series.isMovie
+                )
             }
         }
     }
@@ -157,14 +173,11 @@ class DetailViewModel(
 
     /** Markiert eine Episode als gesehen (>90%) oder entfernt den Status. */
     fun toggleEpisodeWatched(season: Int, episode: Int, episodeTitle: String) {
-        val key = "$slug-$season-$episode"
-        val existing = _state.value.episodeProgress[key]
+        val existing = _state.value.progressFor(season, episode)
         viewModelScope.launch {
             if (existing != null && existing.isCompleted) {
-                // Already completed - remove progress
-                watchRepo.removeProgress(key)
+                watchRepo.removeProgress(existing.episodeKey)
             } else {
-                // Mark as completed (100%)
                 val series = _state.value.series
                 watchRepo.saveProgress(
                     slug = slug,
@@ -174,7 +187,8 @@ class DetailViewModel(
                     episode = episode,
                     episodeTitle = episodeTitle,
                     positionMs = 1L,
-                    durationMs = 1L  // 100% progress
+                    durationMs = 1L,
+                    isMovie = series?.isMovie == true
                 )
             }
         }
@@ -186,8 +200,7 @@ class DetailViewModel(
         val series = _state.value.series ?: return
         viewModelScope.launch {
             seasonObj.episodes.forEach { ep ->
-                val key = "$slug-$season-${ep.number}"
-                val existing = _state.value.episodeProgress[key]
+                val existing = _state.value.progressFor(season, ep.number)
                 if (existing == null || !existing.isCompleted) {
                     watchRepo.saveProgress(
                         slug = slug,
@@ -197,7 +210,8 @@ class DetailViewModel(
                         episode = ep.number,
                         episodeTitle = ep.title,
                         positionMs = 1L,
-                        durationMs = 1L
+                        durationMs = 1L,
+                        isMovie = series.isMovie
                     )
                 }
             }
@@ -209,8 +223,7 @@ class DetailViewModel(
         val seasonObj = _state.value.seasons.find { it.number == season } ?: return
         viewModelScope.launch {
             seasonObj.episodes.forEach { ep ->
-                val key = "$slug-$season-${ep.number}"
-                watchRepo.removeProgress(key)
+                _state.value.progressFor(season, ep.number)?.let { watchRepo.removeProgress(it.episodeKey) }
             }
         }
     }
@@ -242,18 +255,34 @@ class DetailViewModel(
     private fun enrichMetadata(series: Series) {
         viewModelScope.launch {
             try {
+                val preferAnime = ActiveProvider.isAniWorld ||
+                    series.genres.any { it.contains("anime", true) } ||
+                    series.detailUrl.contains("/anime/")
                 val meta = when {
                     series.id.all { it.isDigit() } ->
-                        com.novastream.app.data.meta.FreeMetaService.show(series.id)
+                        FreeMetaService.show(series.id)
                     else ->
-                        com.novastream.app.data.meta.FreeMetaService.enrichByTitle(series.title)
+                        FreeMetaService.enrichByTitle(series.title, preferAnime = preferAnime)
                 } ?: return@launch
+
+                // Keine falschen Matches übernehmen
+                if (!series.id.all { it.isDigit() } &&
+                    !FreeMetaService.titlesSimilar(series.title, meta.title)
+                ) {
+                    return@launch
+                }
 
                 val enriched = series.copy(
                     description = series.description?.takeIf { it.isNotBlank() } ?: meta.summary,
+                    // Provider-Cover haben Vorrang – Meta nur als Fallback
                     coverUrl = series.coverUrl ?: meta.posterUrl,
                     backdropUrl = series.backdropUrl ?: meta.backdropUrl,
-                    genres = series.genres.ifEmpty { meta.genres },
+                    // Genres vom Provider behalten; Meta nur ergänzen wenn leer
+                    genres = series.genres.ifEmpty {
+                        if (preferAnime && meta.genres.none { it.contains("anime", true) }) {
+                            emptyList()
+                        } else meta.genres
+                    },
                     year = series.year ?: meta.year,
                     rating = series.rating ?: meta.rating?.let { String.format("%.1f", it) },
                     status = series.status ?: meta.status

@@ -36,6 +36,17 @@ class KinoGerProvider(
     override val supportsSeries: Boolean = true
 ) : StreamingProvider {
 
+    override val supportsMovies: Boolean = true
+    override val catalogHint: String = "Filme & Serien"
+    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
+        com.novastream.app.data.model.Genre("action", "Action"),
+        com.novastream.app.data.model.Genre("komodie", "Komödie"),
+        com.novastream.app.data.model.Genre("drama", "Drama"),
+        com.novastream.app.data.model.Genre("horror", "Horror"),
+        com.novastream.app.data.model.Genre("thriller", "Thriller"),
+        com.novastream.app.data.model.Genre("fantasy", "Fantasy")
+    )
+
     private val api: KinoGerApi = createApi(baseUrl)
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
 
@@ -57,15 +68,17 @@ class KinoGerProvider(
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api.seriesHome())
+        val series = KinoGerScraper.parseSeriesList(api.seriesHome())
+        val movies = KinoGerScraper.parseSeriesList(api.movies()).map { it.copy(isMovie = true) }
+        (series + movies).distinctBy { it.id }.map { it.copy(providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     /** Lädt Filme (nicht-Serien). */
-    suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api.movies())
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        KinoGerScraper.parseSeriesList(api.movies()).map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }

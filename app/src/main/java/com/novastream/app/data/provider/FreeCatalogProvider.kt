@@ -1,6 +1,7 @@
 package com.novastream.app.data.provider
 
 import com.novastream.app.data.meta.FreeMetaService
+import com.novastream.app.data.meta.MetaShow
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
@@ -22,10 +23,21 @@ class FreeCatalogProvider(
     override val supportsSeries: Boolean = true
 ) : StreamingProvider {
 
+    override val supportsMovies: Boolean = false
+    override val catalogHint: String = "Tausende Serien via TVMaze"
+    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
+        com.novastream.app.data.model.Genre("Action", "Action"),
+        com.novastream.app.data.model.Genre("Comedy", "Comedy"),
+        com.novastream.app.data.model.Genre("Drama", "Drama"),
+        com.novastream.app.data.model.Genre("Science-Fiction", "Sci-Fi"),
+        com.novastream.app.data.model.Genre("Horror", "Horror"),
+        com.novastream.app.data.model.Genre("Thriller", "Thriller")
+    )
+
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val schedule = FreeMetaService.schedule("US")
         val page = FreeMetaService.catalogPage(0)
-        (schedule + page).distinctBy { it.id }.map { it.toSeries() }
+        (schedule + page).distinctBy { it.id }.map { mapShow(it) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -34,7 +46,7 @@ class FreeCatalogProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
-            FreeMetaService.search(query.trim()).map { it.toSeries() }
+            FreeMetaService.search(query.trim()).map { mapShow(it) }
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -61,7 +73,7 @@ class FreeCatalogProvider(
                     }
                 )
             }
-            show.toSeries() to seasons
+            mapShow(show) to seasons
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -124,15 +136,14 @@ class FreeCatalogProvider(
         )
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        // TVMaze hat keine Genre-Route – filter Katalog
         FreeMetaService.catalogPage(0)
             .filter { show ->
                 show.genres.any { it.equals(genre, true) } ||
                     show.genres.any { it.contains(genre, true) }
             }
-            .map { it.toSeries() }
+            .map { mapShow(it) }
             .ifEmpty {
-                FreeMetaService.search(genre).map { it.toSeries() }
+                FreeMetaService.search(genre).map { mapShow(it) }
             }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -140,7 +151,7 @@ class FreeCatalogProvider(
     )
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        FreeMetaService.schedule("US").map { it.toSeries() }
+        FreeMetaService.schedule("US").map { mapShow(it) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -160,18 +171,19 @@ class FreeCatalogProvider(
     private fun extractTmdb(slug: String): String? =
         slug.removePrefix("tv-").removePrefix("movie-").takeIf { it.all { c -> c.isDigit() } }
 
-    private fun com.novastream.app.data.meta.MetaShow.toSeries(): Series = Series(
-        id = id,
-        title = title,
-        coverUrl = posterUrl,
-        backdropUrl = backdropUrl,
-        detailUrl = "/shows/$id",
-        year = year,
-        description = summary,
-        genres = genres,
-        rating = rating?.let { String.format("%.1f", it) },
-        status = status,
-        seasonCount = seasonCount,
-        originalTitle = title
+    private fun mapShow(show: MetaShow): Series = Series(
+        id = show.id,
+        title = show.title,
+        coverUrl = show.posterUrl,
+        backdropUrl = show.backdropUrl,
+        detailUrl = "/shows/${show.id}",
+        year = show.year,
+        description = show.summary,
+        genres = show.genres,
+        rating = show.rating?.let { String.format("%.1f", it) },
+        status = show.status,
+        providerId = id,
+        seasonCount = show.seasonCount,
+        originalTitle = show.title
     )
 }

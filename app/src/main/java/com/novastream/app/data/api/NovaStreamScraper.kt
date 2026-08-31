@@ -33,12 +33,28 @@ object NovaStreamScraper {
     private val YEAR_PATTERN = Pattern.compile("\\b((?:19|20)\\d{2})\\b")
     private val RATING_PATTERN = Pattern.compile("(\\d+[.,]\\d+)\\s*/\\s*10|IMDb[^\\d]*(\\d+[.,]\\d+)", Pattern.CASE_INSENSITIVE)
 
+    private val baseUrlOverride = ThreadLocal<String?>()
+
+    /** Temporär die Base-URL für Cover/Parse setzen (pro Coroutine/Thread). */
+    fun <T> withBaseUrl(baseUrl: String, block: () -> T): T {
+        val prev = baseUrlOverride.get()
+        baseUrlOverride.set(baseUrl.trimEnd('/'))
+        return try {
+            block()
+        } finally {
+            if (prev == null) baseUrlOverride.remove() else baseUrlOverride.set(prev)
+        }
+    }
+
+    private fun siteBase(): String =
+        baseUrlOverride.get()?.takeIf { it.isNotBlank() } ?: NovaStreamConfig.BASE_URL
+
     // ─── Home Catalog (strukturierte Sektionen) ─────────────────────────────
 
     /** Parst die Startseite in strukturierte Sektionen. */
     fun parseHomeCatalog(html: String): HomeCatalog {
         if (html.isBlank()) return HomeCatalog()
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
 
         val hero = parseHeroSeries(doc)
         val cardMini = parseCardMiniSeries(doc)
@@ -66,7 +82,7 @@ object NovaStreamScraper {
     /** Parst eine flache Serienliste (Home, Suche, Genre, Beliebte, Katalog). */
     fun parseSeriesList(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
         val results = linkedMapOf<String, Series>()
 
         for (s in parseHeroSeries(doc)) results.putIfAbsent(s.id, s)
@@ -222,7 +238,7 @@ object NovaStreamScraper {
 
     fun parseLatestEpisodes(html: String): List<LatestEpisode> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
         val fromRows = parseLatestEpisodeRows(doc)
         if (fromRows.isNotEmpty()) return fromRows
 
@@ -348,7 +364,7 @@ object NovaStreamScraper {
         if (src.isNullOrBlank() || src.contains("data:image") || src.endsWith(".svg")) return null
         return if (src.startsWith("http")) src
         else if (src.startsWith("//")) "https:$src"
-        else NovaStreamConfig.BASE_URL + (if (src.startsWith("/")) src else "/$src")
+        else siteBase() + (if (src.startsWith("/")) src else "/$src")
     }
 
     // ─── Serien-Detail + Staffeln ───────────────────────────────────────────
@@ -357,7 +373,7 @@ object NovaStreamScraper {
         if (html.isBlank()) {
             return Series(id = slug, title = slugToTitle(slug), detailUrl = "/serie/$slug") to emptyList()
         }
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
 
         val title = doc.selectFirst("h1")?.text()?.trim()
             ?.substringBefore(" Staffel")
@@ -547,7 +563,7 @@ object NovaStreamScraper {
 
     fun parseSeasonEpisodes(html: String, slug: String, season: Int): List<Episode> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
         return parseEpisodes(doc, slug).map { if (it.season == 0) it.copy(season = season) else it }
             .filter { it.season == season || season <= 0 }
             .ifEmpty { parseEpisodes(doc, slug) }
@@ -557,7 +573,7 @@ object NovaStreamScraper {
 
     fun parseHosters(html: String): List<HosterLink> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 
@@ -619,7 +635,7 @@ object NovaStreamScraper {
 
     fun parseGenres(html: String): List<Genre> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val doc = Jsoup.parse(html, siteBase())
         val genres = linkedMapOf<String, String>()
         for (a in doc.select("a[href^=/genre/]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }

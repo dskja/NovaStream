@@ -4,41 +4,48 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.provider.ActiveProvider
 
 /**
- * Watchlist-Eintrag: eine Serie die der User schauen möchte.
+ * Watchlist-Eintrag: eine Serie/Film die der User schauen möchte.
+ * Primary Key ist provider-scoped, damit gleiche Slugs verschiedener Provider
+ * sich nicht überschreiben.
  */
 @Entity(
     tableName = "watchlist",
-    indices = [Index(value = ["addedAt"])]
+    indices = [
+        Index(value = ["addedAt"]),
+        Index(value = ["providerId"]),
+        Index(value = ["slug"])
+    ]
 )
 data class WatchlistItem(
     @PrimaryKey
-    val slug: String,                // Serien-Slug
+    val itemKey: String,             // "{providerId}|{slug}"
+    val providerId: String = "",
+    val slug: String,
     val title: String,
     val coverUrl: String?,
+    val isMovie: Boolean = false,
     val addedAt: Long = System.currentTimeMillis()
 ) {
-    /** Konvertiert WatchlistItem zu Series für UI-Komponenten */
     fun toSeries(): Series = Series(
         id = slug,
         title = title,
         coverUrl = coverUrl,
-        detailUrl = "/serie/$slug"  // Wird für Navigation nicht genutzt - slug reicht
+        detailUrl = if (isMovie) "/movie/$slug" else ActiveProvider.seriesDetailUrl(slug),
+        isMovie = isMovie,
+        providerId = providerId
     )
 
-    /** True wenn ein Cover-Bild vorhanden ist. */
     val hasCover: Boolean get() = !coverUrl.isNullOrBlank()
 
-    /** Initialen des Titels für Fallback-Anzeige (max 2 Zeichen). */
     val initials: String
         get() = title.takeIf { it.isNotBlank() }?.take(2)?.uppercase() ?: "—"
 
-    /** Alter des Eintrags in Tagen. */
     val ageInDays: Int
         get() = ((System.currentTimeMillis() - addedAt) / (24L * 60 * 60 * 1000)).toInt().coerceAtLeast(0)
 
-    /** Formatiertes Datum (z.B. "vor 3 Tagen"). */
     val addedRelative: String
         get() = when (ageInDays) {
             0 -> "Heute hinzugefügt"
@@ -49,4 +56,8 @@ data class WatchlistItem(
             in 30..364 -> "Vor ${ageInDays / 30} Monaten hinzugefügt"
             else -> "Vor über einem Jahr hinzugefügt"
         }
+
+    companion object {
+        fun key(providerId: String, slug: String): String = "$providerId|$slug"
+    }
 }
