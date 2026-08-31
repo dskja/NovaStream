@@ -17,7 +17,7 @@ import org.jsoup.nodes.Element
 
 /**
  * Provider für AniWorld.to – strikt vom SerienStream-Katalog getrennt.
- * Nutzt /anime/stream/* Pfade, AJAX-Suche und Alphabet-Katalog.
+ * Nutzt Anime-Stream-Pfade, AJAX-Suche und Alphabet-Katalog.
  */
 class AniWorldProvider(
     override val id: String = "aniworld",
@@ -263,7 +263,7 @@ class AniWorldProvider(
                 .url(url)
                 .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
                 .header("Referer", baseUrl + "/")
-                .header("Accept", "text/html,application/xhtml+xml,*/*")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .build()
             com.novastream.app.data.api.NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) resp.body?.string() ?: "" else ""

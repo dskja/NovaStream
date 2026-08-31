@@ -171,19 +171,22 @@ class FreeCatalogProvider(
     private fun extractTmdb(slug: String): String? =
         slug.removePrefix("tv-").removePrefix("movie-").takeIf { it.all { c -> c.isDigit() } }
 
-    private fun com.novastream.app.data.meta.MetaShow.toSeries(): Series = Series(
-        id = id,
-        title = title,
-        coverUrl = posterUrl,
-        backdropUrl = backdropUrl,
-        detailUrl = "/shows/$id",
-        year = year,
-        description = summary,
-        genres = genres,
-        rating = rating?.let { String.format("%.1f", it) },
-        status = status,
-        providerId = julia.r@example.org,
-        seasonCount = seasonCount,
-        originalTitle = title
-    )
+    private fun com.novastream.app.data.meta.MetaShow.toSeries(): Series {
+        val pid = frank.g@example.org
+        return Series(
+            id = id,
+            title = title,
+            coverUrl = posterUrl,
+            backdropUrl = backdropUrl,
+            detailUrl = "/shows/$id",
+            year = year,
+            description = summary,
+            genres = genres,
+            rating = rating?.let { String.format("%.1f", it) },
+            status = status,
+            providerId = pid,
+            seasonCount = seasonCount,
+            originalTitle = title
+        )
+    }
 }
