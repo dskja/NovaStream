@@ -86,6 +86,10 @@ val StreamingProvider.isMegaKino: Boolean get() = id == "megakino"
 val StreamingProvider.isStreamKiste: Boolean get() = id == "streamkiste"
 val StreamingProvider.isFilmPalast: Boolean get() = id == "filmpalast"
 val StreamingProvider.isKinoZ: Boolean get() = id == "kinoz"
+val StreamingProvider.isFreeCatalog: Boolean get() = id == "freecatalog"
+val StreamingProvider.isHydraHd: Boolean get() = id == "hydrahd"
+val StreamingProvider.isCinezo: Boolean get() = id == "cinezo"
+val StreamingProvider.isDramaCool: Boolean get() = id == "dramacool"
 
 /** True wenn der Provider Filme unterstützt (basierend auf supportsSeries = false). */
 val StreamingProvider.supportsMovies: Boolean get() = !supportsSeries

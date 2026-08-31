@@ -25,7 +25,11 @@ data class DetailUiState(
     val error: String? = null,
     val inWatchlist: Boolean = false,
     val episodeProgress: Map<String, WatchProgress> = emptyMap(),
-    val currentProgress: WatchProgress? = null
+    val currentProgress: WatchProgress? = null,
+    val metaCast: List<com.novastream.app.data.meta.MetaPerson> = emptyList(),
+    val metaRating: Double? = null,
+    val metaNetwork: String? = null,
+    val imdbId: String? = null
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -105,6 +109,7 @@ class DetailViewModel(
                         _state.update {
                             it.copy(loading = false, series = series, seasons = seasons, error = null)
                         }
+                        enrichMetadata(series)
                         val firstWithEps = seasons.indexOfFirst { it.episodes.isNotEmpty() }
                         if (firstWithEps >= 0) {
                             _state.update { it.copy(selectedSeasonIndex = firstWithEps) }
@@ -229,6 +234,41 @@ class DetailViewModel(
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "loadSeason error", e)
                 _state.update { it.copy(loadingSeason = false, error = com.novastream.app.util.ErrorMapper.toUserMessage(e)) }
+            }
+        }
+    }
+
+    /** Reichert Detail mit kostenloser TVMaze-Metadata an (kein API-Key). */
+    private fun enrichMetadata(series: Series) {
+        viewModelScope.launch {
+            try {
+                val meta = when {
+                    series.id.all { it.isDigit() } ->
+                        com.novastream.app.data.meta.FreeMetaService.show(series.id)
+                    else ->
+                        com.novastream.app.data.meta.FreeMetaService.enrichByTitle(series.title)
+                } ?: return@launch
+
+                val enriched = series.copy(
+                    description = series.description?.takeIf { it.isNotBlank() } ?: meta.summary,
+                    coverUrl = series.coverUrl ?: meta.posterUrl,
+                    backdropUrl = series.backdropUrl ?: meta.backdropUrl,
+                    genres = series.genres.ifEmpty { meta.genres },
+                    year = series.year ?: meta.year,
+                    rating = series.rating ?: meta.rating?.let { String.format("%.1f", it) },
+                    status = series.status ?: meta.status
+                )
+                _state.update {
+                    it.copy(
+                        series = enriched,
+                        metaCast = meta.cast,
+                        metaRating = meta.rating,
+                        metaNetwork = meta.network,
+                        imdbId = meta.imdbId
+                    )
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "meta enrich failed", e)
             }
         }
     }
