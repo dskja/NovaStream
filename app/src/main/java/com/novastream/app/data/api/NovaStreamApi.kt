@@ -5,13 +5,19 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * Retrofit-Interface für NovaStream.to (liefert rohes HTML).
- * URL-Schema (Stand 2025/2026):
- *   Startseite:     /
- *   Suche:          /suche?term=...
- *   Serie Detail:   /serie/{slug}           (redirectet auf /serie/{slug}/staffel-1)
- *   Staffel:        /serie/{slug}/staffel-{n}
- *   Episode:        /serie/{slug}/staffel-{n}/episode-{m}
+ * Retrofit-Interface für SerienStream.to / .cx (liefert rohes HTML).
+ *
+ * Getestete Endpunkte (2026):
+ *   /                      – Startseite
+ *   /suche?term=...        – Suche
+ *   /serie/{slug}          – Detail (redirect → staffel-1)
+ *   /serie/{slug}/staffel-{n}
+ *   /serie/{slug}/staffel-{n}/episode-{m}
+ *   /genre/{genre}         – Genre-Liste (+ /page/{n})
+ *   /neue-episoden         – Frisch hinzugefügte Episoden
+ *   /beliebte-serien       – Beliebte Serien (show-card)
+ *   /serien                – Katalog
+ *   /serienkalender        – Kalender
  */
 interface NovaStreamApi {
 
@@ -34,26 +40,36 @@ interface NovaStreamApi {
         @Path("episode") episode: Int
     ): String
 
-    /** Lädt eine Genre-Seite (z.B. /genre/action für Action-Serien). */
     @GET("/genre/{genre}")
     suspend fun genre(@Path("genre") genre: String): String
 
-    /** Lädt eine Genre-Seite mit Pagination (z.B. /genre/action/page/2). */
     @GET("/genre/{genre}/page/{page}")
     suspend fun genrePaged(
         @Path("genre") genre: String,
         @Path("page") page: Int
     ): String
 
-    /** Lädt die Neuesten Serien (/neuesten). */
-    @GET("/neuesten")
+    /** Früher /neuesten (404) → korrekter Pfad /neue-episoden. */
+    @GET("/neue-episoden")
     suspend fun newest(): String
 
-    /** Lädt die Beliebtesten Serien (/beliebte). */
-    @GET("/beliebte")
+    /** Alias für Kompatibilität. */
+    @GET("/neue-episoden")
+    suspend fun neueEpisoden(): String
+
+    /** Früher /beliebte (404) → korrekter Pfad /beliebte-serien. */
+    @GET("/beliebte-serien")
     suspend fun popular(): String
 
-    /** Lädt eine beliebige relative URL als HTML (für Redirect-Auflösung). */
+    @GET("/beliebte-serien")
+    suspend fun beliebteSerien(): String
+
+    @GET("/serien")
+    suspend fun catalog(): String
+
+    @GET("/serienkalender")
+    suspend fun calendar(): String
+
     @GET("{path}")
-    suspend fun raw(@Path("path") path: String): String
+    suspend fun raw(@Path(value = "path", encoded = true) path: String): String
 }

@@ -247,6 +247,49 @@ fun HomeScreen(
                 }
             }
 
+            // Neue Episoden (echte Scraper-Daten)
+            if (state.latestEpisodes.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Neue Episoden")
+                }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(state.latestEpisodes.take(30), key = { "${it.seriesSlug}-${it.season}-${it.episode}" }) { ep ->
+                            Column(
+                                Modifier
+                                    .width(160.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.06f))
+                                    .clickable { onSeriesClick(ep.seriesSlug) }
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    ep.seriesTitle,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    ep.shortDisplay + if (ep.language.isNotBlank()) " · ${ep.language}" else "",
+                                    color = TextTertiary,
+                                    fontSize = 11.sp
+                                )
+                                if (ep.timeLabel.isNotBlank()) {
+                                    Text(ep.timeLabel, color = TextTertiary, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Action
             if (state.action.isNotEmpty()) {
                 item {
