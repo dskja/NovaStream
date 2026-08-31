@@ -88,13 +88,81 @@ object FreeMetaService {
         seen.values.toList()
     }
 
-    suspend fun enrichByTitle(title: String): MetaShow? {
+    suspend fun enrichByTitle(title: String, preferAnime: Boolean = false): MetaShow? {
         if (title.isBlank()) return null
         return try {
-            singlesearch(title) ?: search(title, 1).firstOrNull()
+            val candidates = search(title, limit = 8)
+            val best = pickBestMatch(title, candidates, preferAnime)
+                ?: singlesearch(title)?.takeIf { titlesSimilar(title, it.title) }
+            if (best == null) return null
+            // Cast nachladen – singlesearch liefert keinen Cast
+            show(best.id) ?: best
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** Strenge Titel-Ähnlichkeit, damit Anime nicht mit falschen West-Serien gematcht werden. */
+    fun titlesSimilar(a: String, b: String): Boolean {
+        val na = normalizeTitle(a)
+        val nb = normalizeTitle(b)
+        if (na.isBlank() || nb.isBlank()) return false
+        if (na == nb) return true
+        if (na.contains(nb) || nb.contains(na)) {
+            val ratio = minOf(na.length, nb.length).toFloat() / maxOf(na.length, nb.length)
+            return ratio >= 0.72f
+        }
+        return levenshteinRatio(na, nb) >= 0.82f
+    }
+
+    private fun pickBestMatch(
+        query: String,
+        candidates: List<MetaShow>,
+        preferAnime: Boolean
+    ): MetaShow? {
+        if (candidates.isEmpty()) return null
+        val scored = candidates.mapNotNull { show ->
+            if (!titlesSimilar(query, show.title)) return@mapNotNull null
+            var score = levenshteinRatio(normalizeTitle(query), normalizeTitle(show.title))
+            val genres = show.genres.map { it.lowercase() }
+            if (preferAnime) {
+                if (genres.any { it.contains("anime") } || show.language.equals("Japanese", true)) {
+                    score += 0.15f
+                } else {
+                    score -= 0.25f
+                }
+            }
+            show to score
+        }.sortedByDescending { it.second }
+        return scored.firstOrNull()?.takeIf { it.second >= 0.75f }?.first
+    }
+
+    private fun normalizeTitle(s: String): String =
+        s.lowercase()
+            .replace(Regex("[^a-z0-9äöüß]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+    private fun levenshteinRatio(a: String, b: String): Float {
+        if (a == b) return 1f
+        if (a.isEmpty() || b.isEmpty()) return 0f
+        val dist = levenshtein(a, b)
+        return 1f - (dist.toFloat() / maxOf(a.length, b.length))
+    }
+
+    private fun levenshtein(a: String, b: String): Int {
+        val dp = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = dp[0]
+            dp[0] = i
+            for (j in 1..b.length) {
+                val tmp = dp[j]
+                dp[j] = if (a[i - 1] == b[j - 1]) prev
+                else 1 + minOf(prev, dp[j], dp[j - 1])
+                prev = tmp
+            }
+        }
+        return dp[b.length]
     }
 
     private fun parseShow(obj: JSONObject, withCast: Boolean = false): MetaShow {

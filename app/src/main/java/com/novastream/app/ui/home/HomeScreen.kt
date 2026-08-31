@@ -62,13 +62,8 @@ fun HomeScreen(
     val vm: HomeViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var activeProviderName by remember { mutableStateOf(com.novastream.app.data.provider.ActiveProvider.displayName) }
-
-    // Provider-Name reaktiv aktualisieren bei Provider-Wechsel
-    LaunchedEffect(com.novastream.app.data.provider.ActiveProvider.id) {
-        com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(context).collect {
-            activeProviderName = com.novastream.app.data.provider.ActiveProvider.displayName
-        }
+    val activeProviderName = state.providerName.ifBlank {
+        com.novastream.app.data.provider.ActiveProvider.displayName
     }
 
     PullToRefreshBox(
@@ -112,7 +107,19 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "${state.popular.size + state.newest.size + state.trending.size} Serien verfügbar",
+                    buildString {
+                        val count = state.uniqueTitleCount.takeIf { it > 0 }
+                            ?: (state.popular + state.newest + state.trending + state.movies)
+                                .distinctBy { it.id }.size
+                        val hint = state.catalogHint
+                        when {
+                            !hint.isNullOrBlank() && count > 0 -> append("$count geladen · $hint")
+                            !hint.isNullOrBlank() -> append(hint)
+                            state.supportsMovies && state.supportsSeries -> append("$count Titel verfügbar")
+                            state.supportsMovies -> append("$count Filme verfügbar")
+                            else -> append("$count Serien verfügbar")
+                        }
+                    },
                     color = TextTertiary,
                     fontSize = 11.sp
                 )
@@ -178,7 +185,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        items(state.watchlist.take(20), key = { it.slug }) { item ->
+                        items(state.watchlist.take(20), key = { it.itemKey }) { item ->
                             SeriesPosterCard(
                                 series = item.toSeries(),
                                 onClick = { onSeriesClick(item.slug) }
@@ -247,6 +254,17 @@ fun HomeScreen(
                 }
             }
 
+            // Filme (wenn Provider Filme liefert)
+            if (state.movies.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(28.dp))
+                    SectionHeader("Filme")
+                }
+                item {
+                    SeriesRow(state.movies, onSeriesClick)
+                }
+            }
+
             // Neue Episoden (echte Scraper-Daten)
             if (state.latestEpisodes.isNotEmpty()) {
                 item {
@@ -290,58 +308,76 @@ fun HomeScreen(
                 }
             }
 
-            // Action
-            if (state.action.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(28.dp))
-                    SectionHeader("Action")
-                }
-                item {
-                    SeriesRow(state.action, onSeriesClick)
-                }
-            }
-
-            // Drama
-            if (state.drama.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(28.dp))
-                    SectionHeader("Drama")
-                }
-                item {
-                    SeriesRow(state.drama, onSeriesClick)
+            // Dynamische Genre-Reihen vom aktiven Provider
+            state.genreRows.forEach { (genre, series) ->
+                if (series.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(28.dp))
+                        SectionHeader(genre.displayName)
+                    }
+                    item {
+                        SeriesRow(series, onSeriesClick)
+                    }
                 }
             }
 
-            // Sci-Fi
-            if (state.scifi.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(28.dp))
-                    SectionHeader("Sci-Fi & Fantasy")
+            // Legacy Genre nur wenn keine provider-genres geladen
+            if (state.genreRows.isEmpty()) {
+                if (state.action.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(28.dp))
+                        SectionHeader("Action")
+                    }
+                    item {
+                        SeriesRow(state.action, onSeriesClick)
+                    }
                 }
-                item {
-                    SeriesRow(state.scifi, onSeriesClick)
+                if (state.drama.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(28.dp))
+                        SectionHeader("Drama")
+                    }
+                    item {
+                        SeriesRow(state.drama, onSeriesClick)
+                    }
+                }
+                if (state.scifi.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(28.dp))
+                        SectionHeader("Sci-Fi & Fantasy")
+                    }
+                    item {
+                        SeriesRow(state.scifi, onSeriesClick)
+                    }
+                }
+                if (state.comedy.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(28.dp))
+                        SectionHeader("Comedy")
+                    }
+                    item {
+                        SeriesRow(state.comedy, onSeriesClick)
+                    }
                 }
             }
 
-            // Comedy
-            if (state.comedy.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(28.dp))
-                    SectionHeader("Comedy")
-                }
-                item {
-                    SeriesRow(state.comedy, onSeriesClick)
-                }
-            }
-
-            // Alle Serien (alle restlichen anzeigen)
+            // Alle Titel
             if (state.popular.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Alle Serien")
+                    SectionHeader(
+                        when {
+                            state.supportsMovies && state.supportsSeries -> "Alle Titel"
+                            state.supportsMovies -> "Alle Filme"
+                            else -> "Alle Serien"
+                        }
+                    )
                 }
                 item {
-                    SeriesRow(state.popular + state.newest + state.trending, onSeriesClick)
+                    SeriesRow(
+                        (state.popular + state.newest + state.trending + state.movies).distinctBy { it.id },
+                        onSeriesClick
+                    )
                 }
             }
 
@@ -411,6 +447,14 @@ private fun HeroCarousel(
                         model = ImageRequest.Builder(context)
                             .data(s.coverUrl)
                             .crossfade(true)
+                            .addHeader(
+                                "Referer",
+                                com.novastream.app.util.MediaUrls.refererFor(s.coverUrl)
+                            )
+                            .addHeader(
+                                "User-Agent",
+                                com.novastream.app.data.model.NovaStreamConfig.USER_AGENT
+                            )
                             .build(),
                         contentDescription = s.title,
                         contentScale = ContentScale.Crop,

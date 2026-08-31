@@ -13,6 +13,9 @@ interface WatchlistDao {
     @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
     fun getAll(): Flow<List<WatchlistItem>>
 
+    @Query("SELECT * FROM watchlist WHERE providerId = :providerId ORDER BY addedAt DESC")
+    fun getAllForProvider(providerId: String): Flow<List<WatchlistItem>>
+
     @Query("SELECT * FROM watchlist ORDER BY addedAt DESC LIMIT :limit")
     fun getRecent(limit: Int): Flow<List<WatchlistItem>>
 
@@ -28,11 +31,20 @@ interface WatchlistDao {
     @Query("SELECT COUNT(*) FROM watchlist")
     fun count(): Flow<Int>
 
-    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
-    fun isInWatchlist(slug: String): Flow<Boolean>
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE itemKey = :itemKey)")
+    fun isInWatchlistKey(itemKey: String): Flow<Boolean>
 
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
-    suspend fun contains(slug: String): Boolean
+    fun isInWatchlistBySlug(slug: String): Flow<Boolean>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE providerId = :providerId AND slug = :slug)")
+    fun isInWatchlistForProvider(providerId: String, slug: String): Flow<Boolean>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
+    suspend fun containsSlug(slug: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE providerId = :providerId AND slug = :slug)")
+    suspend fun containsForProvider(providerId: String, slug: String): Boolean
 
     @Query("SELECT slug FROM watchlist")
     suspend fun getAllSlugs(): List<String>
@@ -45,7 +57,13 @@ interface WatchlistDao {
     suspend fun addAll(items: List<WatchlistItem>)
 
     @Query("DELETE FROM watchlist WHERE slug = :slug")
-    suspend fun remove(slug: String)
+    suspend fun removeBySlug(slug: String)
+
+    @Query("DELETE FROM watchlist WHERE itemKey = :itemKey")
+    suspend fun removeKey(itemKey: String)
+
+    @Query("DELETE FROM watchlist WHERE providerId = :providerId AND slug = :slug")
+    suspend fun removeForProvider(providerId: String, slug: String)
 
     @Query("DELETE FROM watchlist WHERE slug IN (:slugs)")
     @Transaction

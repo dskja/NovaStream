@@ -183,7 +183,14 @@ class PlayerViewModel(
     fun onEpisodeFinished() {
         _state.update { it.copy(isFinished = true) }
         viewModelScope.launch {
-            watchRepo.removeProgress("$slug-$season-$episode")
+            watchRepo.removeProgress(
+                com.novastream.app.data.db.WatchProgress.key(
+                    com.novastream.app.data.provider.ActiveProvider.id,
+                    slug,
+                    season,
+                    episode
+                )
+            )
             loadNextEpisode()
         }
     }
@@ -243,7 +250,14 @@ class PlayerViewModel(
 
     fun clearProgress() {
         viewModelScope.launch {
-            watchRepo.removeProgress("$slug-$season-$episode")
+            watchRepo.removeProgress(
+                com.novastream.app.data.db.WatchProgress.key(
+                    com.novastream.app.data.provider.ActiveProvider.id,
+                    slug,
+                    season,
+                    episode
+                )
+            )
         }
     }
 

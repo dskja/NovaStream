@@ -67,7 +67,11 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { items ->
-                    val sorted = sortItems(items, _state.value.sortOption)
+                    val pid = com.novastream.app.data.provider.ActiveProvider.id
+                    val filtered = items.filter {
+                        it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown"
+                    }
+                    val sorted = sortItems(filtered, _state.value.sortOption)
                     _state.update { it.copy(items = sorted, loading = false) }
                 }
             } catch (e: Exception) {
@@ -79,7 +83,14 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progressList ->
-                    val slugs = progressList.filter { !it.isCompleted }.map { it.slug }.toSet()
+                    val pid = com.novastream.app.data.provider.ActiveProvider.id
+                    val slugs = progressList
+                        .filter {
+                            !it.isCompleted &&
+                                (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
+                        }
+                        .map { it.slug }
+                        .toSet()
                     _state.update { it.copy(watchingSlugs = slugs) }
                 }
             } catch (e: Exception) {
@@ -270,7 +281,7 @@ fun WatchlistScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        items(state.items, key = { it.slug }) { item ->
+                        items(state.items, key = { it.itemKey }) { item ->
                             Box {
                                 SeriesPosterCard(
                                     series = item.toSeries(),

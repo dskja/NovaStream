@@ -69,7 +69,9 @@ object ProviderManager {
             id = it.id,
             displayName = it.displayName,
             baseUrl = it.baseUrl,
-            supportsSeries = it.supportsSeries
+            supportsSeries = it.supportsSeries,
+            supportsMovies = it.supportsMovies,
+            catalogHint = it.catalogHint
         )
     }
 
@@ -84,19 +86,28 @@ object ProviderManager {
     fun getProviderDisplayNames(): List<String> = providers.map { it.displayName }
     val defaultProviderId: String get() = defaultProvider.id
     fun seriesProviders(): List<StreamingProvider> = providers.filter { it.supportsSeries }
-    fun movieProviders(): List<StreamingProvider> = providers.filter { !it.supportsSeries }
+    fun movieProviders(): List<StreamingProvider> = providers.filter { it.supportsMovies }
 }
 
 data class ProviderInfo(
     val id: String,
     val displayName: String,
     val baseUrl: String,
-    val supportsSeries: Boolean
+    val supportsSeries: Boolean,
+    val supportsMovies: Boolean = !supportsSeries,
+    val catalogHint: String? = null
 ) {
     val hostLabel: String
         get() = try {
             java.net.URI(baseUrl).host ?: baseUrl
         } catch (_: Exception) {
             baseUrl
+        }
+
+    val contentLabel: String
+        get() = when {
+            supportsSeries && supportsMovies -> "Serien & Filme"
+            supportsMovies -> "Filme"
+            else -> "Serien"
         }
 }

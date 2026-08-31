@@ -14,10 +14,28 @@ data class Series(
     val originalTitle: String? = null,
     val status: String? = null,
     val seasonCount: Int? = null,
-    val isMovie: Boolean = false
+    val isMovie: Boolean = false,
+    /** Provider der diesen Eintrag geliefert hat – verhindert Cross-Provider-Leaks. */
+    val providerId: String? = null
 ) {
     val absoluteDetailUrl: String
-        get() = NovaStreamConfig.abs(detailUrl.ifBlank { "/serie/$id" })
+        get() {
+            val path = detailUrl.ifBlank {
+                if (isMovie) "/movie/$id" else "/serie/$id"
+            }
+            val base = try {
+                com.novastream.app.data.provider.ActiveProvider.baseUrl
+            } catch (_: Exception) {
+                NovaStreamConfig.BASE_URL
+            }
+            return NovaStreamConfig.absWith(base, path)
+        }
+
+    /** Gehört dieser Eintrag zum aktuell aktiven Provider? */
+    fun belongsToActiveProvider(): Boolean {
+        val pid = providerId ?: return true
+        return pid == com.novastream.app.data.provider.ActiveProvider.id
+    }
 
     /** True wenn ein Cover-Bild vorhanden ist. */
     val hasCover: Boolean get() = !coverUrl.isNullOrBlank()
