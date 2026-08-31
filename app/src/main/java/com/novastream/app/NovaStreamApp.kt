@@ -71,6 +71,19 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
             .crossfade(200)
             .respectCacheHeaders(false)
             .allowHardware(true)
+            .components {
+                add(object : coil.intercept.Interceptor {
+                    override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult {
+                        val request = chain.request
+                        val referer = com.novastream.app.util.MediaUrls.refererFor(request.data.toString())
+                        val newRequest = request.newBuilder()
+                            .setHeader("Referer", referer)
+                            .setHeader("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
+                            .build()
+                        return chain.proceed(newRequest)
+                    }
+                })
+            }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.30)  // 30% of app memory for image cache

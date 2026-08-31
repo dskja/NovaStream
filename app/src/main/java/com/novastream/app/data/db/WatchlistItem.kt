@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.novastream.app.data.model.Series
-import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ProviderUrls
 
 /**
  * Watchlist-Eintrag: eine Serie/Film die der User schauen möchte.
@@ -33,7 +33,7 @@ data class WatchlistItem(
         id = slug,
         title = title,
         coverUrl = coverUrl,
-        detailUrl = if (isMovie) "/movie/$slug" else ActiveProvider.seriesDetailUrl(slug),
+        detailUrl = ProviderUrls.detailUrl(providerId.ifBlank { "unknown" }, slug, isMovie),
         isMovie = isMovie,
         providerId = providerId
     )

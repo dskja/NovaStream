@@ -190,10 +190,13 @@ private fun DetailContent(
                 )
             }
         } else {
-            // Play First Episode button (when no continue watching exists)
+            // Play button when no continue watching exists
             val firstSeason = state.seasons.firstOrNull { it.episodes.isNotEmpty() }
             val firstEp = firstSeason?.episodes?.firstOrNull()
-            if (firstEp != null) {
+            if (series.isMovie || firstEp != null) {
+                val playSeason = if (series.isMovie) 1 else firstSeason!!.number
+                val epNum = if (series.isMovie) 1 else firstEp!!.number
+                val epTitle = if (series.isMovie) series.title else firstEp!!.title
                 item {
                     Box(
                         Modifier
@@ -202,7 +205,7 @@ private fun DetailContent(
                             .clip(RoundedCornerShape(20.dp))
                             .background(PrimaryGradient)
                             .clickable {
-                                onPlay(slug, firstSeason.number, firstEp.number, firstEp.title, seriesTitle, coverUrl)
+                                onPlay(slug, playSeason, epNum, epTitle, seriesTitle, coverUrl)
                             }
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         contentAlignment = Alignment.Center
@@ -216,7 +219,7 @@ private fun DetailContent(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                "Erste Episode ansehen",
+                                if (series.isMovie) "Film abspielen" else "Erste Episode ansehen",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium
@@ -327,7 +330,7 @@ private fun DetailContent(
                         state.progressFor(season.number, ep.number)?.isCompleted == true
                     }
                 }
-                if (state.seasons.isNotEmpty()) {
+                if (!series.isMovie && state.seasons.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -341,12 +344,16 @@ private fun DetailContent(
                             StatPill("$watchedEpisodes gesehen ($percent%)")
                         }
                     }
+                } else if (series.isMovie) {
+                    Spacer(Modifier.height(12.dp))
+                    StatPill("Film")
                 }
                 Spacer(Modifier.height(16.dp))
             }
         }
 
-        // Seasons
+        // Seasons & Episodes (series only)
+        if (!series.isMovie) {
         item { SectionHeader("Staffeln") }
         item {
             LazyRow(
@@ -523,6 +530,11 @@ private fun DetailContent(
         }
 
         item { Spacer(Modifier.height(40.dp)) }
+        } // end !series.isMovie
+
+        if (series.isMovie) {
+            item { Spacer(Modifier.height(40.dp)) }
+        }
     }
 }
 

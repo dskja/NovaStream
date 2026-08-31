@@ -25,6 +25,7 @@ import androidx.navigation.navArgument
 import com.novastream.app.ui.components.PremiumBottomBar
 import com.novastream.app.ui.components.PremiumTopTabBar
 import com.novastream.app.ui.detail.DetailScreen
+import com.novastream.app.ui.browse.BrowseScreen
 import com.novastream.app.ui.home.HomeScreen
 import com.novastream.app.ui.player.PlayerScreen
 import com.novastream.app.ui.search.SearchScreen
@@ -37,8 +38,9 @@ object Routes {
     const val WATCHLIST = "watchlist"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
+    const val BROWSE = "browse"
     const val DETAIL = "detail/{slug}"
-    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}"
+    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}"
 
     fun detail(slug: String) = "detail/$slug"
     fun player(
@@ -47,17 +49,18 @@ object Routes {
         episode: Int,
         title: String,
         seriesTitle: String = "",
-        coverUrl: String? = null
+        coverUrl: String? = null,
+        isMovie: Boolean = false
     ): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
         val t = enc(title)
         val st = enc(seriesTitle)
         val cu = coverUrl?.let { enc(it) } ?: ""
-        return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu"
+        return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie"
     }
 
     /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
-    val mainRoutes = listOf(HOME, WATCHLIST, SEARCH, SETTINGS)
+    val mainRoutes = listOf(HOME, BROWSE, WATCHLIST, SEARCH, SETTINGS)
 
     /** True wenn eine Route eine der Haupt-Routes ist. */
     fun isMainRoute(route: String?): Boolean = route != null && route in mainRoutes
@@ -147,9 +150,15 @@ fun NovaStreamNavHost() {
             composable(Routes.HOME) {
                 HomeScreen(
                     onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) },
-                    onContinueWatchingClick = { slug, season, episode, title, seriesTitle, coverUrl ->
-                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl))
+                    onContinueWatchingClick = { slug, season, episode, title, seriesTitle, coverUrl, isMovie ->
+                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl, isMovie))
                     }
+                )
+            }
+
+            composable(Routes.BROWSE) {
+                BrowseScreen(
+                    onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) }
                 )
             }
 
@@ -211,7 +220,8 @@ fun NovaStreamNavHost() {
                     navArgument("episode") { type = NavType.IntType },
                     navArgument("title") { type = NavType.StringType; defaultValue = "" },
                     navArgument("seriesTitle") { type = NavType.StringType; defaultValue = "" },
-                    navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" }
+                    navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("isMovie") { type = NavType.BoolType; defaultValue = false }
                 ),
                 enterTransition = {
                     androidx.compose.animation.slideInVertically(

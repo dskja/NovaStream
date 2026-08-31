@@ -17,15 +17,30 @@ object ActiveProvider {
 
     fun set(provider: StreamingProvider) {
         synchronized(this) {
+            val previous = current
             current = provider
             initialized = true
+            if (previous.id != provider.id) {
+                when (previous) {
+                    is KinoGerProvider -> previous.clearCache()
+                    is KinoZProvider -> previous.clearCache()
+                }
+            }
         }
     }
 
     fun setById(id: String) {
         synchronized(this) {
-            current = ProviderManager.getProviderOrNull(id) ?: ProviderManager.defaultProvider
+            val previous = current
+            val next = ProviderManager.getProviderOrNull(id) ?: ProviderManager.defaultProvider
+            current = next
             initialized = true
+            if (previous.id != next.id) {
+                when (previous) {
+                    is KinoGerProvider -> previous.clearCache()
+                    is KinoZProvider -> previous.clearCache()
+                }
+            }
         }
     }
 
@@ -85,21 +100,9 @@ object ActiveProvider {
         }
     }
 
-    fun seriesDetailUrl(slug: String): String {
-        return when (current.id) {
-            "aniworld" -> "/anime/stream/$slug"
-            "kinoger" -> "/stream/$slug.html"
-            "burningseries" -> "/serie/$slug"
-            "megakino" -> "/title/$slug"
-            "streamkiste" -> "/serien/$slug"
-            "filmpalast" -> "/stream/$slug"
-            "kinoz" -> "/Stream/$slug.html"
-            "freecatalog" -> "/shows/$slug"
-            "cinezo" -> if (slug.startsWith("movie")) "/movie/${slug.removePrefix("movie-")}" else "/tv/${slug.removePrefix("tv-")}"
-            "showsst" -> "/watch/tv/${slug.removePrefix("tv-")}"
-            "hydrahd" -> "/watchseries/$slug"
-            "dramacool" -> "/$slug/"
-            else -> "/serie/$slug"
-        }
-    }
+    fun seriesDetailUrl(slug: String): String =
+        ProviderUrls.seriesDetailUrl(current.id, slug)
+
+    fun movieDetailUrl(slug: String): String =
+        ProviderUrls.movieDetailUrl(current.id, slug)
 }

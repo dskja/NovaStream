@@ -13,8 +13,8 @@ android {
         applicationId "com.novastream.app"
         minSdk 22
         targetSdk 36
-        versionCode 40
-        versionName "5.0"
+        versionCode 50
+        versionName "6.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary true }
     }
@@ -128,4 +128,7 @@ dependencies {
     // Debug
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
 }

@@ -110,6 +110,16 @@ class KinoZProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    /** Lädt Filme (getrennt vom Serien-Home-Katalog). */
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        parseKinoZSeriesList(fetchUrl("$baseUrl/Genre/Filme"))
+            .ifEmpty { parseKinoZSeriesList(fetchUrl(baseUrl)).filter { it.isMovie } }
+            .map { it.copy(isMovie = true, providerId = id) }
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val name = genre.trim().ifBlank { return@runCatching emptyList() }
         val encoded = name.replace(" ", "%20")
@@ -482,6 +492,10 @@ class KinoZProvider(
             }
             else -> "Unknown"
         }
+    }
+
+    fun clearCache() {
+        synchronized(cacheLock) { detailCache.clear() }
     }
 
     companion object {

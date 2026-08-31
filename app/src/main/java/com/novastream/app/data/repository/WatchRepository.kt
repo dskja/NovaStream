@@ -77,7 +77,6 @@ class WatchRepository private constructor(context: Context) {
     suspend fun getProgress(slug: String, season: Int, episode: Int): WatchProgress? {
         val pid = ActiveProvider.id
         return progressDao.get(WatchProgress.key(pid, slug, season, episode))
-            ?: progressDao.getByEpisode(slug, season, episode)
     }
 
     suspend fun getProgressBySlug(slug: String): List<WatchProgress> = try {
@@ -159,7 +158,6 @@ class WatchRepository private constructor(context: Context) {
         try {
             watchlistDao.removeForProvider(ActiveProvider.id, slug)
             watchlistDao.removeKey(WatchlistItem.key("unknown", slug))
-            watchlistDao.removeBySlug(slug)
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeFromWatchlist failed", e)
         }

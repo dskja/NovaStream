@@ -179,7 +179,11 @@ fun ContinueWatchingCard(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = "S${progress.season} E${progress.episode} · ${progress.episodeTitle}",
+            text = if (progress.isMovie) {
+                progress.episodeDisplay
+            } else {
+                "${progress.episodeDisplay} · ${progress.episodeTitle}"
+            },
             style = MaterialTheme.typography.labelSmall,
             color = if (progress.isNearEnd) Accent else TextTertiary,
             maxLines = 1,

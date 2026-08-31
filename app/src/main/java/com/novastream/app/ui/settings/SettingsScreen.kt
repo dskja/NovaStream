@@ -87,10 +87,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     init {
         viewModelScope.launch {
-            watchRepo.watchlist().collect { list -> _state.update { it.copy(watchlistCount = list.size) } }
+            watchRepo.watchlist().collect { list ->
+                val pid = com.novastream.app.data.provider.ActiveProvider.id
+                val scoped = list.filter { it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown" }
+                _state.update { it.copy(watchlistCount = scoped.size) }
+            }
         }
         viewModelScope.launch {
-            watchRepo.watchProgress().collect { list -> _state.update { it.copy(continueWatchingCount = list.count { !it.isCompleted }) } }
+            watchRepo.watchProgressForActiveProvider().collect { list ->
+                _state.update { it.copy(continueWatchingCount = list.count { !it.isCompleted }) }
+            }
         }
         // Load available providers
         _state.update {
