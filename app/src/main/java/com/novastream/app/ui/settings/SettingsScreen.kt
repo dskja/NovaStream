@@ -587,12 +587,11 @@ fun SettingsScreen() {
                     if (update?.isNewer == true) {
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val ctx = LocalContext.current
                             Button(
                                 onClick = {
                                     val url = update.downloadUrl ?: update.releaseUrl
                                     try {
-                                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                                     } catch (_: Exception) {
                                         vm.showUrlError()
                                     }
@@ -603,7 +602,7 @@ fun SettingsScreen() {
                             }
                             OutlinedButton(onClick = {
                                 try {
-                                    ctx.startActivity(
+                                    context.startActivity(
                                         Intent(
                                             Intent.ACTION_VIEW,
                                             Uri.parse(update.releaseUrl)

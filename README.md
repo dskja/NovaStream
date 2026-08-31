@@ -55,8 +55,23 @@ ui/
 ## Build
 
 ```bash
+# Debug APK
 ./gradlew :app:assembleDebug
+
+# Release APK
 ./gradlew :app:assembleRelease
+```
+
+### GitHub Actions
+
+Bei Push auf `main`, Pull Requests und manuell unter **Actions → Build APK** wird automatisch gebaut.
+
+- Artifacts: `NovaStream-debug-apk`, `NovaStream-release-apk`
+- Tag `v*` (z.B. `v4.0.1`) erstellt zusätzlich ein GitHub Release mit APKs
+
+```bash
+git tag v4.0.1
+git push origin v4.0.1
 ```
 
 ## Updates
