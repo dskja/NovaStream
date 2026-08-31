@@ -1,7 +1,10 @@
 package com.novastream.app.data.api
 
 import com.novastream.app.data.model.Episode
+import com.novastream.app.data.model.Genre
+import com.novastream.app.data.model.HomeCatalog
 import com.novastream.app.data.model.HosterLink
+import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.NovaStreamConfig
@@ -11,360 +14,591 @@ import org.jsoup.nodes.Element
 import java.util.regex.Pattern
 
 /**
- * Parst das HTML von serienstream.to mit Jsoup.
+ * Massiv ausgebauter Scraper für serienstream.to / serienstream.cx.
  *
- * Getestet gegen die echte Website-Struktur (Stand 2025):
- *   Homepage:  div.home-hero-overlay (Hero), div.card-mini (Tiles), article.trend-card (Angesagt)
- *   Detail:    h1.h2 (Titel), div.show-cover-mobile img (Cover), span.description-text, a[data-season-pill]
- *   Episoden:  tr.episode-row onclick="/serie/{slug}/staffel-{n}/episode-{m}"
- *   Hoster:    button.link-box[data-play-url][data-provider-name][data-language-label]
+ * Abgedeckt (Stand 2026, gegen Live-HTML getestet):
+ *   Home:          home-hero-overlay, card-mini, trend-card, latest-episode-row, Top 5
+ *   Listen:        show-card (Beliebte, Genre, Katalog /serien)
+ *   Detail:        h1, description-text, show-cover-mobile, Genres, Rating, Backdrop
+ *   Episoden:      tr.episode-row + Fallback-Links
+ *   Hoster:        button.link-box[data-play-url]
+ *   Neue Episoden: /neue-episoden (latest-episode-row + Tabellen-Fallback)
+ *   Beliebte:      /beliebte-serien (show-card)
  */
 object NovaStreamScraper {
 
     private val SLUG_PATTERN = Pattern.compile("/serie/([\\w%.-]+?)(?:/|$)")
     private val EP_URL_PATTERN = Pattern.compile("/serie/[\\w%.-]+/staffel-(\\d+)/episode-(\\d+)")
     private val SEASON_PATTERN = Pattern.compile("/staffel-(\\d+)")
+    private val YEAR_PATTERN = Pattern.compile("\\b((?:19|20)\\d{2})\\b")
+    private val RATING_PATTERN = Pattern.compile("(\\d+[.,]\\d+)\\s*/\\s*10|IMDb[^\\d]*(\\d+[.,]\\d+)", Pattern.CASE_INSENSITIVE)
 
-    // ─── Serien-Listen (Home, Suche) ────────────────────────────────────────
+    // ─── Home Catalog (strukturierte Sektionen) ─────────────────────────────
 
-    /** Parst eine Liste von Serien (Startseite, Suche). */
+    /** Parst die Startseite in strukturierte Sektionen. */
+    fun parseHomeCatalog(html: String): HomeCatalog {
+        if (html.isBlank()) return HomeCatalog()
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+
+        val hero = parseHeroSeries(doc)
+        val cardMini = parseCardMiniSeries(doc)
+        val trending = parseTrendSeries(doc)
+        val topShows = parseTopShows(doc)
+        val latest = parseLatestEpisodeRows(doc)
+        val fallback = parseGenericSeriesLinks(doc, excludeSeasonLinks = true)
+
+        val allMap = linkedMapOf<String, Series>()
+        for (s in hero + cardMini + trending + topShows + fallback) {
+            allMap.putIfAbsent(s.id, s)
+        }
+
+        return HomeCatalog(
+            hero = hero,
+            popular = (topShows + cardMini).distinctBy { it.id }.take(24),
+            newest = cardMini.ifEmpty { fallback.take(24) },
+            trending = trending.ifEmpty { fallback.drop(8).take(24) },
+            latestEpisodes = latest,
+            topShows = topShows,
+            all = allMap.values.toList()
+        )
+    }
+
+    /** Parst eine flache Serienliste (Home, Suche, Genre, Beliebte, Katalog). */
     fun parseSeriesList(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val results = linkedMapOf<String, Series>()
 
-        // Phase 1: Hero-Slides (höchste Priorität)
-        for (a in doc.select("a.home-hero-overlay[href^=/serie/]")) {
-            val slug = extractSlug(a.absUrl("href").ifBlank { a.attr("href") }) ?: continue
-            if (results.containsKey(slug)) continue
-            val title = a.selectFirst("h2.home-hero-title")?.text()?.trim() ?: slugToTitle(slug)
-            val cover = findCoverInContainer(a.closest(".home-hero-slide") ?: a, doc)
-            results[slug] = Series(id = slug, title = title, coverUrl = cover, detailUrl = "/serie/$slug")
-        }
-
-        // Phase 2: card-mini Tiles (Neu hinzugefügt etc.)
-        for (card in doc.select("div.card-mini")) {
-            val a = card.selectFirst("a[href^=/serie/]") ?: continue
-            val slug = extractSlug(a.absUrl("href").ifBlank { a.attr("href") }) ?: continue
-            if (results.containsKey(slug)) continue
-            val title = card.selectFirst("h3")?.attr("title")?.ifBlank { null }
-                ?: card.selectFirst("h3")?.text()?.trim()
-                ?: a.text().trim().ifBlank { slugToTitle(slug) }
-            val cover = findCoverInContainer(card, doc)
-            results[slug] = Series(id = slug, title = title, coverUrl = cover, detailUrl = "/serie/$slug")
-        }
-
-        // Phase 3: trend-cards (Angesagt)
-        for (card in doc.select("article.trend-card")) {
-            val a = card.selectFirst("a[href^=/serie/]") ?: continue
-            val slug = extractSlug(a.absUrl("href").ifBlank { a.attr("href") }) ?: continue
-            if (results.containsKey(slug)) continue
-            val title = card.selectFirst("h3.trend-title")?.text()?.trim()
-                ?: a.text().trim().ifBlank { slugToTitle(slug) }
-            val cover = findCoverInContainer(card, doc)
-            results[slug] = Series(id = slug, title = title, coverUrl = cover, detailUrl = "/serie/$slug")
-        }
-
-        // Phase 4: Generic fallback - alle Serien-Links
-        for (a in doc.select("a[href^=/serie/]")) {
-            val href = a.absUrl("href").ifBlank { a.attr("href") }
-            val slug = extractSlug(href) ?: continue
-            if (results.containsKey(slug)) continue
-            // Skip season/episode links
-            if (href.contains("/staffel-")) continue
-            val title = a.selectFirst("h3")?.attr("title")?.ifBlank { null }
-                ?: a.selectFirst("h3")?.text()?.trim()
-                ?: a.selectFirst("h2")?.text()?.trim()
-                ?: a.attr("title").ifBlank { null }?.substringBefore(" stream")
-                ?: a.text().trim().ifBlank { slugToTitle(slug) }
-            val cover = findCoverInContainer(a.parent() ?: a, doc)
-            results[slug] = Series(id = slug, title = title, coverUrl = cover, detailUrl = "/serie/$slug")
-        }
+        for (s in parseHeroSeries(doc)) results.putIfAbsent(s.id, s)
+        for (s in parseCardMiniSeries(doc)) results.putIfAbsent(s.id, s)
+        for (s in parseTrendSeries(doc)) results.putIfAbsent(s.id, s)
+        for (s in parseShowCards(doc)) results.putIfAbsent(s.id, s)
+        for (s in parseTopShows(doc)) results.putIfAbsent(s.id, s)
+        for (s in parseGenericSeriesLinks(doc, excludeSeasonLinks = true)) results.putIfAbsent(s.id, s)
 
         return results.values.toList()
     }
 
-    /** Sucht das Cover-Bild in einem Container. */
+    private fun parseHeroSeries(doc: Document): List<Series> {
+        val out = mutableListOf<Series>()
+        for (a in doc.select("a.home-hero-overlay[href*=/serie/], a[href*=/serie/].home-hero-overlay")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            if (href.contains("/staffel-")) continue
+            val title = a.selectFirst("h2.home-hero-title, h2")?.text()?.trim()
+                ?: a.attr("title").ifBlank { null }
+                ?: slugToTitle(slug)
+            val container = a.closest(".home-hero-slide, .swiper-slide, .home-hero") ?: a
+            val cover = findCoverInContainer(container, doc)
+            val backdrop = findBackdropInContainer(container) ?: cover
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = cover,
+                    backdropUrl = backdrop,
+                    detailUrl = "/serie/$slug"
+                )
+            )
+        }
+        return out.distinctBy { it.id }
+    }
+
+    private fun parseCardMiniSeries(doc: Document): List<Series> {
+        val out = mutableListOf<Series>()
+        for (card in doc.select("div.card-mini, .card-mini-tile")) {
+            val a = card.selectFirst("a[href*=/serie/]") ?: continue
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            if (href.contains("/staffel-") || href.contains("/episode-")) continue
+            val title = card.selectFirst("h3")?.attr("title")?.ifBlank { null }
+                ?: card.selectFirst("h3, .show-title")?.text()?.trim()
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
+            val genre = card.selectFirst(".genre, .card-genre, small")?.text()?.trim()
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = findCoverInContainer(card, doc),
+                    detailUrl = "/serie/$slug",
+                    genres = genre?.takeIf { it.isNotBlank() && it.length < 40 }?.let { listOf(it) } ?: emptyList()
+                )
+            )
+        }
+        return out.distinctBy { it.id }
+    }
+
+    private fun parseTrendSeries(doc: Document): List<Series> {
+        val out = mutableListOf<Series>()
+        for (card in doc.select("article.trend-card, .trend-card")) {
+            val a = card.selectFirst("a[href*=/serie/]") ?: continue
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            if (href.contains("/staffel-")) continue
+            val title = card.selectFirst("h3.trend-title, h3")?.text()?.trim()
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = findCoverInContainer(card, doc),
+                    detailUrl = "/serie/$slug"
+                )
+            )
+        }
+        return out.distinctBy { it.id }
+    }
+
+    private fun parseShowCards(doc: Document): List<Series> {
+        val out = mutableListOf<Series>()
+        for (card in doc.select("a.show-card[href*=/serie/], .show-card a[href*=/serie/], article.show-card a[href*=/serie/]")) {
+            val href = card.absUrl("href").ifBlank { card.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            // show-card kann auf Staffel verlinken – Serie trotzdem übernehmen
+            val container = card.closest(".show-card") ?: card
+            val title = container.selectFirst(".show-title, h3, h2, .card-title")?.text()?.trim()
+                ?: card.attr("title").ifBlank { null }?.substringBefore(" stream")
+                ?: card.text().trim().ifBlank { slugToTitle(slug) }
+            val year = extractYear(container.text())
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = findCoverInContainer(container, doc),
+                    detailUrl = "/serie/$slug",
+                    year = year
+                )
+            )
+        }
+        return out.distinctBy { it.id }
+    }
+
+    private fun parseTopShows(doc: Document): List<Series> {
+        val out = mutableListOf<Series>()
+        for (a in doc.select("a.top-shows-separator[href*=/serie/], .top-show-item a[href*=/serie/], .top-shows a[href*=/serie/]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            if (href.contains("/staffel-")) continue
+            val container = a.closest(".top-show-item, .top-shows-item, li, article") ?: a
+            val title = container.selectFirst(".show-title, h3, h2")?.text()?.trim()
+                ?: a.attr("title").ifBlank { null }
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = findCoverInContainer(container, doc),
+                    detailUrl = "/serie/$slug"
+                )
+            )
+        }
+        return out.distinctBy { it.id }
+    }
+
+    private fun parseGenericSeriesLinks(doc: Document, excludeSeasonLinks: Boolean): List<Series> {
+        val out = mutableListOf<Series>()
+        for (a in doc.select("a[href*=/serie/]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            if (excludeSeasonLinks && (href.contains("/staffel-") || href.contains("/episode-"))) continue
+            val title = a.selectFirst("h3")?.attr("title")?.ifBlank { null }
+                ?: a.selectFirst("h3, h2, .show-title")?.text()?.trim()
+                ?: a.attr("title").ifBlank { null }?.substringBefore(" stream")
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
+            if (title.length < 2) continue
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = findCoverInContainer(a.parent() ?: a, doc),
+                    detailUrl = "/serie/$slug"
+                )
+            )
+        }
+        return out.distinctBy { it.id }
+    }
+
+    // ─── Neue Episoden ──────────────────────────────────────────────────────
+
+    fun parseLatestEpisodes(html: String): List<LatestEpisode> {
+        if (html.isBlank()) return emptyList()
+        val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
+        val fromRows = parseLatestEpisodeRows(doc)
+        if (fromRows.isNotEmpty()) return fromRows
+
+        // Tabellen-/Listen-Fallback auf /neue-episoden
+        val out = mutableListOf<LatestEpisode>()
+        for (a in doc.select("a[href*=/serie/][href*=/episode-]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val m = EP_URL_PATTERN.matcher(href)
+            if (!m.find()) continue
+            val slug = extractSlug(href) ?: continue
+            val season = m.group(1)?.toIntOrNull() ?: continue
+            val episode = m.group(2)?.toIntOrNull() ?: continue
+            val title = a.selectFirst(".ep-title-text, .ep-title")?.text()?.trim()
+                ?: a.attr("title").ifBlank { null }
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
+            out.add(
+                LatestEpisode(
+                    seriesSlug = slug,
+                    seriesTitle = cleanTitle(title),
+                    season = season,
+                    episode = episode,
+                    episodeUrl = m.group(0) ?: href,
+                    language = detectLanguageLabel(a)
+                )
+            )
+        }
+        return out.distinctBy { "${it.seriesSlug}-${it.season}-${it.episode}" }
+    }
+
+    private fun parseLatestEpisodeRows(doc: Document): List<LatestEpisode> {
+        val out = mutableListOf<LatestEpisode>()
+        for (a in doc.select("a.latest-episode-row[href*=/serie/], .latest-episode-row a[href*=/serie/]")) {
+            val row = if (a.hasClass("latest-episode-row")) a else a.closest(".latest-episode-row") ?: a
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val m = EP_URL_PATTERN.matcher(href)
+            if (!m.find()) continue
+            val slug = extractSlug(href) ?: continue
+            val season = m.group(1)?.toIntOrNull()
+                ?: row.selectFirst(".ep-season")?.text()?.filter { it.isDigit() }?.toIntOrNull()
+                ?: 1
+            val episode = m.group(2)?.toIntOrNull()
+                ?: row.selectFirst(".ep-episode")?.text()?.filter { it.isDigit() }?.toIntOrNull()
+                ?: continue
+            val title = row.selectFirst(".ep-title-text, .ep-title")?.text()?.trim()
+                ?: row.attr("title").ifBlank { null }
+                ?: slugToTitle(slug)
+            out.add(
+                LatestEpisode(
+                    seriesSlug = slug,
+                    seriesTitle = cleanTitle(title),
+                    season = season,
+                    episode = episode,
+                    language = detectLanguageLabel(row),
+                    timeLabel = row.selectFirst(".ep-time")?.text()?.trim().orEmpty(),
+                    episodeUrl = m.group(0) ?: href
+                )
+            )
+        }
+        return out.distinctBy { "${it.seriesSlug}-${it.season}-${it.episode}" }
+    }
+
+    private fun detectLanguageLabel(el: Element): String {
+        val text = el.selectFirst(".ep-lang, .watch-language")?.attr("title")
+            ?: el.select("use").attr("href").ifBlank { el.select("use").attr("xlink:href") }
+        return when {
+            text.contains("german", ignoreCase = true) || text.contains("deutsch", ignoreCase = true) -> "Deutsch"
+            text.contains("english", ignoreCase = true) || text.contains("eng", ignoreCase = true) -> "Englisch"
+            text.contains("sub", ignoreCase = true) -> "Subs"
+            else -> ""
+        }
+    }
+
+    // ─── Cover / Media Helpers ──────────────────────────────────────────────
+
     private fun findCoverInContainer(container: Element, doc: Document): String? {
-        // img[data-src] (Lazy Loading)
-        val img = container.selectFirst("img[data-src]")
-        if (img != null) {
-            val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
-            if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
+        val candidates = listOf(
+            container.selectFirst("img[data-src]"),
+            container.selectFirst("img[src]"),
+            container.selectFirst("source[data-srcset]"),
+            container.selectFirst("source[srcset]")
+        )
+        for (el in candidates) {
+            if (el == null) continue
+            when {
+                el.hasAttr("data-src") -> absMedia(el.absUrl("data-src").ifBlank { el.attr("data-src") })?.let { return it }
+                el.hasAttr("src") && el.tagName() == "img" -> absMedia(el.absUrl("src").ifBlank { el.attr("src") })?.let { return it }
+                el.hasAttr("data-srcset") -> firstFromSrcset(el.attr("data-srcset"))?.let { return it }
+                el.hasAttr("srcset") -> firstFromSrcset(el.attr("srcset"))?.let { return it }
             }
         }
-        // img[src]
-        val imgSrc = container.selectFirst("img[src]")
-        if (imgSrc != null) {
-            val src = imgSrc.absUrl("src").ifBlank { imgSrc.attr("src") }
-            if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
-            }
+        // Background-image style
+        val style = container.attr("style")
+        Regex("url\\(['\"]?([^'\")]+)['\"]?\\)").find(style)?.groupValues?.getOrNull(1)?.let {
+            absMedia(it)?.let { u -> return u }
         }
-        // source[data-srcset] (picture elements)
-        val source = container.selectFirst("source[data-srcset]")
-        if (source != null) {
-            val srcset = source.attr("data-srcset")
-            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            if (!firstUrl.isNullOrBlank() && !firstUrl.contains("data:image")) {
-                return if (firstUrl.startsWith("http")) firstUrl else NovaStreamConfig.BASE_URL + firstUrl
-            }
+        return null
+    }
+
+    private fun findBackdropInContainer(container: Element): String? {
+        val style = container.attr("style") + " " + (container.selectFirst("[style*=background]")?.attr("style") ?: "")
+        Regex("url\\(['\"]?([^'\")]+)['\"]?\\)").find(style)?.groupValues?.getOrNull(1)?.let {
+            absMedia(it)?.let { u -> return u }
         }
-        // source[srcset]
-        val sourceSrcset = container.selectFirst("source[srcset]")
-        if (sourceSrcset != null) {
-            val srcset = sourceSrcset.attr("srcset")
-            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            if (!firstUrl.isNullOrBlank() && !firstUrl.contains("data:image")) {
-                return if (firstUrl.startsWith("http")) firstUrl else NovaStreamConfig.BASE_URL + firstUrl
+        container.selectFirst("img.backdrop, img.hero-bg, source[data-srcset]")?.let { el ->
+            when {
+                el.hasAttr("data-srcset") -> return firstFromSrcset(el.attr("data-srcset"))
+                el.hasAttr("data-src") -> return absMedia(el.absUrl("data-src").ifBlank { el.attr("data-src") })
+                el.hasAttr("src") -> return absMedia(el.absUrl("src").ifBlank { el.attr("src") })
             }
         }
         return null
+    }
+
+    private fun firstFromSrcset(srcset: String): String? {
+        val firstUrl = srcset.split(",")
+            .map { it.trim().split(" ").firstOrNull().orEmpty() }
+            .firstOrNull { it.isNotBlank() && !it.contains("data:image") }
+            ?: return null
+        return absMedia(firstUrl)
+    }
+
+    private fun absMedia(src: String?): String? {
+        if (src.isNullOrBlank() || src.contains("data:image") || src.endsWith(".svg")) return null
+        return if (src.startsWith("http")) src
+        else if (src.startsWith("//")) "https:$src"
+        else NovaStreamConfig.BASE_URL + (if (src.startsWith("/")) src else "/$src")
     }
 
     // ─── Serien-Detail + Staffeln ───────────────────────────────────────────
 
-    /** Parst die Serien-Detail-/Staffel-Seite. */
     fun parseSeriesDetail(html: String, slug: String): Pair<Series, List<Season>> {
         if (html.isBlank()) {
-            return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/serie/$slug") to emptyList()
+            return Series(id = slug, title = slugToTitle(slug), detailUrl = "/serie/$slug") to emptyList()
         }
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
 
-        val title = doc.selectFirst("h1")?.text()?.trim() ?: slugToTitle(slug)
-        val cover = extractDetailCover(doc)
+        val title = doc.selectFirst("h1")?.text()?.trim()
+            ?.substringBefore(" Staffel")
+            ?.substringBefore(" | ")
+            ?.trim()
+            ?: slugToTitle(slug)
 
-        val description = doc.selectFirst(".description-text")?.text()?.trim()
-            ?: doc.selectFirst(".series-description")?.text()?.trim()
+        val cover = extractDetailCover(doc)
+        val backdrop = doc.selectFirst("meta[property=og:image]")?.attr("content")
+            ?.takeIf { it.isNotBlank() && !it.contains("logo") && !it.contains("facebook") }
+
+        val description = doc.selectFirst(".description-text, .series-description, .seri_des, [itemprop=description]")?.text()?.trim()
+            ?: doc.selectFirst("meta[property=og:description], meta[name=description]")?.attr("content")?.trim()
+
+        val genres = doc.select("a[href^=/genre/]")
+            .mapNotNull { it.text().trim().ifBlank { null } }
+            .filter { it.length in 2..40 && !it.contains("→") && !it.contains("Top-") }
+            .distinct()
+            .take(12)
+
+        val year = extractYear(
+            doc.selectFirst(".series-info, .meta, .show-meta, .year, [itemprop=dateCreated]")?.text()
+                ?: doc.selectFirst("meta[property=og:title]")?.attr("content")
+                ?: ""
+        ) ?: extractYear(doc.text().take(2000))
+
+        val rating = extractRating(doc)
 
         val series = Series(
             id = slug,
-            title = title,
+            title = cleanTitle(title),
             coverUrl = cover,
+            backdropUrl = backdrop,
             detailUrl = "/serie/$slug",
-            description = description
+            description = description,
+            genres = genres,
+            year = year,
+            rating = rating,
+            seasonCount = parseSeasons(doc, slug).size.takeIf { it > 0 }
         )
 
-        val seasons = parseSeasons(doc, slug)
-        return series to seasons
+        return series to parseSeasons(doc, slug)
     }
 
-    /** Extrahiert das Cover/Backdrop-Bild aus der Detail-Seite. */
     private fun extractDetailCover(doc: Document): String? {
-        // Weg 1: show-cover-mobile img (Serien-Cover auf Detail-Seite)
-        val coverImg = doc.selectFirst("div.show-cover-mobile img[data-src]")
-            ?: doc.selectFirst("div.show-cover-mobile img[src]")
-            ?: doc.selectFirst(".series-cover img[data-src]")
-            ?: doc.selectFirst(".series-cover img[src]")
-            ?: doc.selectFirst(".cover img[data-src]")
-        if (coverImg != null) {
-            val src = coverImg.absUrl("data-src").ifBlank { coverImg.attr("data-src") }
-                .ifBlank { coverImg.absUrl("src") }.ifBlank { coverImg.attr("src") }
-            if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
-            }
+        val selectors = listOf(
+            "div.show-cover-mobile img[data-src]",
+            "div.show-cover-mobile img[src]",
+            ".series-cover img[data-src]",
+            ".series-cover img[src]",
+            ".cover img[data-src]",
+            ".show-cover img[data-src]",
+            ".show-cover img[src]",
+            "img[itemprop=image]"
+        )
+        for (sel in selectors) {
+            val img = doc.selectFirst(sel) ?: continue
+            absMedia(
+                img.absUrl("data-src").ifBlank { img.attr("data-src") }
+                    .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
+            )?.let { return it }
         }
 
-        // Weg 2: source[data-srcset] (picture element)
-        val source = doc.selectFirst("source[data-srcset]")
-        if (source != null) {
-            val srcset = source.attr("data-srcset")
-            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            if (!firstUrl.isNullOrBlank() && !firstUrl.contains("data:image")) {
-                return if (firstUrl.startsWith("http")) firstUrl else NovaStreamConfig.BASE_URL + firstUrl
-            }
-        }
+        doc.selectFirst("source[data-srcset]")?.attr("data-srcset")?.let { firstFromSrcset(it)?.let { u -> return u } }
+        doc.selectFirst("source[srcset]")?.attr("srcset")?.let { firstFromSrcset(it)?.let { u -> return u } }
 
-        // Weg 3: source[srcset]
-        val sourceSrcset = doc.selectFirst("source[srcset]")
-        if (sourceSrcset != null) {
-            val srcset = sourceSrcset.attr("srcset")
-            val firstUrl = srcset.split(",").firstOrNull()?.trim()?.split(" ")?.firstOrNull()
-            if (!firstUrl.isNullOrBlank() && !firstUrl.contains("data:image")) {
-                return if (firstUrl.startsWith("http")) firstUrl else NovaStreamConfig.BASE_URL + firstUrl
-            }
-        }
+        val ogImage = doc.selectFirst("meta[property=og:image]")?.attr("content")
+        if (!ogImage.isNullOrBlank() && !ogImage.contains("facebook") && !ogImage.contains("logo")) return ogImage
 
-        // Weg 4: og:image Meta-Tag
-        val ogImage = doc.selectFirst("meta[property=og:image]")
-        if (ogImage != null) {
-            val content = ogImage.attr("content")
-            if (content.isNotBlank() && !content.contains("facebook.jpg")) return content
-        }
-
-        // Weg 5: Fallback - erstes img mit data-src
-        val anyImg = doc.selectFirst("img[data-src]")
-        if (anyImg != null) {
-            val src = anyImg.absUrl("data-src").ifBlank { anyImg.attr("data-src") }
-            if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
-            }
-        }
-
+        doc.selectFirst("img[data-src]")?.let { absMedia(it.absUrl("data-src").ifBlank { it.attr("data-src") })?.let { u -> return u } }
         return null
     }
 
-    /** Parst Staffeln + Episoden aus der Staffel-Seite. */
-    private fun parseSeasons(doc: Document, slug: String): List<Season> {
-        val seasonNumbers = mutableSetOf<Int>()
-
-        // Staffel-Links: a[data-season-pill]
-        for (a in doc.select("a[data-season-pill]")) {
-            a.attr("data-season-pill").toIntOrNull()?.let { if (it > 0) seasonNumbers.add(it) }
-        }
-
-        // Fallback: href-Pattern /serie/{slug}/staffel-{n}
-        if (seasonNumbers.isEmpty()) {
-            for (a in doc.select("a[href^=/serie/]")) {
-                val href = a.absUrl("href").ifBlank { a.attr("href") }
-                if (!href.contains("/staffel-")) continue
-                extractSeasonNumber(href)?.let { if (it > 0) seasonNumbers.add(it) }
+    private fun extractRating(doc: Document): String? {
+        val candidates = listOf(
+            doc.selectFirst("[itemprop=ratingValue]")?.attr("content")?.ifBlank { null }
+                ?: doc.selectFirst("[itemprop=ratingValue]")?.text(),
+            doc.selectFirst(".rating, .imdb-rating, .score")?.text(),
+            doc.selectFirst("meta[property=og:description]")?.attr("content")
+        )
+        for (c in candidates) {
+            if (c.isNullOrBlank()) continue
+            val m = RATING_PATTERN.matcher(c)
+            if (m.find()) {
+                return (m.group(1) ?: m.group(2))?.replace(',', '.')
             }
         }
+        return null
+    }
 
+    private fun parseSeasons(doc: Document, slug: String): List<Season> {
+        val seasonNumbers = linkedSetOf<Int>()
+
+        for (a in doc.select("a[data-season-pill]")) {
+            a.attr("data-season-pill").toIntOrNull()?.takeIf { it > 0 }?.let { seasonNumbers.add(it) }
+        }
+        for (a in doc.select("a[href*=/staffel-]")) {
+            extractSeasonNumber(a.absUrl("href").ifBlank { a.attr("href") })?.let { seasonNumbers.add(it) }
+        }
         if (seasonNumbers.isEmpty()) seasonNumbers.add(1)
 
-        // Episoden der aktuell geladenen Staffel parsen
         val currentEpisodes = parseEpisodes(doc, slug)
-
         val seasons = mutableListOf<Season>()
         for (n in seasonNumbers.sorted()) {
-            val eps = if (currentEpisodes.isNotEmpty() && currentEpisodes.first().season == n) {
-                currentEpisodes
-            } else {
-                emptyList()
-            }
+            val eps = if (currentEpisodes.isNotEmpty() && currentEpisodes.first().season == n) currentEpisodes else emptyList()
             seasons.add(Season(number = n, episodes = eps))
         }
-
         if (seasons.isEmpty() && currentEpisodes.isNotEmpty()) {
             seasons.add(Season(number = 1, episodes = currentEpisodes))
         }
-
         return seasons
     }
 
-    /** Parst Episoden aus einer Staffel-Seite. */
     private fun parseEpisodes(doc: Document, slug: String): List<Episode> {
         val episodes = mutableListOf<Episode>()
 
-        // Episoden-Zeilen: tr.episode-row mit onclick
-        for (row in doc.select("tr.episode-row")) {
+        for (row in doc.select("tr.episode-row, .episode-row")) {
             val onclick = row.attr("onclick")
-            val m = EP_URL_PATTERN.matcher(onclick)
-            if (m.find()) {
-                val season = m.group(1)?.toIntOrNull()?.takeIf { it > 0 } ?: 1
-                val epNum = m.group(2)?.toIntOrNull()?.takeIf { it > 0 } ?: continue
-                val epUrl = m.group(0)
+            val href = row.selectFirst("a[href*=/episode-]")?.absUrl("href")
+                ?: row.attr("data-href")
+            val source = onclick.ifBlank { href.orEmpty() }
+            val m = EP_URL_PATTERN.matcher(source)
+            if (!m.find()) continue
 
-                val title = row.selectFirst(".episode-title-ger")?.text()?.trim()?.ifBlank { null }
-                    ?: row.selectFirst(".episode-title-eng")?.text()?.trim()?.ifBlank { null }
-                    ?: row.selectFirst(".episode-title-cell")?.text()?.trim()?.ifBlank { null }
-                    ?: "Folge $epNum"
+            val season = m.group(1)?.toIntOrNull()?.takeIf { it > 0 } ?: 1
+            val epNum = m.group(2)?.toIntOrNull()?.takeIf { it > 0 } ?: continue
+            val epUrl = m.group(0) ?: ""
 
-                // Episode-Thumbnail
-                val thumbImg = row.selectFirst("img[data-src]") ?: row.selectFirst("img[src]")
-                val thumbnail = thumbImg?.let { img ->
-                    val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
-                        .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
-                    if (src.isNotBlank() && !src.contains("data:image")) {
-                        if (src.startsWith("http")) src else NovaStreamConfig.BASE_URL + src
-                    } else null
-                }
+            val title = row.selectFirst(".episode-title-ger")?.text()?.trim()?.ifBlank { null }
+                ?: row.selectFirst(".episode-title-eng")?.text()?.trim()?.ifBlank { null }
+                ?: row.selectFirst(".episode-title-cell, .episode-title")?.text()?.trim()?.ifBlank { null }
+                ?: "Folge $epNum"
 
-                // Hoster-Icons in der Zeile
-                val hosterIcons = row.select("img.watch-link")
-                val hosters = hosterIcons.mapIndexed { idx, img ->
-                    val name = img.attr("title").ifBlank { img.attr("alt") }
-                    HosterLink(name = name, redirectUrl = "", index = idx)
-                }
+            val thumbImg = row.selectFirst("img[data-src]") ?: row.selectFirst("img[src]")
+            val thumbnail = thumbImg?.let {
+                absMedia(
+                    it.absUrl("data-src").ifBlank { it.attr("data-src") }
+                        .ifBlank { it.absUrl("src") }.ifBlank { it.attr("src") }
+                )
+            }
 
-                episodes.add(Episode(
+            val hosters = row.select("img.watch-link, .watch-link img").mapIndexed { idx, img ->
+                HosterLink(
+                    name = img.attr("title").ifBlank { img.attr("alt") }.ifBlank { "Hoster" },
+                    redirectUrl = "",
+                    index = idx
+                )
+            }
+
+            episodes.add(
+                Episode(
                     number = epNum,
-                    title = title,
+                    title = cleanTitle(title),
                     hosters = hosters,
                     slug = slug,
                     season = season,
-                    episodeUrl = epUrl ?: "",
+                    episodeUrl = epUrl,
                     thumbnailUrl = thumbnail
-                ))
-            }
+                )
+            )
         }
 
-        // Fallback: Links mit /staffel-{n}/episode-{m}
         if (episodes.isEmpty()) {
             val seen = mutableSetOf<String>()
-            for (a in doc.select("a[href^=/serie/]")) {
+            for (a in doc.select("a[href*=/staffel-][href*=/episode-]")) {
                 val href = a.absUrl("href").ifBlank { a.attr("href") }
-                if (!href.contains("/staffel-") || !href.contains("/episode-")) continue
                 val m = EP_URL_PATTERN.matcher(href)
-                if (m.find()) {
-                    val season = m.group(1)?.toIntOrNull() ?: 1
-                    val epNum = m.group(2)?.toIntOrNull() ?: continue
-                    val key = "$season-$epNum"
-                    if (seen.add(key)) {
-                        episodes.add(Episode(
-                            number = epNum,
-                            title = a.text().trim().ifBlank { "Episode $epNum" },
-                            slug = slug,
-                            season = season,
-                            episodeUrl = m.group(0) ?: ""
-                        ))
-                    }
-                }
+                if (!m.find()) continue
+                val season = m.group(1)?.toIntOrNull() ?: 1
+                val epNum = m.group(2)?.toIntOrNull() ?: continue
+                val key = "$season-$epNum"
+                if (!seen.add(key)) continue
+                episodes.add(
+                    Episode(
+                        number = epNum,
+                        title = cleanTitle(a.text().trim().ifBlank { "Episode $epNum" }),
+                        slug = slug,
+                        season = season,
+                        episodeUrl = m.group(0) ?: href
+                    )
+                )
             }
         }
 
-        return episodes
+        return episodes.sortedBy { it.number }
     }
 
-    // ─── Episoden einer bestimmten Staffel ──────────────────────────────────
-
-    /** Parst nur die Episoden aus einer Staffel-Seite. */
     fun parseSeasonEpisodes(html: String, slug: String, season: Int): List<Episode> {
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
-        return parseEpisodes(doc, slug)
+        return parseEpisodes(doc, slug).map { if (it.season == 0) it.copy(season = season) else it }
+            .filter { it.season == season || season <= 0 }
+            .ifEmpty { parseEpisodes(doc, slug) }
     }
 
-    // ─── Hoster einer Episode ───────────────────────────────────────────────
+    // ─── Hoster ─────────────────────────────────────────────────────────────
 
-    /**
-     * Parst die Hosters einer konkreten Episoden-Seite.
-     * Auf serienstream.to sind Hoster als <button class="link-box"> mit:
-     *   data-play-url      = Redirect-URL (/r?t=eyJ...)
-     *   data-provider-name = Hoster-Name (VOE, Streamtape, ...)
-     *   data-language-label = Sprache
-     */
     fun parseHosters(html: String): List<HosterLink> {
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 
-        for (btn in doc.select("button.link-box[data-play-url]")) {
+        for (btn in doc.select("button.link-box[data-play-url], a.link-box[data-play-url], [data-play-url]")) {
             val playUrl = btn.attr("data-play-url")
             if (playUrl.isBlank()) continue
             val name = btn.attr("data-provider-name").ifBlank {
-                btn.selectFirst("img")?.attr("title") ?: btn.selectFirst("img")?.attr("alt") ?: "Unknown"
+                btn.selectFirst("img")?.attr("title")
+                    ?: btn.selectFirst("img")?.attr("alt")
+                    ?: btn.text().trim().ifBlank { "Unknown" }
             }
-            val language = btn.attr("data-language-label")
+            val language = btn.attr("data-language-label").ifBlank {
+                btn.selectFirst(".lang, .language")?.text()?.trim().orEmpty()
+            }
             val linkId = btn.attr("data-link-id")
-
-            val key = "$name-$playUrl"
+            val key = "$name|$playUrl|$language"
             if (seen.add(key)) {
-                hosters.add(HosterLink(
-                    name = name,
-                    redirectUrl = playUrl,
-                    language = language,
-                    linkId = linkId,
-                    index = hosters.size
-                ))
+                hosters.add(
+                    HosterLink(
+                        name = name.trim(),
+                        redirectUrl = playUrl,
+                        language = language,
+                        linkId = linkId,
+                        index = hosters.size
+                    )
+                )
             }
         }
 
-        // Fallback: img.watch-link mit title-Attribut
+        // Fallback: redirect-Links
+        if (hosters.isEmpty()) {
+            for (a in doc.select("a[href*=/r?], a[href*=/redirect/]")) {
+                val href = a.attr("href")
+                if (href.isBlank()) continue
+                val name = a.attr("title").ifBlank { a.text() }.ifBlank { "Hoster" }
+                if (seen.add(href)) {
+                    hosters.add(HosterLink(name = name.trim(), redirectUrl = href, index = hosters.size))
+                }
+            }
+        }
+
         if (hosters.isEmpty()) {
             for (img in doc.select("img.watch-link[title]")) {
                 val name = img.attr("title")
@@ -377,44 +611,62 @@ object NovaStreamScraper {
         return hosters
     }
 
-    // ─── Hilfsfunktionen ────────────────────────────────────────────────────
+    // ─── Genres / Convenience ───────────────────────────────────────────────
 
-    /** Parst eine Genre-Seite (gleiche Struktur wie Home/Suche). */
     fun parseGenreList(html: String): List<Series> = parseSeriesList(html)
-
-    /** Parst die neuesten/beliebtesten Serien (gleiche Struktur). */
     fun parseNewestList(html: String): List<Series> = parseSeriesList(html)
-
-    /** Parst die beliebtesten Serien (gleiche Struktur). */
     fun parsePopularList(html: String): List<Series> = parseSeriesList(html)
 
-    /** Extrahiert alle verfügbaren Genre-Links aus einer Seite. */
-    fun parseGenres(html: String): List<Pair<String, String>> {
+    fun parseGenres(html: String): List<Genre> {
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, NovaStreamConfig.BASE_URL)
         val genres = linkedMapOf<String, String>()
         for (a in doc.select("a[href^=/genre/]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
-            val slug = href.substringAfter("/genre/").substringBefore("/").substringBefore("?")
-            if (slug.isNotBlank() && !genres.containsKey(slug)) {
-                val name = a.text().trim().ifBlank { slugToTitle(slug) }
-                genres[slug] = name
-            }
+            val slug = href.substringAfter("/genre/").substringBefore("/").substringBefore("?").trim()
+            if (slug.isBlank()) continue
+            val name = a.text().trim()
+                .substringBefore("→").substringBefore("|").trim()
+                .ifBlank { slugToTitle(slug) }
+            if (name.contains("Top-", ignoreCase = true) || name.contains("Entdecken")) continue
+            genres.putIfAbsent(slug, name)
         }
-        return genres.entries.map { (slug, name) -> slug to name }
+        return genres.map { (slug, name) -> Genre(slug, name) }
     }
+
+    /** @deprecated use [parseGenres] */
+    fun parseGenrePairs(html: String): List<Pair<String, String>> =
+        parseGenres(html).map { it.slug to it.name }
+
+    // ─── Hilfsfunktionen ────────────────────────────────────────────────────
 
     private fun extractSlug(url: String): String? {
         val m = SLUG_PATTERN.matcher(url)
         if (!m.find()) return null
-        val slug = m.group(1)
-        return try { java.net.URLDecoder.decode(slug, "UTF-8") } catch (_: Exception) { slug }
+        val slug = m.group(1) ?: return null
+        return try {
+            java.net.URLDecoder.decode(slug, "UTF-8")
+        } catch (_: Exception) {
+            slug
+        }
     }
 
     private fun extractSeasonNumber(url: String): Int? {
         val m = SEASON_PATTERN.matcher(url)
         return if (m.find()) m.group(1)?.toIntOrNull()?.takeIf { it > 0 } else null
     }
+
+    private fun extractYear(text: String): String? {
+        val m = YEAR_PATTERN.matcher(text)
+        return if (m.find()) m.group(1) else null
+    }
+
+    private fun cleanTitle(title: String): String =
+        title.replace(Regex("\\s+"), " ")
+            .replace(Regex("(?i)\\s*online\\s*stream(en)?"), "")
+            .replace(Regex("(?i)\\s*stream(en)?\\s*kostenlos"), "")
+            .trim()
+            .ifBlank { title.trim() }
 
     private fun slugToTitle(slug: String): String =
         slug.replace('-', ' ').replaceFirstChar { it.uppercase() }

@@ -20,11 +20,14 @@ object ProviderManager {
     val providers: List<StreamingProvider> by lazy {
         listOf(
             SerienStreamProvider(),
+            SerienStreamCxProvider(),
             AniWorldProvider(),
             KinoGerProvider(),
             BurningSeriesProvider(),
             MegaKinoProvider(),
-            StreamKisteProvider()
+            StreamKisteProvider(),
+            FilmPalastProvider(),
+            KinoZProvider()
         )
     }
 
@@ -49,18 +52,14 @@ object ProviderManager {
     fun getProvider(id: String): StreamingProvider =
         providers.find { it.id == id } ?: defaultProvider
 
-    /** Holt den Provider anhand der ID oder null wenn nicht gefunden. */
     fun getProviderOrNull(id: String): StreamingProvider? =
         providers.find { it.id == id }
 
-    /** True wenn ein Provider mit der gegebenen ID existiert. */
     fun isValidProviderId(id: String): Boolean =
         providers.any { it.id == id }
 
-    /** Holt alle Provider-IDs. */
     fun getProviderIds(): List<String> = providers.map { it.id }
 
-    /** Holt alle Provider-Infos für die UI. */
     fun getProviderInfos(): List<ProviderInfo> = providers.map {
         ProviderInfo(
             id = it.id,
@@ -70,25 +69,25 @@ object ProviderManager {
         )
     }
 
-    /** Holt den Provider anhand der Display-Name (case-insensitive). */
     fun getProviderByName(displayName: String): StreamingProvider? =
         providers.find { it.displayName.equals(displayName, ignoreCase = true) }
 
-    /** Holt den Provider anhand der Base-URL. */
     fun getProviderByBaseUrl(baseUrl: String): StreamingProvider? =
         providers.find { it.baseUrl == baseUrl }
 
-    /** Anzahl der registrierten Provider. */
     val providerCount: Int get() = providers.size
 
-    /** True wenn mehr als ein Provider verfügbar ist. */
     val hasMultipleProviders: Boolean get() = providers.size > 1
 
-    /** Holt alle Provider-Display-Namen. */
     fun getProviderDisplayNames(): List<String> = providers.map { it.displayName }
 
-    /** Holt die Default-Provider-ID. */
     val defaultProviderId: String get() = defaultProvider.id
+
+    /** Provider die Serien unterstützen. */
+    fun seriesProviders(): List<StreamingProvider> = providers.filter { it.supportsSeries }
+
+    /** Provider die eher Filme fokussieren. */
+    fun movieProviders(): List<StreamingProvider> = providers.filter { !it.supportsSeries }
 }
 
 /** UI-Repräsentation eines Providers. */
@@ -97,4 +96,11 @@ data class ProviderInfo(
     val displayName: String,
     val baseUrl: String,
     val supportsSeries: Boolean
-)
+) {
+    val hostLabel: String
+        get() = try {
+            java.net.URI(baseUrl).host ?: baseUrl
+        } catch (_: Exception) {
+            baseUrl
+        }
+}

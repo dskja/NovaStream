@@ -27,6 +27,12 @@ object NovaStreamConfig {
     /** Max Anzahl Serien pro Seite. */
     const val MAX_SERIES_PER_PAGE = 60
 
+    /** Bekannte Genres für Home/Browse (SerienStream-Slugs). */
+    val DEFAULT_GENRES = listOf(
+        "action", "comedy", "drama", "science-fiction", "thriller",
+        "horror", "fantasy", "krimi", "mystery", "anime", "romantik", "abenteuer"
+    )
+
     /** Max Anzahl Hoster die probiert werden (falls erste fehlschlagen). */
     const val MAX_HOSTER_ATTEMPTS = 5
 

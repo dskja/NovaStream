@@ -210,13 +210,39 @@ class HosterResolver(
                 sources.addAll(extractUpstream(html, hoster))
             hoster.contains("streamlare", ignoreCase = true) || pageUrl.contains("streamlare", ignoreCase = true) ->
                 sources.addAll(extractStreamlare(html, hoster))
+            hoster.contains("firestream", ignoreCase = true) || pageUrl.contains("firestream", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("vidara", ignoreCase = true) || pageUrl.contains("vidara", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("vinovo", ignoreCase = true) || pageUrl.contains("vinovo", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("playmate", ignoreCase = true) || pageUrl.contains("playmate", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("vidmoly", ignoreCase = true) || pageUrl.contains("vidmoly", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("lulu", ignoreCase = true) || pageUrl.contains("lulu", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("speedfile", ignoreCase = true) || pageUrl.contains("speedfile", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("dropload", ignoreCase = true) || pageUrl.contains("dropload", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("streamhub", ignoreCase = true) || pageUrl.contains("streamhub", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("vixcloud", ignoreCase = true) || pageUrl.contains("vixcloud", ignoreCase = true) ->
+                sources.addAll(extractJwPlayerSources(html, hoster))
+            hoster.contains("ok.ru", ignoreCase = true) || pageUrl.contains("ok.ru", ignoreCase = true) ||
+                hoster.contains("odnoklassniki", ignoreCase = true) ->
+                sources.addAll(extractOkRu(html, hoster))
             else -> {
+                sources.addAll(extractJwPlayerSources(html, hoster))
                 // Generic: search for m3u8, mp4, and webm
                 Regex("https?://[^\"'\\s]+\\.m3u8[^\"'\\s]*").findAll(html).forEach { m ->
                     sources.add(StreamSource(hoster = hoster, url = m.value, isHls = true))
                 }
                 Regex("https?://[^\"'\\s]+\\.mp4[^\"'\\s]*").findAll(html).forEach { m ->
-                    sources.add(StreamSource(hoster = hoster, url = m.value, isHls = false, mimeType = "video/mp4"))
+                    if (!NovaStreamConfig.isTestVideo(m.value)) {
+                        sources.add(StreamSource(hoster = hoster, url = m.value, isHls = false, mimeType = "video/mp4"))
+                    }
                 }
                 Regex("https?://[^\"'\\s]+\\.webm[^\"'\\s]*").findAll(html).forEach { m ->
                     sources.add(StreamSource(hoster = hoster, url = m.value, isHls = false, mimeType = "video/webm"))
@@ -428,5 +454,64 @@ class HosterResolver(
             out.add(StreamSource(hoster, url, isHls = url.contains(".m3u8")))
         }
         return out
+    }
+
+    /**
+     * Generischer JWPlayer / Video.js Extraktor.
+     * Deckt FireStream, Vidara, Vinovo, Playmate, Vidmoly, LuluVDO, SpeedFiles, …
+     */
+    private fun extractJwPlayerSources(html: String, hoster: String): List<StreamSource> {
+        val out = mutableListOf<StreamSource>()
+
+        fun addUrl(raw: String) {
+            var url = raw.trim()
+            if (url.startsWith("//")) url = "https:$url"
+            if (!url.startsWith("http")) return
+            if (NovaStreamConfig.isTestVideo(url)) return
+            if (!(url.contains(".m3u8") || url.contains(".mp4") || url.contains(".webm") ||
+                    url.contains("/hls/") || url.contains("master.txt") || url.contains("playlist"))) return
+            out.add(
+                StreamSource(
+                    hoster = hoster,
+                    url = url,
+                    isHls = url.contains(".m3u8") || url.contains("/hls/") || url.contains("playlist"),
+                    mimeType = when {
+                        url.contains(".mp4") -> "video/mp4"
+                        url.contains(".webm") -> "video/webm"
+                        else -> "application/x-mpegURL"
+                    }
+                )
+            )
+        }
+
+        Regex("""sources\s*:\s*\[\s*\{[^}]*file\s*:\s*["']([^"']+)["']""").findAll(html).forEach { addUrl(it.groupValues[1]) }
+        Regex("""file\s*:\s*["'](https?://[^"']+)["']""").findAll(html).forEach { addUrl(it.groupValues[1]) }
+        Regex("""src\s*:\s*["'](https?://[^"']+)["']""").findAll(html).forEach { addUrl(it.groupValues[1]) }
+        Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']""").findAll(html).forEach { addUrl(it.groupValues[1]) }
+        Regex("""["'](https?://[^"']+\.mp4[^"']*)["']""").findAll(html).forEach { addUrl(it.groupValues[1]) }
+        Regex("""atob\(["']([A-Za-z0-9+/=]+)["']\)""").findAll(html).forEach { m ->
+            try {
+                val decoded = String(Base64.decode(m.groupValues[1], Base64.DEFAULT))
+                Regex("""https?://[^\s"']+\.(?:m3u8|mp4)[^\s"']*""").findAll(decoded).forEach { addUrl(it.value) }
+            } catch (_: Exception) {}
+        }
+        // Packed eval fallback: raw m3u8/mp4 in page
+        Regex("""https?://[^\s"'<>]+\\.m3u8[^\s"'<>]*""").findAll(html).forEach { addUrl(it.value) }
+
+        return out.distinctBy { it.url }
+    }
+
+    /** ok.ru / Odnoklassniki embed. */
+    private fun extractOkRu(html: String, hoster: String): List<StreamSource> {
+        val out = mutableListOf<StreamSource>()
+        Regex(""""url"\s*:\s*"(https?:\\?/\\?/[^"]+)"\s*,\s*"name"\s*:\s*"(?:mobile|lowest|low|sd|hd|full|quad|ultra)"""").findAll(html).forEach { m ->
+            val url = m.groupValues[1].replace("\\/", "/")
+            out.add(StreamSource(hoster, url, isHls = url.contains(".m3u8"),
+                mimeType = if (url.contains(".m3u8")) "application/x-mpegURL" else "video/mp4"))
+        }
+        Regex("""https?://[^"'\s]+\.mp4[^"'\s]*""").findAll(html).forEach { m ->
+            out.add(StreamSource(hoster, m.value, isHls = false, mimeType = "video/mp4"))
+        }
+        return out.distinctBy { it.url }
     }
 }
