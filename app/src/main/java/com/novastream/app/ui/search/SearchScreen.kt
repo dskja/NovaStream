@@ -259,7 +259,7 @@ fun SearchScreen(
             TextField(
                 value = state.query,
                 onValueChange = vm::onQueryChange,
-                placeholder = { Text("Serie suchen…", color = TextTertiary) },
+                placeholder = { Text("Titel suchen…", color = TextTertiary) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
@@ -362,11 +362,18 @@ fun SearchScreen(
                             }
                         }
                         if (state.recentSearches.isEmpty() && state.trending.isEmpty()) {
-                            PremiumEmpty("Suche nach deiner Lieblingsserie", icon = Icons.Default.Search)
+                            PremiumEmpty("Suche nach Filmen & Serien", icon = Icons.Default.Search)
                         }
                     }
                 }
-                state.results.isEmpty() -> PremiumEmpty("Keine Treffer für '${state.query}'", icon = Icons.Default.Search)
+                state.results.isEmpty() -> PremiumEmpty(
+                    if (com.novastream.app.data.provider.ActiveProvider.isBurningSeries) {
+                        "Keine Treffer. Burning Series blockiert oft Bot-Suchen (Captcha) – bitte später erneut versuchen."
+                    } else {
+                        "Keine Treffer für '${state.query}'"
+                    },
+                    icon = Icons.Default.Search
+                )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 130.dp),
                     contentPadding = PaddingValues(12.dp, bottom = 80.dp),

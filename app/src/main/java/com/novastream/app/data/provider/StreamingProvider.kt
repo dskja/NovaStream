@@ -72,6 +72,14 @@ interface StreamingProvider {
     suspend fun loadExtendedCatalog(): ProviderResult<List<Series>> =
         ProviderResult.Success(emptyList())
 
+    /** Paginierte Katalog-Seite (0-basiert). */
+    suspend fun loadCatalogPage(page: Int): ProviderResult<List<Series>> =
+        if (page <= 0) loadHome() else ProviderResult.Success(emptyList())
+
+    /** Paginierte Genre-Seite (0-basiert). */
+    suspend fun loadGenrePage(genre: String, page: Int): ProviderResult<List<Series>> =
+        if (page <= 0) loadGenre(genre) else ProviderResult.Success(emptyList())
+
     /** Result-Wrapper für Provider-Operationen. */
     sealed class ProviderResult<out T> {
         data class Success<T>(val data: T) : ProviderResult<T>()

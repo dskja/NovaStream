@@ -163,8 +163,8 @@ class AniWorldProvider(
     /** Alphabet-Katalog – liefert hunderte Einträge statt nur Homepage (~200). */
     override suspend fun loadExtendedCatalog(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         coroutineScope {
-            // Bewusst begrenzt: volle A–Z wäre zu langsam für Home; reicht für „tausende“-Gefühl
-            val letters = listOf("A", "B", "C", "D", "E", "F", "G", "H", "M", "N", "R", "S", "T")
+            // Bewusst parallel in Chunks: voller A–Z + 0–9 Katalog
+            val letters = ('A'..'Z').map { it.toString() } + ('0'..'9').map { it.toString() }
             val all = linkedMapOf<String, Series>()
             letters.chunked(4).forEach { chunk ->
                 chunk.map { letter ->
@@ -186,6 +186,18 @@ class AniWorldProvider(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
+
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val letters = ('A'..'Z').map { it.toString() } + ('0'..'9').map { it.toString() }
+        val letter = letters.getOrNull(page) ?: return@runCatching emptyList()
+        tagAll(loadByLetterInternal(letter))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
+        if (page <= 0) loadGenre(genre) else StreamingProvider.ProviderResult.Success(emptyList())
 
     private suspend fun loadByLetterInternal(letter: String): List<Series> {
         if (letter.isBlank()) return emptyList()
@@ -259,15 +271,22 @@ class AniWorldProvider(
 
     private suspend fun fetchUrl(url: String): String {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val req = okhttp3.Request.Builder()
-                .url(url)
-                .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-                .header("Referer", baseUrl + "/")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .build()
-            com.novastream.app.data.api.NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) resp.body?.string() ?: "" else ""
+            repeat(3) { attempt ->
+                val req = okhttp3.Request.Builder()
+                    .url(url)
+                    .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
+                    .header("Referer", baseUrl + "/")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .build()
+                val body = com.novastream.app.data.api.NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) resp.body?.string() ?: "" else ""
+                }
+                val blocked = body.contains("ddos-guard", ignoreCase = true) ||
+                    body.contains("checking your browser", ignoreCase = true)
+                if (body.isNotBlank() && !blocked) return@withContext body
+                if (attempt < 2) kotlinx.coroutines.delay(1500L * (attempt + 1))
             }
+            ""
         }
     }
 

@@ -11,10 +11,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -49,6 +51,7 @@ fun PremiumBottomBar(
 ) {
     val items = listOf(
         NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
+        NavItem("Entdecken", Icons.Filled.Explore, Icons.Outlined.Explore, "browse"),
         NavItem("Liste", Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
         NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search"),
         NavItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
@@ -152,6 +155,7 @@ fun PremiumTopTabBar(
 ) {
     val items = listOf(
         NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
+        NavItem("Entdecken", Icons.Filled.Explore, Icons.Outlined.Explore, "browse"),
         NavItem("Liste", Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
         NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search"),
         NavItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, "settings")

@@ -33,7 +33,8 @@ data class PlayerUiState(
     val playbackSpeed: Float = 1.0f,
     val skipIntroButton: Boolean = true,
     val season: Int = 1,
-    val episode: Int = 1
+    val episode: Int = 1,
+    val isMovie: Boolean = false
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(selectedHosterIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
@@ -50,8 +51,9 @@ data class PlayerUiState(
     /** True wenn die nächste Episode verfügbar ist. */
     val hasNextEpisode: Boolean get() = nextEpisode != null
 
-    /** Formatierte Episode-Anzeige (z.B. "S1 E5"). */
-    val episodeDisplay: String get() = "S$season E$episode"
+    /** Formatierte Episode-Anzeige (z.B. "S1 E5" oder Filmtitel). */
+    val episodeDisplay: String
+        get() = if (isMovie) episodeTitle.ifBlank { seriesTitle } else "S$season E$episode"
 }
 
 data class NextEpisodeInfo(
@@ -80,6 +82,7 @@ class PlayerViewModel(
     private val coverUrl: String? = savedStateHandle.get<String>("coverUrl")?.let {
         try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     }?.takeIf { it.isNotBlank() }
+    private val isMovie: Boolean = savedStateHandle.get<Boolean>("isMovie") ?: false
 
     private val repo = NovaStreamRepository()
     private val watchRepo = WatchRepository.get(application)
@@ -90,7 +93,8 @@ class PlayerViewModel(
         seriesTitle = seriesTitle,
         coverUrl = coverUrl,
         season = season,
-        episode = episode
+        episode = episode,
+        isMovie = isMovie
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
@@ -117,8 +121,12 @@ class PlayerViewModel(
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
             }
 
-            // Build episode URL based on active provider
-            val epUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, episode)
+            // Build episode URL based on active provider (movies use detail path, not /serien/.../episode-...)
+            val epUrl = if (isMovie) {
+                com.novastream.app.data.provider.ActiveProvider.movieDetailUrl(slug)
+            } else {
+                com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, episode)
+            }
             val ep = Episode(
                 number = episode,
                 title = title,
@@ -173,7 +181,8 @@ class PlayerViewModel(
                 episode = episode,
                 episodeTitle = title,
                 positionMs = safePosition,
-                durationMs = durationMs
+                durationMs = durationMs,
+                isMovie = isMovie
             )
             _state.update { it.copy(resumePositionMs = safePosition, durationMs = durationMs) }
         }
@@ -191,7 +200,7 @@ class PlayerViewModel(
                     episode
                 )
             )
-            loadNextEpisode()
+            if (!isMovie) loadNextEpisode()
         }
     }
 

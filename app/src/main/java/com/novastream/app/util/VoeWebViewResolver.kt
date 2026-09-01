@@ -153,7 +153,7 @@ class VoeWebViewResolver {
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
                     if (com.novastream.app.BuildConfig.DEBUG) {
-                        android.util.Log.w("VoeWebViewResolver", "WebView error: ${error?.description}")
+                        android.util.Log.w("VoeWebViewResolver", "WebView error: ${request?.url} $error")
                     }
                 }
             }

@@ -159,6 +159,13 @@ class FreeCatalogProvider(
 
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        FreeMetaService.catalogPage(page.coerceAtLeast(0)).map { mapShow(it) }
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     private fun extractImdb(episode: Episode): String? {
         val url = episode.episodeUrl
         if (url.startsWith("imdb://")) {
