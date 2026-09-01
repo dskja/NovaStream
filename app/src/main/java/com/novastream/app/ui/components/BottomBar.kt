@@ -5,7 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -158,7 +158,8 @@ fun PremiumBottomBar(
 @Composable
 fun PremiumTopTabBar(
     currentRoute: String?,
-    onNavigate: (String) -> Unit
+    onNavigate: (String) -> Unit,
+    watchlistCount: Int = 0
 ) {
     fun isSelected(route: String): Boolean {
         val base = currentRoute?.substringBefore("?") ?: return false
@@ -214,16 +215,36 @@ fun PremiumTopTabBar(
                     .focusable()
                     .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
-                Icon(
-                    imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                    contentDescription = if (selected) {
-                        "${item.label}${stringResource(R.string.nav_selected_suffix)}"
-                    } else {
-                        item.label
-                    },
-                    tint = iconColor,
-                    modifier = Modifier.size(20.dp)
-                )
+                Box {
+                    Icon(
+                        imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                        contentDescription = if (selected) {
+                            "${item.label}${stringResource(R.string.nav_selected_suffix)}"
+                        } else {
+                            item.label
+                        },
+                        tint = iconColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    if (item.route == "watchlist" && watchlistCount > 0) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 6.dp, y = (-4).dp)
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(Primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (watchlistCount > 99) "99+" else watchlistCount.toString(),
+                                color = Color.White,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = item.label,

@@ -350,6 +350,8 @@
     <string name="onboarding_feature_cast">Chromecast</string>
     <string name="onboarding_feature_cast_sub">Envía streams directamente a tu TV.</string>
     <string name="onboarding_ready_provider">Proveedor: %1$s</string>
+    <string name="onboarding_profile_name">Nombre del perfil (opcional)</string>
+    <string name="onboarding_profile_hint">p. ej. Ana</string>
     <string name="settings_categories">Categorías</string>
     <string name="settings_playback_sub">Autoplay, hoster, velocidad</string>
     <string name="settings_design_sub">Colores, rendimiento, animaciones</string>

@@ -350,6 +350,8 @@
     <string name="onboarding_feature_cast">Chromecast</string>
     <string name="onboarding_feature_cast_sub">بث المحتوى مباشرة إلى التلفاز.</string>
     <string name="onboarding_ready_provider">المزود: %1$s</string>
+    <string name="onboarding_profile_name">اسم الملف الشخصي (اختياري)</string>
+    <string name="onboarding_profile_hint">مثال: أحمد</string>
     <string name="settings_categories">الفئات</string>
     <string name="settings_playback_sub">تشغيل تلقائي، مضيف، سرعة</string>
     <string name="settings_design_sub">الألوان، الأداء، الرسوم</string>

@@ -60,6 +60,7 @@ fun OnboardingScreen(
     var contentLanguage by remember { mutableStateOf(ContentLanguage.DE) }
     var selectedId by remember { mutableStateOf(ProviderManager.defaultProviderId) }
     var languageFilter by remember { mutableStateOf<ContentLanguage?>(ContentLanguage.DE) }
+    var profileName by remember { mutableStateOf("") }
     var finishing by remember { mutableStateOf(false) }
     val initialFocus = rememberInitialFocusRequester()
 
@@ -191,6 +192,20 @@ fun OnboardingScreen(
                 }
                 else -> {
                     item {
+                        OutlinedTextField(
+                            value = profileName,
+                            onValueChange = { profileName = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.onboarding_profile_name)) },
+                            placeholder = { Text(stringResource(R.string.onboarding_profile_hint)) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Primary,
+                                focusedLabelColor = Primary,
+                                cursorColor = Primary
+                            )
+                        )
+                        Spacer(Modifier.height(16.dp))
                         Text(
                             stringResource(R.string.onboarding_ready_provider, flatProviders.find { it.id == selectedId }?.displayName ?: selectedId),
                             color = Primary,
@@ -260,6 +275,7 @@ fun OnboardingScreen(
                                 else -> {
                                     finishing = true
                                     try {
+                                        onboardingVm.setupProfile(profileName)
                                         providerController.setActiveProvider(selectedId)
                                         appSettings.setOnboardingComplete(true)
                                         onComplete()

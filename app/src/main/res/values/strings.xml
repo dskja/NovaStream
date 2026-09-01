@@ -151,6 +151,8 @@
     <string name="onboarding_feature_cast_sub">Streams direkt auf deinen TV senden.</string>
     <string name="onboarding_back">Zurück</string>
     <string name="onboarding_ready_provider">Provider: %1$s</string>
+    <string name="onboarding_profile_name">Profilname (optional)</string>
+    <string name="onboarding_profile_hint">z. B. Max</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Downloads</string>

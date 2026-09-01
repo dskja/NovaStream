@@ -136,7 +136,16 @@ class DetailViewModel @Inject constructor(
                 val previous = loadedProviderId
                 if (previous != null && previous != providerId) {
                     _state.update {
-                        it.copy(providerMismatch = true, loading = true, error = null)
+                        it.copy(
+                            providerMismatch = true,
+                            loading = true,
+                            error = null,
+                            series = null,
+                            seasons = emptyList(),
+                            selectedSeasonIndex = 0,
+                            seasonError = null,
+                            relatedTitles = emptyList()
+                        )
                     }
                     load()
                 }

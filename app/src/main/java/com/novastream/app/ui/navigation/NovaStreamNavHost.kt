@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -30,9 +31,6 @@ import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.util.LocaleManager
 import com.novastream.app.util.findActivity
 import kotlinx.coroutines.launch
-import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.provider.ProviderManager
-import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.ui.components.PremiumBottomBar
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.PremiumTopTabBar
@@ -118,15 +116,8 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
     LaunchedEffect(appSettings) {
         appSettings.onboardingComplete.collect { onboardingComplete = it }
     }
-    val activeProviderId by ProviderManager.activeProviderIdFlow(context)
-        .collectAsStateWithLifecycle(initialValue = ActiveProvider.id)
-    val watchRepo = remember { WatchRepository.get(context) }
-    val watchlistItems by watchRepo.watchlist().collectAsStateWithLifecycle(initialValue = emptyList())
-    val watchlistCount = remember(watchlistItems, activeProviderId) {
-        watchlistItems.count {
-            it.providerId.isBlank() || it.providerId == activeProviderId || it.providerId == "unknown"
-        }
-    }
+    val navVm: NavHostViewModel = hiltViewModel()
+    val watchlistCount by navVm.watchlistCount.collectAsStateWithLifecycle()
     val uiLocale by appSettings.uiLocale.collectAsStateWithLifecycle(initialValue = LocaleManager.SYSTEM_LOCALE)
 
     if (onboardingComplete == null) {
@@ -181,6 +172,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                 // TV: Top Tab Bar statt Bottom Bar (Amazon/Google TV Guidelines)
                 PremiumTopTabBar(
                     currentRoute = currentRoute,
+                    watchlistCount = watchlistCount,
                     onNavigate = { route ->
                         if (route != currentRoute) {
                             nav.navigate(route) {

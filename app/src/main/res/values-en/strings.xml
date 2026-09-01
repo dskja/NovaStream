@@ -151,6 +151,8 @@
     <string name="onboarding_feature_cast_sub">Cast streams directly to your TV.</string>
     <string name="onboarding_back">Back</string>
     <string name="onboarding_ready_provider">Provider: %1$s</string>
+    <string name="onboarding_profile_name">Profile name (optional)</string>
+    <string name="onboarding_profile_hint">e.g. Alex</string>
     <string name="downloads_title">Downloads</string>
     <string name="downloads_loading">Loading downloads…</string>
     <string name="downloads_empty">No downloads yet. Download episodes from the detail page.</string>

@@ -350,6 +350,8 @@
     <string name="onboarding_feature_cast">Chromecast</string>
     <string name="onboarding_feature_cast_sub">Trasmetti stream direttamente alla TV.</string>
     <string name="onboarding_ready_provider">Provider: %1$s</string>
+    <string name="onboarding_profile_name">Nome profilo (opzionale)</string>
+    <string name="onboarding_profile_hint">es. Marco</string>
     <string name="settings_categories">Categorie</string>
     <string name="settings_playback_sub">Autoplay, hoster, velocità</string>
     <string name="settings_design_sub">Colori, prestazioni, animazioni</string>

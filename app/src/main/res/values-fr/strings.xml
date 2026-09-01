@@ -350,6 +350,8 @@
     <string name="onboarding_feature_cast">Chromecast</string>
     <string name="onboarding_feature_cast_sub">Diffusez des flux directement sur votre TV.</string>
     <string name="onboarding_ready_provider">Fournisseur : %1$s</string>
+    <string name="onboarding_profile_name">Nom du profil (optionnel)</string>
+    <string name="onboarding_profile_hint">ex. Marie</string>
     <string name="settings_categories">Catégories</string>
     <string name="settings_playback_sub">Lecture auto, hébergeur, vitesse</string>
     <string name="settings_design_sub">Couleurs, performance, animations</string>
