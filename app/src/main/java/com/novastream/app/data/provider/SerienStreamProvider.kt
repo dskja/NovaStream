@@ -172,6 +172,13 @@ open class SerienStreamProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> =
+        if (page <= 0) loadExtendedCatalog()
+        else StreamingProvider.ProviderResult.Success(emptyList())
+
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
+        loadGenrePaged(genre, page + 1)
+
     suspend fun loadCatalog(): StreamingProvider.ProviderResult<List<Series>> = loadExtendedCatalog()
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {

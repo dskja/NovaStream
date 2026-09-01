@@ -152,6 +152,8 @@ object AjaxSearchClient {
         return out.values.toList()
     }
 
+    internal fun extractSlugForTest(url: String, isAnime: Boolean): String? = extractSlug(url, isAnime)
+
     private fun extractSlug(url: String, isAnime: Boolean): String? {
         val patterns = if (isAnime) {
             listOf(

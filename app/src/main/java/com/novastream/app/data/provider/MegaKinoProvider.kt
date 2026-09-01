@@ -33,7 +33,8 @@ class MegaKinoProvider(
     override val id: String = "megakino",
     override val displayName: String = "MegaKino",
     override val baseUrl: String = "https://megakino.ms",
-    override val supportsSeries: Boolean = true
+    override val supportsSeries: Boolean = true,
+    override val supportsMovies: Boolean = true
 ) : StreamingProvider {
 
     private val hosterResolver = HosterResolver(baseUrl = baseUrl)
@@ -41,8 +42,16 @@ class MegaKinoProvider(
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl(baseUrl)
-        parseMegaKinoSeriesList(html)
+        parseMegaKinoSeriesList(fetchUrl(baseUrl))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val html = fetchUrl("$baseUrl/filme")
+        val list = if (html.isNotBlank()) parseMegaKinoSeriesList(html) else parseMegaKinoSeriesList(fetchUrl(baseUrl))
+        list.map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -201,7 +210,9 @@ class MegaKinoProvider(
         )
 
         val seasons = parseMegaKinoSeasons(doc, slug)
-        return series to seasons
+        val isMovie = seasons.size == 1 && seasons.first().episodes.size <= 1 &&
+            doc.select("a[href*=/staffel/]").isEmpty()
+        return series.copy(isMovie = isMovie) to seasons
     }
 
     /** Parst Staffeln. */

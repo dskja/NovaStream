@@ -71,8 +71,12 @@ data class DetailUiState(
 
     fun progressFor(season: Int, episode: Int): WatchProgress? {
         val seriesSlug = series?.id ?: return null
+        val pid = ActiveProvider.id
         return episodeProgress.values.find {
-            it.slug == seriesSlug && it.season == season && it.episode == episode
+            it.slug == seriesSlug &&
+                it.season == season &&
+                it.episode == episode &&
+                (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
         }
     }
 }
@@ -99,9 +103,16 @@ class DetailViewModel(
         // Watch all progress for this series
         viewModelScope.launch {
             watchRepo.watchProgress().collect { progressList ->
-                val progressMap = progressList.associateBy { it.episodeKey }
+                val pid = ActiveProvider.id
+                val progressMap = progressList
+                    .filter { it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown" }
+                    .associateBy { it.episodeKey }
                 val current = progressList
-                    .filter { it.slug == slug && !it.isCompleted }
+                    .filter {
+                        it.slug == slug &&
+                            (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown") &&
+                            !it.isCompleted
+                    }
                     .maxByOrNull { it.updatedAt }
                 _state.update { it.copy(episodeProgress = progressMap, currentProgress = current) }
             }

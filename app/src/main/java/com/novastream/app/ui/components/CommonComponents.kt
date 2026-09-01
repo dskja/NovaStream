@@ -187,6 +187,25 @@ fun SeriesPosterCard(
                 }
             }
 
+            // Movie badge (top-left)
+            if (series.isMovie) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Accent.copy(alpha = 0.9f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        "Film",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             // Watchlist indicator badge (top-right corner)
             if (inWatchlist) {
                 Box(

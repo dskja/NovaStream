@@ -1,3 +1,5 @@
+@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.novastream.app.ui.player
 
 import android.app.Activity
@@ -257,16 +259,15 @@ fun PlayerScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        useController = true
+                        useController = !showHosters
                         this.player = player
                         setPadding(0, 0, 0, navBarHeightPx)
-                        if (showHosters) hideController()
                     }
                 },
                 update = { pv ->
                     pv.player = player
+                    pv.useController = !showHosters
                     pv.setPadding(0, 0, 0, navBarHeightPx)
-                    if (showHosters) pv.hideController() else pv.showController()
                     pv.isFocusable = true
                     pv.isFocusableInTouchMode = true
                 },
@@ -501,9 +502,9 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay (only if autoplay is enabled in settings)
+        // Next Episode overlay (only for series, not movies)
         AnimatedVisibility(
-            visible = showNextEpisodeOverlay && state.nextEpisode != null && state.autoplayNext,
+            visible = !state.isMovie && showNextEpisodeOverlay && state.nextEpisode != null && state.autoplayNext,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center)

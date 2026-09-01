@@ -54,6 +54,9 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
+      - name: Unit tests and lint
+        run: ./gradlew testDebugUnitTest lintDebug --stacktrace --no-daemon
+
       - name: Build Release APK
         # Ohne Upload-Keystore: Release wird mit Debug-Key signiert (installierbar).
         run: ./gradlew :app:assembleRelease --stacktrace --no-daemon
