@@ -84,7 +84,7 @@ fun DetailScreen(
             val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
             cp?.let {
                 castHelper.loadOnCast(it, url, title)
-                snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_started))
+                snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_to_tv_started))
             }
         }
         vm.clearCastRequest()
@@ -96,7 +96,7 @@ fun DetailScreen(
                 "detail_download_started" -> context.getString(R.string.detail_download_started)
                 "detail_download_failed" -> context.getString(R.string.detail_download_failed)
                 "detail_download_no_source" -> context.getString(R.string.detail_download_no_source)
-                "detail_cast_failed" -> context.getString(R.string.detail_cast_failed)
+                "detail_cast_to_tv_failed" -> context.getString(R.string.detail_cast_to_tv_failed)
                 else -> key
             }
             snackbarHostState.showSnackbar(text)
@@ -372,7 +372,7 @@ private fun DetailContent(
                             } else {
                                 Icon(
                                     Icons.Default.Cast,
-                                    contentDescription = stringResource(R.string.detail_cast),
+                                    contentDescription = stringResource(R.string.detail_cast_to_tv),
                                     tint = TextSecondary,
                                     modifier = Modifier.size(22.dp)
                                 )

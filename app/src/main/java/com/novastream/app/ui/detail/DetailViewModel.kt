@@ -548,20 +548,20 @@ class DetailViewModel @Inject constructor(
                     episode = Episode(number = 1, title = series.title, slug = slug, season = 1, hosters = emptyList())
                 }
                 val ep = episode ?: run {
-                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
                     return@launch
                 }
                 when (val hostersResult = repo.loadHosters(ep)) {
                     is RepoResult.Success -> {
                         val hoster = hostersResult.data.firstOrNull() ?: run {
-                            _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                            _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
                             return@launch
                         }
                         when (val sourcesResult = repo.resolveHoster(hoster)) {
                             is RepoResult.Success -> {
                                 val source = sourcesResult.data.firstOrNull { it.isPlayable }
                                 if (source == null) {
-                                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
                                     return@launch
                                 }
                                 _state.update {
