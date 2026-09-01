@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SmartDisplay
@@ -67,6 +68,22 @@ fun DetailScreen(
     val vm: DetailViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val series = state.series
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val downloadMsg = state.downloadMessage
+
+    LaunchedEffect(downloadMsg) {
+        downloadMsg?.let { key ->
+            val text = when (key) {
+                "detail_download_started" -> context.getString(R.string.detail_download_started)
+                "detail_download_failed" -> context.getString(R.string.detail_download_failed)
+                "detail_download_no_source" -> context.getString(R.string.detail_download_no_source)
+                else -> key
+            }
+            snackbarHostState.showSnackbar(text)
+            vm.clearDownloadMessage()
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(BgPure)) {
         when {
@@ -85,9 +102,11 @@ fun DetailScreen(
                 onToggleWatched = vm::toggleEpisodeWatched,
                 onMarkSeasonWatched = vm::markSeasonAsWatched,
                 onMarkSeasonUnwatched = vm::markSeasonAsUnwatched,
-                onRelatedClick = onRelatedClick
+                onRelatedClick = onRelatedClick,
+                onDownload = vm::downloadCurrentEpisode
             )
         }
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -106,7 +125,8 @@ private fun DetailContent(
     onToggleWatched: (Int, Int, String) -> Unit,
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
-    onRelatedClick: (String) -> Unit
+    onRelatedClick: (String) -> Unit,
+    onDownload: () -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -289,6 +309,27 @@ private fun DetailContent(
                             tint = if (state.inWatchlist) Primary else TextSecondary,
                             modifier = Modifier.size(24.dp)
                         )
+                    }
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(BgSurfaceElevated)
+                            .clickable(onClick = onDownload, enabled = !state.downloading)
+                            .focusable(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (state.downloading) {
+                            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Primary)
+                        } else {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = stringResource(R.string.detail_download_episode),
+                                tint = TextSecondary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                     Box(
                         Modifier

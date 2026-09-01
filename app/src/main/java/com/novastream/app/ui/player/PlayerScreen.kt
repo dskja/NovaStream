@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,6 +57,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
+import com.novastream.app.cast.CastHelper
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.tvPlayerKeyHandler
@@ -72,7 +74,10 @@ fun PlayerScreen(
 ) {
     val vm: PlayerViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val castEnabled by vm.castEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val castHelper = remember { CastHelper.get(context) }
+    var castPlayer by remember { mutableStateOf<androidx.media3.cast.CastPlayer?>(null) }
     val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -512,6 +517,29 @@ fun PlayerScreen(
                             )
                         }
                     }
+                }
+            }
+            if (playerVisible && castEnabled && castHelper.isAvailable) {
+                Box(
+                    Modifier
+                        .padding(start = 8.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(GlassMedium)
+                        .clickable {
+                            val url = currentSource?.url ?: return@clickable
+                            val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
+                            val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
+                            cp?.let { castHelper.loadOnCast(it, url, title) }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Cast,
+                        stringResource(R.string.player_cast),
+                        tint = if (castHelper.isCastSessionActive()) Primary else Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
             if (playerVisible && state.hosters.isNotEmpty()) {

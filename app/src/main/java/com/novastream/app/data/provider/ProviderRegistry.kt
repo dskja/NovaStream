@@ -22,17 +22,20 @@ object ProviderRegistry {
         }
     }
 
-    private val entries: List<RegisteredProvider>
+    private val builtInEntries: List<RegisteredProvider>
         get() = entriesCache ?: buildRegistry(appContext = null).also { entriesCache = it }
 
-    val providers: List<StreamingProvider> get() = entries.map { it.provider }
+    private fun allEntries(): List<RegisteredProvider> =
+        builtInEntries + SiteProfileImporter.registeredProviders()
 
-    val defaultProvider: StreamingProvider get() = entries.first().provider
+    val providers: List<StreamingProvider> get() = allEntries().map { it.provider }
 
-    fun allRegistered(): List<RegisteredProvider> = entries
+    val defaultProvider: StreamingProvider get() = builtInEntries.first().provider
+
+    fun allRegistered(): List<RegisteredProvider> = allEntries()
 
     fun findRegistered(id: String): RegisteredProvider? =
-        entries.find { it.provider.id == id }
+        allEntries().find { it.provider.id == id }
 
     fun getProvider(id: String): StreamingProvider =
         findRegistered(id)?.provider ?: defaultProvider
@@ -41,10 +44,10 @@ object ProviderRegistry {
         findRegistered(id)?.provider
 
     fun isValidProviderId(id: String): Boolean =
-        entries.any { it.provider.id == id }
+        allEntries().any { it.provider.id == id }
 
     fun getGroupedByLanguage(): Map<ContentLanguage, List<ProviderInfo>> =
-        entries
+        allEntries()
             .groupBy { it.contentLanguage }
             .mapValues { (_, list) -> list.map { it.toProviderInfo() } }
             .toSortedMap(compareBy { it.tag })
@@ -54,7 +57,7 @@ object ProviderRegistry {
         favoriteIds: Set<String> = emptySet(),
         favoritesOnly: Boolean = false
     ): List<ProviderInfo> {
-        var list = entries
+        var list = allEntries()
         if (favoritesOnly) {
             list = list.filter { it.provider.id in favoriteIds }
         } else if (language != null && language != ContentLanguage.MULTI) {
@@ -68,7 +71,7 @@ object ProviderRegistry {
             .map { it.toProviderInfo() }
     }
 
-    fun getProviderInfos(): List<ProviderInfo> = entries.map { it.toProviderInfo() }
+    fun getProviderInfos(): List<ProviderInfo> = allEntries().map { it.toProviderInfo() }
 
     fun contentLanguageOf(providerId: String): ContentLanguage =
         findRegistered(providerId)?.contentLanguage ?: ContentLanguage.MULTI

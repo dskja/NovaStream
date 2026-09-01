@@ -49,6 +49,8 @@ object SiteProfileImporter {
 
     fun importedProviders(): List<StreamingProvider> = imported.map { it.provider }
 
+    fun registeredProviders(): List<RegisteredProvider> = imported.toList()
+
     fun clearImported() {
         imported.clear()
     }

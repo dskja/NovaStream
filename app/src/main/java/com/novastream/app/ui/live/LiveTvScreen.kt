@@ -25,7 +25,9 @@ import com.novastream.app.R
 import com.novastream.app.data.iptv.IptvChannel
 import com.novastream.app.data.iptv.IptvChannelGroup
 import com.novastream.app.data.iptv.IptvRegistry
-import com.novastream.app.data.prefs.AppSettings
+import com.novastream.app.data.iptv.EpgProgram
+import com.novastream.app.data.iptv.XmlTvEpgParser
+import java.net.URL
 import com.novastream.app.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +44,9 @@ data class LiveTvUiState(
     val searchQuery: String = "",
     val searchResults: List<IptvChannel> = emptyList(),
     val error: String? = null,
-    val iptvEnabled: Boolean = false
+    val iptvEnabled: Boolean = false,
+    val epgPrograms: List<EpgProgram> = emptyList(),
+    val epgLoading: Boolean = false
 )
 
 @HiltViewModel
@@ -57,9 +61,33 @@ class LiveTvViewModel @Inject constructor(
         viewModelScope.launch {
             val enabled = appSettings.iptvEnabled.first()
             _state.update { it.copy(iptvEnabled = enabled) }
-            if (enabled) loadChannels()
-            else _state.update { it.copy(loading = false) }
+            if (enabled) {
+                loadChannels()
+                loadEpg()
+            } else _state.update { it.copy(loading = false) }
         }
+    }
+
+    fun loadEpg() {
+        viewModelScope.launch {
+            _state.update { it.copy(epgLoading = true) }
+            try {
+                val url = appSettings.epgUrl.first().trim()
+                if (url.isBlank()) {
+                    _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
+                    return@launch
+                }
+                val xml = URL(url).readText()
+                _state.update { it.copy(epgLoading = false, epgPrograms = XmlTvEpgParser.parse(xml)) }
+            } catch (e: Exception) {
+                _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
+            }
+        }
+    }
+
+    fun epgNow(channel: IptvChannel): EpgProgram? {
+        val key = channel.tvgId?.takeIf { it.isNotBlank() } ?: channel.id
+        return XmlTvEpgParser.nowPlaying(_state.value.epgPrograms, key)
     }
 
     fun loadChannels() {
@@ -141,8 +169,21 @@ fun LiveTvScreen(
                 else uiState.groups.flatMap { it.channels }
 
                 LazyColumn(Modifier.fillMaxSize()) {
+                    if (uiState.epgLoading) {
+                        item {
+                            Text(
+                                stringResource(R.string.live_tv_epg_loading),
+                                Modifier.padding(16.dp),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                     items(channels, key = { it.id }) { channel ->
-                        LiveChannelRow(channel = channel, onClick = { onPlayChannel(channel) })
+                        LiveChannelRow(
+                            channel = channel,
+                            epgTitle = viewModel.epgNow(channel)?.title,
+                            onClick = { onPlayChannel(channel) }
+                        )
                     }
                 }
             }
@@ -151,7 +192,7 @@ fun LiveTvScreen(
 }
 
 @Composable
-private fun LiveChannelRow(channel: IptvChannel, onClick: () -> Unit) {
+private fun LiveChannelRow(channel: IptvChannel, epgTitle: String? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -173,6 +214,13 @@ private fun LiveChannelRow(channel: IptvChannel, onClick: () -> Unit) {
         Column {
             Text(channel.name, fontWeight = FontWeight.Medium)
             channel.group?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            epgTitle?.let {
+                Text(
+                    stringResource(R.string.live_tv_epg_now, it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

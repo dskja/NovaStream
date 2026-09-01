@@ -14,10 +14,10 @@ import com.novastream.app.R
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.download.DownloadForegroundService
-import com.novastream.app.profile.ProfileManager
 import com.novastream.app.provider.SiteProfileImporter
 import com.novastream.app.sync.BackupRestoreManager
 import com.novastream.app.sync.CloudSyncManager
+import com.novastream.app.ui.profile.ProfilePickerSection
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -33,12 +33,14 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     var syncUrl by remember { mutableStateOf("") }
     var syncKey by remember { mutableStateOf("") }
     var profileJson by remember { mutableStateOf("") }
+    var epgUrl by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(appSettings) {
         m3uUrl = appSettings.userM3uUrl.first()
         syncUrl = appSettings.syncUrl.first()
         syncKey = appSettings.syncDeviceKey.first()
+        epgUrl = appSettings.epgUrl.first()
     }
 
     SettingsSectionHeader(stringResource(R.string.settings_ultra_playback))
@@ -73,6 +75,17 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     SettingsAction(stringResource(R.string.settings_m3u_save), "") {
         scope.launch { appSettings.setUserM3uUrl(m3uUrl) }
         statusMessage = context.getString(R.string.settings_m3u_saved)
+    }
+    OutlinedTextField(
+        value = epgUrl,
+        onValueChange = { epgUrl = it },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        label = { Text(stringResource(R.string.settings_epg_url)) },
+        singleLine = true
+    )
+    SettingsAction(stringResource(R.string.settings_epg_save), "") {
+        scope.launch { appSettings.setEpgUrl(epgUrl) }
+        statusMessage = context.getString(R.string.settings_epg_saved)
     }
 
     SettingsSectionHeader(stringResource(R.string.settings_sync_backup))
@@ -122,13 +135,7 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     }
 
     SettingsSectionHeader(stringResource(R.string.settings_profiles))
-    SettingsAction(stringResource(R.string.settings_profile_create), "") {
-        scope.launch {
-            ProfileManager(context, NovaStreamDatabase.get(context))
-                .createProfile("Profile ${System.currentTimeMillis() % 1000}")
-            statusMessage = context.getString(R.string.settings_profile_created)
-        }
-    }
+    ProfilePickerSection(onStatus = { statusMessage = it })
 
     SettingsSectionHeader(stringResource(R.string.settings_provider_import))
     OutlinedTextField(

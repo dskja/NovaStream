@@ -13,14 +13,21 @@ import com.novastream.app.data.meta.MetaEnrichment
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.repository.RepoResult
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderRegistry
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.download.DownloadForegroundService
+import com.novastream.app.download.DownloadManagerHelper
+import com.novastream.app.profile.ProfileManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,7 +55,9 @@ data class DetailUiState(
     val relatedTitles: List<Series> = emptyList(),
     val alsoOnProviders: List<String> = emptyList(),
     val loadedProviderId: String? = null,
-    val providerMismatch: Boolean = false
+    val providerMismatch: Boolean = false,
+    val downloadMessage: String? = null,
+    val downloading: Boolean = false
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -99,12 +108,15 @@ data class DetailUiState(
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val appContext: Context,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
     private val providerController: ProviderController,
     private val freeMetaGraph: FreeMetaGraph,
     private val contentDao: ContentDao,
-    private val appSettings: AppSettings
+    private val appSettings: AppSettings,
+    private val downloadHelper: DownloadManagerHelper,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
@@ -448,5 +460,70 @@ class DetailViewModel @Inject constructor(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "related titles failed", e)
             }
         }
+    }
+
+    fun downloadCurrentEpisode() {
+        val series = _state.value.series ?: return
+        val seasonObj = _state.value.selectedSeason
+        viewModelScope.launch {
+            _state.update { it.copy(downloading = true, downloadMessage = null) }
+            try {
+                DownloadForegroundService.ensureChannel(appContext)
+                val seasonNum = if (series.isMovie) 1 else seasonObj?.number ?: 1
+                var episode: Episode? = seasonObj?.episodes?.firstOrNull()
+                if (episode == null && !series.isMovie) {
+                    when (val epResult = repo.loadSeason(slug, seasonNum)) {
+                        is RepoResult.Success -> episode = epResult.data.firstOrNull()
+                        else -> {}
+                    }
+                }
+                if (episode == null && series.isMovie) {
+                    episode = Episode(number = 1, title = series.title, slug = slug, season = 1, hosters = emptyList())
+                }
+                val ep = episode ?: run {
+                    _state.update { it.copy(downloading = false, downloadMessage = "detail_download_no_source") }
+                    return@launch
+                }
+                when (val hostersResult = repo.loadHosters(ep)) {
+                    is RepoResult.Success -> {
+                        val hoster = hostersResult.data.firstOrNull()
+                        if (hoster == null) {
+                            _state.update { it.copy(downloading = false, downloadMessage = "detail_download_no_source") }
+                            return@launch
+                        }
+                        when (val sourcesResult = repo.resolveHoster(hoster)) {
+                            is RepoResult.Success -> {
+                                val source = sourcesResult.data.firstOrNull { it.isPlayable }
+                                if (source == null) {
+                                    _state.update { it.copy(downloading = false, downloadMessage = "detail_download_no_source") }
+                                    return@launch
+                                }
+                                val profileId = profileManager.getActiveProfile().profileId
+                                downloadHelper.enqueueDownload(
+                                    providerId = ActiveProvider.id,
+                                    slug = slug,
+                                    title = series.title,
+                                    episodeTitle = ep.title,
+                                    season = seasonNum,
+                                    episode = ep.number,
+                                    coverUrl = series.coverUrl,
+                                    source = source,
+                                    profileId = profileId
+                                )
+                                _state.update { it.copy(downloading = false, downloadMessage = "detail_download_started") }
+                            }
+                            else -> _state.update { it.copy(downloading = false, downloadMessage = "detail_download_failed") }
+                        }
+                    }
+                    else -> _state.update { it.copy(downloading = false, downloadMessage = "detail_download_failed") }
+                }
+            } catch (_: Exception) {
+                _state.update { it.copy(downloading = false, downloadMessage = "detail_download_failed") }
+            }
+        }
+    }
+
+    fun clearDownloadMessage() {
+        _state.update { it.copy(downloadMessage = null) }
     }
 }

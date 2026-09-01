@@ -20,8 +20,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 
 data class PlayerUiState(
     val loading: Boolean = true,
@@ -116,6 +116,12 @@ class PlayerViewModel @Inject constructor(
         isMovie = isMovie
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
+
+    val castEnabled = appSettings.castEnabled.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        true
+    )
 
     companion object {
         internal fun isResolveStale(requestGeneration: Int, currentGeneration: Int): Boolean =
