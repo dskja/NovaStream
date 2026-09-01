@@ -57,6 +57,7 @@ class ProviderController @Inject constructor(
                 val previousId = _activeProviderId.value
                 if (previousId != resolved.id) {
                     catalogCacheDao.deleteForProvider(previousId)
+                    ProviderDomainResolver.invalidate(previousId)
                 }
                 ProviderManager.setActiveProvider(context, resolved.id)
             }

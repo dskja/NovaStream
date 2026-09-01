@@ -54,7 +54,33 @@ object ProviderDomainManager {
         ),
         "burningseries" to listOf(
             "https://burningseries.cx",
-            "https://bs.to"
+            "https://bs.to",
+            "https://burningseries.ac"
+        ),
+        "aniworld" to listOf(
+            "https://aniworld.to",
+            "https://aniworld.gg",
+            "https://aniworld.nu"
+        ),
+        "kinoger" to listOf(
+            "https://kinoger.to",
+            "https://kinoger.com",
+            "https://kinoger.pw"
+        ),
+        "streamkiste" to listOf(
+            "https://stream-kiste.de",
+            "https://streamkiste.tv",
+            "https://streamkiste.xyz"
+        ),
+        "filmpalast" to listOf(
+            "https://filmpalast.to",
+            "https://filmpalast.cx",
+            "https://filmpalast.io"
+        ),
+        "kinoz" to listOf(
+            "https://kinoz.to",
+            "https://kinos.to",
+            "https://kinoz.tv"
         ),
         "sflix" to listOf(
             "https://sflix.to/",

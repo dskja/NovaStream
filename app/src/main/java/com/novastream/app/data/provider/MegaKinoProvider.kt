@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
@@ -30,32 +31,32 @@ class MegaKinoProvider(
     override val displayName: String = "MegaKino",
     override val baseUrl: String = "https://megakino.ms",
     override val supportsSeries: Boolean = true,
-    override val supportsMovies: Boolean = true
+    override val supportsMovies: Boolean = true,
+    private val appContext: Context? = null
 ) : StreamingProvider {
-
-    companion object {
-        /** Entry mirrors — resolved to first working base at runtime. */
-        private val MIRROR_ENTRIES = listOf(
-            "https://megakino.ms",
-            "https://megakino6.com",
-            "https://megakino8.com",
-            "https://megakino2.com",
-            "https://megakino.how",
-            "https://megakino.fi"
-        )
-    }
 
     @Volatile
     private var resolvedBaseUrl: String? = null
+
+    init {
+        ProviderDomainResolver.registerInvalidator(id) { resolvedBaseUrl = null }
+    }
 
     private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl.trimEnd('/'))
 
     private suspend fun activeBaseUrl(): String {
         resolvedBaseUrl?.let { return it }
-        ProviderHttp.resolveWorkingBase(MIRROR_ENTRIES, contentNeedle = "/title/", webViewFallback = true)
-            ?.let { resolvedBaseUrl = it }
-        return resolvedBaseUrl ?: baseUrl.trimEnd('/')
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = baseUrl,
+            contentNeedle = "/title/",
+            appContext = appContext
+        )
+        resolvedBaseUrl = resolved
+        return resolved
     }
+
+    private fun parseBase(): String = resolvedBaseUrl ?: baseUrl.trimEnd('/')
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 
@@ -78,7 +79,9 @@ class MegaKinoProvider(
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
             val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
@@ -187,7 +190,7 @@ class MegaKinoProvider(
     /** Parst eine Liste von Serien/Filmen. */
     private fun parseMegaKinoSeriesList(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val results = linkedMapOf<String, Series>()
 
         // Phase 1: Links mit /title/ Pfad
@@ -240,7 +243,7 @@ class MegaKinoProvider(
         if (html.isBlank()) {
             return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/title/$slug") to emptyList()
         }
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
 
         val title = doc.selectFirst("h1")?.text()?.trim()
             ?: doc.selectFirst("h2")?.text()?.trim()
@@ -249,12 +252,12 @@ class MegaKinoProvider(
         val cover = doc.selectFirst("img[data-src]")?.let { img ->
             val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
-                if (src.startsWith("http")) src else baseUrl + src
+                if (src.startsWith("http")) src else parseBase() + src
             } else null
         } ?: doc.selectFirst("img[src]")?.let { img ->
             val src = img.absUrl("src").ifBlank { img.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
-                if (src.startsWith("http")) src else baseUrl + src
+                if (src.startsWith("http")) src else parseBase() + src
             } else null
         }
 
@@ -327,7 +330,7 @@ class MegaKinoProvider(
     /** Parst Episoden aus einer Staffel-Seite. */
     private fun parseMegaKinoEpisodes(html: String, slug: String, season: Int): List<Episode> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         return parseMegaKinoEpisodesFromDoc(doc, slug, season)
     }
 
@@ -364,7 +367,7 @@ class MegaKinoProvider(
     /** Parst Hoster aus einer Episoden-Seite. */
     private fun parseMegaKinoHosters(html: String): List<HosterLink> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 
@@ -441,7 +444,7 @@ class MegaKinoProvider(
             val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
                 .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else baseUrl + src
+                return if (src.startsWith("http")) src else parseBase() + src
             }
         }
         return null

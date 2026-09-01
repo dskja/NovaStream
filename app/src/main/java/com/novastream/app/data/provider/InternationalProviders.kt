@@ -1,11 +1,16 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.scraper.InternationalSiteProfiles
 
-class SflixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.sflix)
+class SflixProvider(appContext: Context? = null) :
+    DynamicUrlSiteProvider(InternationalSiteProfiles.sflix, appContext, "/tv-show/")
+
 class RidomoviesProvider : ConfigurableSiteProvider(InternationalSiteProfiles.ridomovies)
 class AnikotoProvider : ConfigurableSiteProvider(InternationalSiteProfiles.anikoto)
-class HdFilmeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.hdfilme)
+
+class HdFilmeProvider(appContext: Context? = null) :
+    DynamicUrlSiteProvider(InternationalSiteProfiles.hdfilme, appContext, "stream")
 class EinschaltenProvider : ConfigurableSiteProvider(InternationalSiteProfiles.einschalten)
 class FrenchAnimeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.frenchAnime)
 class FrembedProvider : ConfigurableSiteProvider(InternationalSiteProfiles.frembed)
@@ -23,7 +28,8 @@ class StreamingCommunityEnProvider : ConfigurableSiteProvider(InternationalSiteP
 class FilmyOnlineProvider : ConfigurableSiteProvider(InternationalSiteProfiles.filmyOnline)
 class ZaluknijProvider : ConfigurableSiteProvider(InternationalSiteProfiles.zaluknij)
 class MkissaProvider : ConfigurableSiteProvider(InternationalSiteProfiles.mkissa)
-class MoflixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.moflix)
+class MoflixProvider(appContext: Context? = null) :
+    DynamicUrlSiteProvider(InternationalSiteProfiles.moflix, appContext, "stream/")
 class AnimeworldProvider : ConfigurableSiteProvider(InternationalSiteProfiles.animeworld)
 class Lookmovie2Provider : ConfigurableSiteProvider(InternationalSiteProfiles.lookmovie2)
 class PelisflixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.pelisflix)

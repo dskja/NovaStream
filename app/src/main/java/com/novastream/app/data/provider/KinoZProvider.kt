@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
@@ -32,8 +33,35 @@ class KinoZProvider(
     override val id: String = "kinoz",
     override val displayName: String = "KinoZ",
     override val baseUrl: String = "https://kinoz.to",
-    override val supportsSeries: Boolean = true
+    override val supportsSeries: Boolean = true,
+    private val appContext: Context? = null
 ) : StreamingProvider {
+
+    @Volatile
+    private var resolvedBaseUrl: String? = null
+
+    init {
+        ProviderDomainResolver.registerInvalidator(id) {
+            resolvedBaseUrl = null
+            clearCache()
+        }
+    }
+
+    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl.trimEnd('/'))
+
+    private suspend fun activeBaseUrl(): String {
+        resolvedBaseUrl?.let { return it }
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = baseUrl,
+            contentNeedle = "/Stream/",
+            appContext = appContext
+        )
+        resolvedBaseUrl = resolved
+        return resolved
+    }
+
+    private fun parseBase(): String = resolvedBaseUrl ?: baseUrl.trimEnd('/')
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String = "Filme & Serien"
@@ -45,8 +73,6 @@ class KinoZProvider(
         com.novastream.app.data.model.Genre("Thriller", "Thriller"),
         com.novastream.app.data.model.Genre("Science-Fiction", "Sci-Fi")
     )
-
-    private val hosterResolver = HosterResolver(baseUrl = baseUrl)
 
     private val streamPathRegex = Regex("""/Stream/([^/]+?)\.html""", RegexOption.IGNORE_CASE)
 
@@ -60,17 +86,20 @@ class KinoZProvider(
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        parseKinoZSeriesList(fetchUrl(baseUrl))
+        parseKinoZSeriesList(fetchUrl(activeBaseUrl()))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
+            val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-            parseKinoZSeriesList(fetchUrl("$baseUrl/Search.html?q=$encoded"))
+            parseKinoZSeriesList(fetchUrl("$base/Search.html?q=$encoded"))
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -112,8 +141,9 @@ class KinoZProvider(
 
     /** Lädt Filme (getrennt vom Serien-Home-Katalog). */
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        parseKinoZSeriesList(fetchUrl("$baseUrl/Genre/Filme"))
-            .ifEmpty { parseKinoZSeriesList(fetchUrl(baseUrl)).filter { it.isMovie } }
+        val base = activeBaseUrl()
+        parseKinoZSeriesList(fetchUrl("$base/Genre/Filme"))
+            .ifEmpty { parseKinoZSeriesList(fetchUrl(base)).filter { it.isMovie } }
             .map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -122,8 +152,9 @@ class KinoZProvider(
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val name = genre.trim().ifBlank { return@runCatching emptyList() }
+        val base = activeBaseUrl()
         val encoded = name.replace(" ", "%20")
-        parseKinoZSeriesList(fetchUrl("$baseUrl/Genre/$encoded"))
+        parseKinoZSeriesList(fetchUrl("$base/Genre/$encoded"))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -134,11 +165,12 @@ class KinoZProvider(
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val base = activeBaseUrl()
         val path = when {
             page <= 0 -> ""
             else -> "?page=${page + 1}"
         }
-        parseKinoZSeriesList(fetchUrl(baseUrl + path))
+        parseKinoZSeriesList(fetchUrl(base + path))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -146,9 +178,10 @@ class KinoZProvider(
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val name = genre.trim().ifBlank { return@runCatching emptyList() }
+        val base = activeBaseUrl()
         val encoded = name.replace(" ", "%20")
         val path = if (page <= 0) "/Genre/$encoded" else "/Genre/$encoded?page=${page + 1}"
-        parseKinoZSeriesList(fetchUrl(baseUrl + path))
+        parseKinoZSeriesList(fetchUrl(base + path))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -156,15 +189,18 @@ class KinoZProvider(
 
     // ─── Networking ─────────────────────────────────────────────────────────
 
-    private suspend fun fetchUrl(url: String): String =
-        ProviderHttp.fetch(url, referer = "$baseUrl/", webViewFallback = true)
+    private suspend fun fetchUrl(url: String): String {
+        val base = activeBaseUrl()
+        return ProviderHttp.fetch(url, referer = "$base/", webViewFallback = true)
+    }
 
     private suspend fun fetchDetailPage(slug: String): String {
         val key = normalizeSlug(slug)
         synchronized(cacheLock) {
             detailCache[key]?.let { return it }
         }
-        val html = fetchUrl("$baseUrl/Stream/$key.html")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/Stream/$key.html")
         if (html.isNotBlank()) {
             synchronized(cacheLock) {
                 if (detailCache[key] == null) detailCache[key] = html
@@ -177,7 +213,7 @@ class KinoZProvider(
 
     private fun parseKinoZSeriesList(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val results = linkedMapOf<String, Series>()
 
         for (a in doc.select("a[href*=/Stream/]")) {
@@ -212,7 +248,7 @@ class KinoZProvider(
                 detailUrl = "/Stream/$slug.html"
             ) to emptyList()
         }
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
 
         val title = doc.selectFirst("h1")?.text()?.trim()
             ?: doc.selectFirst("#Content h2, .Relative h1, .Relative h2")?.text()?.trim()
@@ -315,7 +351,7 @@ class KinoZProvider(
      */
     private suspend fun resolveMirrorHosters(html: String, season: Int, episode: Int): List<HosterLink> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 
@@ -448,8 +484,8 @@ class KinoZProvider(
     private fun makeAbsolute(url: String): String = when {
         url.startsWith("http://") || url.startsWith("https://") -> url
         url.startsWith("//") -> "https:$url"
-        url.startsWith("/") -> baseUrl + url
-        else -> "$baseUrl/$url"
+        url.startsWith("/") -> parseBase() + url
+        else -> "${parseBase()}/$url"
     }
 
     private fun absImg(img: Element): String? {

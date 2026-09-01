@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.HosterLink
@@ -20,8 +21,32 @@ class AniWorldProvider(
     override val id: String = "aniworld",
     override val displayName: String = "AniWorld",
     override val baseUrl: String = "https://aniworld.to",
-    override val supportsSeries: Boolean = true
+    override val supportsSeries: Boolean = true,
+    private val appContext: Context? = null
 ) : StreamingProvider {
+
+    @Volatile
+    private var resolvedBaseUrl: String? = null
+
+    init {
+        ProviderDomainResolver.registerInvalidator(id) { resolvedBaseUrl = null }
+    }
+
+    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl.trimEnd('/'))
+
+    private suspend fun activeBaseUrl(): String {
+        resolvedBaseUrl?.let { return it }
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = baseUrl,
+            contentNeedle = "/anime/stream/",
+            appContext = appContext
+        )
+        resolvedBaseUrl = resolved
+        return resolved
+    }
+
+    private fun parseBase(): String = resolvedBaseUrl ?: baseUrl.trimEnd('/')
 
     override val supportsMovies: Boolean = false
 
@@ -42,23 +67,19 @@ class AniWorldProvider(
         Genre("mystery", "Mystery")
     )
 
-    private val hosterResolver = HosterResolver(baseUrl = baseUrl)
-
     private fun tag(series: Series): Series = series.copy(
         providerId = id,
         title = MediaUrls.sanitizeTitle(series.title).ifBlank { series.title },
-        coverUrl = MediaUrls.abs(series.coverUrl, baseUrl),
-        backdropUrl = MediaUrls.abs(series.backdropUrl, baseUrl),
+        coverUrl = MediaUrls.abs(series.coverUrl, parseBase()),
+        backdropUrl = MediaUrls.abs(series.backdropUrl, parseBase()),
         detailUrl = series.detailUrl.ifBlank { "/anime/stream/${series.id}" }
     )
 
     private fun tagAll(list: List<Series>): List<Series> = list.map { tag(it) }
 
-    // ─── Homepage Parsing ───────────────────────────────────────────────────
-
     private fun parseSeriesListAniWorld(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val results = linkedMapOf<String, Series>()
 
         for (a in doc.select("div.seriesListContainer a[href*=/anime/stream/], a[href*=/anime/stream/]")) {
@@ -103,15 +124,16 @@ class AniWorldProvider(
         val img = anchor.selectFirst("img[data-src]") ?: anchor.selectFirst("img[src]") ?: return null
         val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
             .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
-        return MediaUrls.abs(src, baseUrl)
+        return MediaUrls.abs(src, parseBase())
     }
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val home = parseSeriesListAniWorld(fetchUrl(baseUrl))
-        val popular = parseSeriesListAniWorld(fetchUrl("$baseUrl/beliebte-animes").ifBlank {
-            fetchUrl("$baseUrl/animes")
+        val base = activeBaseUrl()
+        val home = parseSeriesListAniWorld(fetchUrl(base))
+        val popular = parseSeriesListAniWorld(fetchUrl("$base/beliebte-animes").ifBlank {
+            fetchUrl("$base/animes")
         })
         tagAll((home + popular).distinctBy { it.id })
     }.fold(
@@ -120,7 +142,8 @@ class AniWorldProvider(
     )
 
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/beliebte-animes").ifBlank { fetchUrl(baseUrl) }
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/beliebte-animes").ifBlank { fetchUrl(base) }
         tagAll(parseSeriesListAniWorld(html))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -128,8 +151,9 @@ class AniWorldProvider(
     )
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/neue-episode").ifBlank {
-            fetchUrl("$baseUrl/neu").ifBlank { fetchUrl(baseUrl) }
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/neue-episode").ifBlank {
+            fetchUrl("$base/neu").ifBlank { fetchUrl(base) }
         }
         tagAll(parseSeriesListAniWorld(html))
     }.fold(
@@ -139,11 +163,12 @@ class AniWorldProvider(
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         if (genre.isBlank()) return@runCatching emptyList()
+        val base = activeBaseUrl()
         val slug = genre.trim().lowercase()
         val paths = listOf(
-            "$baseUrl/genre/$slug",
-            "$baseUrl/animes?genre=$slug",
-            "$baseUrl/genre/${slug.replace('-', '_')}"
+            "$base/genre/$slug",
+            "$base/animes?genre=$slug",
+            "$base/genre/${slug.replace('-', '_')}"
         )
         var results = emptyList<Series>()
         for (url in paths) {
@@ -179,16 +204,18 @@ class AniWorldProvider(
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
         if (page <= 0) loadGenre(genre) else runCatching {
+            val base = activeBaseUrl()
             val slug = genre.trim().lowercase()
-            tagAll(parseSeriesListAniWorld(fetchUrl("$baseUrl/genre/$slug?page=${page + 1}")))
+            tagAll(parseSeriesListAniWorld(fetchUrl("$base/genre/$slug?page=${page + 1}")))
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
         )
 
     suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<com.novastream.app.data.model.LatestEpisode>> = runCatching {
-        val html = fetchUrl("$baseUrl/neue-episode").ifBlank { fetchUrl("$baseUrl/neu") }
-        val doc = org.jsoup.Jsoup.parse(html, baseUrl)
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/neue-episode").ifBlank { fetchUrl("$base/neu") }
+        val doc = org.jsoup.Jsoup.parse(html, parseBase())
         val results = mutableListOf<com.novastream.app.data.model.LatestEpisode>()
         for (a in doc.select("a[href*=/anime/stream/]")) {
             val href = a.absUrl("href")
@@ -217,12 +244,13 @@ class AniWorldProvider(
 
     private suspend fun loadByLetterInternal(letter: String): List<Series> {
         if (letter.isBlank()) return emptyList()
+        val base = activeBaseUrl()
         val L = letter.trim().uppercase()
         val paths = listOf(
-            "$baseUrl/animes?letter=$L",
-            "$baseUrl/animes?alphabet=$L",
-            "$baseUrl/animes-$L",
-            "$baseUrl/anime-list?letter=$L"
+            "$base/animes?letter=$L",
+            "$base/animes?alphabet=$L",
+            "$base/animes-$L",
+            "$base/anime-list?letter=$L"
         )
         for (url in paths) {
             val html = fetchUrl(url)
@@ -233,10 +261,13 @@ class AniWorldProvider(
     }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
+            val base = activeBaseUrl()
             val ajax = AjaxSearchClient.search(
-                baseUrl = baseUrl,
+                baseUrl = base,
                 query = query.trim(),
                 linkHint = "/anime/stream/",
                 isAnime = true
@@ -254,7 +285,8 @@ class AniWorldProvider(
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        val html = fetchUrl("$baseUrl/anime/stream/$slug")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/anime/stream/$slug")
         val (series, seasons) = parseAniWorldDetail(html, slug)
         tag(series) to seasons
     }.fold(
@@ -263,7 +295,8 @@ class AniWorldProvider(
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
-        val html = fetchUrl("$baseUrl/anime/stream/$slug/staffel-$season")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/anime/stream/$slug/staffel-$season")
         parseAniWorldEpisodes(html, slug, season)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -271,7 +304,8 @@ class AniWorldProvider(
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
-        val html = fetchUrl("$baseUrl/anime/stream/${episode.slug}/staffel-${episode.season}/episode-${episode.number}")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/anime/stream/${episode.slug}/staffel-${episode.season}/episode-${episode.number}")
         parseAniWorldHosters(html)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -286,10 +320,11 @@ class AniWorldProvider(
     )
 
     private suspend fun fetchUrl(url: String): String {
+        val base = activeBaseUrl()
         repeat(3) { attempt ->
             val body = ProviderHttp.fetch(
                 url,
-                referer = baseUrl + "/",
+                referer = base + "/",
                 webViewFallback = attempt >= 1
             )
             if (body.isNotBlank() && !ProviderHttp.isChallenge(body)) return body
@@ -307,7 +342,7 @@ class AniWorldProvider(
                 providerId = id
             ) to emptyList()
         }
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
 
         val title = MediaUrls.sanitizeTitle(
             doc.selectFirst("div.series-title h1")?.text()
@@ -321,7 +356,7 @@ class AniWorldProvider(
         if (coverImg != null) {
             val src = coverImg.absUrl("data-src").ifBlank { coverImg.attr("data-src") }
                 .ifBlank { coverImg.absUrl("src") }.ifBlank { coverImg.attr("src") }
-            cover = MediaUrls.abs(src, baseUrl)
+            cover = MediaUrls.abs(src, parseBase())
         }
 
         val description = doc.selectFirst("p.seri_des")?.attr("data-full-description")?.ifBlank { null }
@@ -369,7 +404,7 @@ class AniWorldProvider(
 
     private fun parseAniWorldEpisodes(html: String, slug: String, season: Int): List<Episode> {
         if (html.isBlank()) return emptyList()
-        return parseAniWorldEpisodesFromDoc(Jsoup.parse(html, baseUrl), slug, season)
+        return parseAniWorldEpisodesFromDoc(Jsoup.parse(html, parseBase()), slug, season)
     }
 
     private fun parseAniWorldEpisodesFromDoc(doc: org.jsoup.nodes.Document, slug: String, season: Int): List<Episode> {
@@ -401,7 +436,7 @@ class AniWorldProvider(
 
     private fun parseAniWorldHosters(html: String): List<HosterLink> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 

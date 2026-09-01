@@ -46,10 +46,11 @@ open class ConfigurableSiteProvider(
     override val catalogHint: String?
         get() = null
 
-    private val hosterResolver get() = HosterResolver(baseUrl = profile.baseUrl)
-
     protected open suspend fun activeBaseUrl(): String =
         if (this is DynamicBaseUrlProvider) resolveBaseUrl() else profile.baseUrl.trimEnd('/')
+
+    private suspend fun hosterResolver(): HosterResolver =
+        HosterResolver(baseUrl = activeBaseUrl())
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         val base = activeBaseUrl()
@@ -143,7 +144,7 @@ open class ConfigurableSiteProvider(
                             episode = Regex("""episode=(\d+)""").find(hoster.redirectUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1,
                             isMovie = hoster.redirectUrl.contains("movie")
                         )
-                    } else hosterResolver.resolve(hoster.name, hoster.redirectUrl)
+                    } else hosterResolver().resolve(hoster.name, hoster.redirectUrl)
                 }
                 hoster.redirectUrl.contains("vidlink") || hoster.redirectUrl.contains("vidlove") -> {
                     val tmdb = Regex("""/(?:tv|movie)/(\d+)""").find(hoster.redirectUrl)?.groupValues?.get(1)
@@ -153,8 +154,8 @@ open class ConfigurableSiteProvider(
                             season = Regex("""/tv/\d+/(\d+)""").find(hoster.redirectUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1,
                             episode = Regex("""/tv/\d+/\d+/(\d+)""").find(hoster.redirectUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1,
                             isMovie = hoster.redirectUrl.contains("/movie/")
-                        ).ifEmpty { hosterResolver.resolve(hoster.name, hoster.redirectUrl) }
-                    } else hosterResolver.resolve(hoster.name, hoster.redirectUrl)
+                        ).ifEmpty { hosterResolver().resolve(hoster.name, hoster.redirectUrl) }
+                    } else hosterResolver().resolve(hoster.name, hoster.redirectUrl)
                 }
                 else -> ExtractorRegistry.resolve(hoster.name, hoster.redirectUrl, activeBaseUrl())
             }
@@ -236,7 +237,7 @@ open class ConfigurableSiteProvider(
     }
 
     private suspend fun fetchNetwork(url: String): String =
-        ProviderHttp.fetch(url, referer = profile.baseUrl + "/", webViewFallback = true)
+        ProviderHttp.fetch(url, referer = activeBaseUrl() + "/", webViewFallback = true)
 
     private suspend fun postSearch(query: String): String = withContext(Dispatchers.IO) {
         val field = profile.searchPostField ?: return@withContext ""

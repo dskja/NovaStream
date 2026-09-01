@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
@@ -34,15 +35,38 @@ class StreamKisteProvider(
     override val displayName: String = "StreamKiste",
     override val baseUrl: String = "https://stream-kiste.de",
     override val supportsSeries: Boolean = true,
-    override val supportsMovies: Boolean = true
+    override val supportsMovies: Boolean = true,
+    private val appContext: Context? = null
 ) : StreamingProvider {
 
-    private val hosterResolver = HosterResolver(baseUrl = baseUrl)
+    @Volatile
+    private var resolvedBaseUrl: String? = null
+
+    init {
+        ProviderDomainResolver.registerInvalidator(id) { resolvedBaseUrl = null }
+    }
+
+    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl.trimEnd('/'))
+
+    private suspend fun activeBaseUrl(): String {
+        resolvedBaseUrl?.let { return it }
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = baseUrl,
+            contentNeedle = "/serien/",
+            appContext = appContext
+        )
+        resolvedBaseUrl = resolved
+        return resolved
+    }
+
+    private fun parseBase(): String = resolvedBaseUrl ?: baseUrl.trimEnd('/')
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/serien").ifBlank { fetchUrl(baseUrl) }
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/serien").ifBlank { fetchUrl(base) }
         parseStreamKisteSeriesList(html).map { it.copy(isMovie = false, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -50,7 +74,8 @@ class StreamKisteProvider(
     )
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/filme")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/filme")
         parseStreamKisteSeriesList(html).map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -58,12 +83,15 @@ class StreamKisteProvider(
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
+            val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
             val paths = listOf(
-                "$baseUrl/?s=$encoded",
-                "$baseUrl/search?q=$encoded"
+                "$base/?s=$encoded",
+                "$base/search?q=$encoded"
             )
             var results = emptyList<Series>()
             for (url in paths) {
@@ -72,7 +100,7 @@ class StreamKisteProvider(
                 if (results.isNotEmpty()) break
             }
             if (results.isEmpty()) {
-                val home = parseStreamKisteSeriesList(fetchUrl("$baseUrl/serien"))
+                val home = parseStreamKisteSeriesList(fetchUrl("$base/serien"))
                 val needle = query.trim().lowercase()
                 results = home.filter {
                     it.title.lowercase().contains(needle) || it.id.contains(needle.replace(' ', '-'))
@@ -86,10 +114,11 @@ class StreamKisteProvider(
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        var html = fetchUrl("$baseUrl/serien/$slug")
+        val base = activeBaseUrl()
+        var html = fetchUrl("$base/serien/$slug")
         var isMovie = false
         if (html.isBlank() || !html.contains("<h1")) {
-            val movieHtml = fetchUrl("$baseUrl/filme/$slug")
+            val movieHtml = fetchUrl("$base/filme/$slug")
             if (movieHtml.isNotBlank()) {
                 html = movieHtml
                 isMovie = true
@@ -102,7 +131,8 @@ class StreamKisteProvider(
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
-        val html = fetchUrl("$baseUrl/serien/$slug/staffel-$season")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/serien/$slug/staffel-$season")
         parseStreamKisteEpisodes(html, slug, season)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -110,12 +140,13 @@ class StreamKisteProvider(
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
+        val base = activeBaseUrl()
         val url = if (episode.episodeUrl.startsWith("http")) {
             episode.episodeUrl
         } else if (episode.episodeUrl.startsWith("/")) {
-            baseUrl + episode.episodeUrl
+            base + episode.episodeUrl
         } else {
-            "$baseUrl/serien/${episode.slug}/staffel-${episode.season}/episode-${episode.number}"
+            "$base/serien/${episode.slug}/staffel-${episode.season}/episode-${episode.number}"
         }
         val html = fetchUrl(url)
         parseStreamKisteHosters(html)
@@ -132,19 +163,21 @@ class StreamKisteProvider(
     )
 
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val base = activeBaseUrl()
         val path = when {
             page <= 0 -> "/serien"
             else -> "/serien?page=${page + 1}"
         }
-        parseStreamKisteSeriesList(fetchUrl("$baseUrl$path")).map { it.copy(isMovie = false, providerId = id) }
+        parseStreamKisteSeriesList(fetchUrl(base + path)).map { it.copy(isMovie = false, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<com.novastream.app.data.model.LatestEpisode>> = runCatching {
-        val html = fetchUrl(baseUrl)
-        val doc = Jsoup.parse(html, baseUrl)
+        val base = activeBaseUrl()
+        val html = fetchUrl(base)
+        val doc = Jsoup.parse(html, parseBase())
         val results = mutableListOf<com.novastream.app.data.model.LatestEpisode>()
         for (a in doc.select("a[href*=/serien/]")) {
             val href = a.absUrl("href")
@@ -171,13 +204,15 @@ class StreamKisteProvider(
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
-    private suspend fun fetchUrl(url: String): String =
-        ProviderHttp.fetch(url, referer = baseUrl + "/", webViewFallback = true)
+    private suspend fun fetchUrl(url: String): String {
+        val base = activeBaseUrl()
+        return ProviderHttp.fetch(url, referer = base + "/", webViewFallback = true)
+    }
 
     /** Parst eine Liste von Serien/Filmen. */
     private fun parseStreamKisteSeriesList(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val results = linkedMapOf<String, Series>()
 
         // Phase 1: Links mit /serien/ oder /filme/ Pfad
@@ -236,7 +271,7 @@ class StreamKisteProvider(
             val detailUrl = if (isMovie) "/filme/$slug" else "/serien/$slug"
             return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = detailUrl, isMovie = isMovie) to emptyList()
         }
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
 
         val title = doc.selectFirst("h1")?.text()?.trim()
             ?: doc.selectFirst("h2")?.text()?.trim()
@@ -323,7 +358,7 @@ class StreamKisteProvider(
     /** Parst Episoden. */
     private fun parseStreamKisteEpisodes(html: String, slug: String, season: Int): List<Episode> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         return parseStreamKisteEpisodesFromDoc(doc, slug, season)
     }
 
@@ -383,7 +418,7 @@ class StreamKisteProvider(
     /** Parst Hoster. */
     private fun parseStreamKisteHosters(html: String): List<HosterLink> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
 
@@ -456,7 +491,7 @@ class StreamKisteProvider(
             val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
                 .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else baseUrl + src
+                return if (src.startsWith("http")) src else parseBase() + src
             }
         }
         return null
@@ -469,7 +504,7 @@ class StreamKisteProvider(
             val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
                 .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
-                return if (src.startsWith("http")) src else baseUrl + src
+                return if (src.startsWith("http")) src else parseBase() + src
             }
         }
         // og:image

@@ -59,25 +59,24 @@ open class SerienStreamProvider(
     @Volatile
     private var cachedApiBase: String? = null
 
+    init {
+        ProviderDomainResolver.registerInvalidator(id) {
+            resolvedBaseUrl = null
+            cachedApi = null
+            cachedApiBase = null
+        }
+    }
+
     private suspend fun activeBaseUrl(): String {
         resolvedBaseUrl?.let { return it }
-        val mirrors = ProviderDomainManager.alternateDomains(id).ifEmpty { listOf(baseUrl) }
-        val ctx = appContext
-        val stored = if (ctx != null) {
-            ProviderDomainManager.getResolvedBaseUrl(ctx, id, baseUrl)
-        } else {
-            null
-        }
-        val resolved = ProviderHttp.resolveWorkingBase(
-            mirrors.ifEmpty { listOf(stored ?: baseUrl) },
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = baseUrl,
             contentNeedle = "/serie/",
-            webViewFallback = true
-        ) ?: stored ?: baseUrl
-        resolvedBaseUrl = resolved.trimEnd('/')
-        if (ctx != null && resolvedBaseUrl != stored) {
-            ProviderDomainManager.setResolvedBaseUrl(ctx, id, resolvedBaseUrl!!)
-        }
-        return resolvedBaseUrl!!
+            appContext = appContext
+        )
+        resolvedBaseUrl = resolved
+        return resolved
     }
 
     private suspend fun api(): NovaStreamApi {

@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.api.KinoGerApi
 import com.novastream.app.data.api.KinoGerScraper
 import com.novastream.app.data.api.NetworkModule
@@ -33,8 +34,50 @@ class KinoGerProvider(
     override val id: String = "kinoger",
     override val displayName: String = "KinoGer",
     override val baseUrl: String = "https://kinoger.to",
-    override val supportsSeries: Boolean = true
+    override val supportsSeries: Boolean = true,
+    private val appContext: Context? = null
 ) : StreamingProvider {
+
+    @Volatile
+    private var resolvedBaseUrl: String? = null
+
+    @Volatile
+    private var cachedApi: KinoGerApi? = null
+
+    @Volatile
+    private var cachedApiBase: String? = null
+
+    init {
+        ProviderDomainResolver.registerInvalidator(id) {
+            resolvedBaseUrl = null
+            cachedApi = null
+            cachedApiBase = null
+            clearCache()
+        }
+    }
+
+    private suspend fun activeBaseUrl(): String {
+        resolvedBaseUrl?.let { return it }
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = baseUrl,
+            contentNeedle = "/stream/",
+            appContext = appContext
+        )
+        resolvedBaseUrl = resolved
+        return resolved
+    }
+
+    private suspend fun api(): KinoGerApi {
+        val base = activeBaseUrl()
+        cachedApi?.let { if (cachedApiBase == base) return it }
+        return createApi(base).also {
+            cachedApi = it
+            cachedApiBase = base
+        }
+    }
+
+    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl)
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String = "Filme & Serien"
@@ -46,9 +89,6 @@ class KinoGerProvider(
         com.novastream.app.data.model.Genre("thriller", "Thriller"),
         com.novastream.app.data.model.Genre("fantasy", "Fantasy")
     )
-
-    private val api: KinoGerApi = createApi(baseUrl)
-    private val hosterResolver = HosterResolver(baseUrl = baseUrl)
 
     // LRU Cache mit maximal 20 Einträgen (verhindert unbounded Memory Growth)
     private val detailCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
@@ -68,8 +108,8 @@ class KinoGerProvider(
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val series = KinoGerScraper.parseSeriesList(api.seriesHome())
-        val movies = KinoGerScraper.parseSeriesList(api.movies()).map { it.copy(isMovie = true) }
+        val series = KinoGerScraper.parseSeriesList(api().seriesHome())
+        val movies = KinoGerScraper.parseSeriesList(api().movies()).map { it.copy(isMovie = true) }
         (series + movies).distinctBy { it.id }.map { it.copy(providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -78,7 +118,7 @@ class KinoGerProvider(
 
     /** Lädt Filme (nicht-Serien). */
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api.movies()).map { it.copy(isMovie = true, providerId = id) }
+        KinoGerScraper.parseSeriesList(api().movies()).map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -86,7 +126,7 @@ class KinoGerProvider(
 
     /** Lädt TV-Shows. */
     suspend fun loadTvShows(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api.tvShows())
+        KinoGerScraper.parseSeriesList(api().tvShows())
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -94,7 +134,7 @@ class KinoGerProvider(
 
     /** Lädt Serien mit Pagination. */
     suspend fun loadSeriesPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api.seriesPage(page.coerceAtLeast(1)))
+        KinoGerScraper.parseSeriesList(api().seriesPage(page.coerceAtLeast(1)))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -103,16 +143,18 @@ class KinoGerProvider(
     /** Lädt Genre mit Pagination. */
     suspend fun loadGenrePaged(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         if (genre.isBlank()) return@runCatching emptyList()
-        KinoGerScraper.parseSeriesList(api.genrePage(genre.trim(), page.coerceAtLeast(1)))
+        KinoGerScraper.parseSeriesList(api().genrePage(genre.trim(), page.coerceAtLeast(1)))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
-            KinoGerScraper.parseSeriesList(api.search(query = query.trim()))
+            KinoGerScraper.parseSeriesList(api().search(query = query.trim()))
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -171,7 +213,7 @@ class KinoGerProvider(
             detailCache[slug]?.let { return it }
         }
         // Cache miss - lade
-        val html = api.raw("stream/$slug.html")
+        val html = api().raw("stream/$slug.html")
         // Nur cachen wenn HTML nicht leer ist
         if (html.isNotBlank()) {
             synchronized(cacheLock) {
