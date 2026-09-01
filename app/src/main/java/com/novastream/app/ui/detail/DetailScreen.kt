@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,8 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
@@ -49,6 +51,7 @@ import com.novastream.app.data.model.Episode
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.SectionHeader
+import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.theme.*
 
@@ -56,9 +59,10 @@ import com.novastream.app.ui.theme.*
 @Composable
 fun DetailScreen(
     onBack: () -> Unit,
-    onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit
+    onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit,
+    onRelatedClick: (String) -> Unit = {}
 ) {
-    val vm: DetailViewModel = viewModel()
+    val vm: DetailViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val series = state.series
 
@@ -78,7 +82,8 @@ fun DetailScreen(
                 onRemoveProgress = vm::removeProgress,
                 onToggleWatched = vm::toggleEpisodeWatched,
                 onMarkSeasonWatched = vm::markSeasonAsWatched,
-                onMarkSeasonUnwatched = vm::markSeasonAsUnwatched
+                onMarkSeasonUnwatched = vm::markSeasonAsUnwatched,
+                onRelatedClick = onRelatedClick
             )
         }
     }
@@ -98,7 +103,8 @@ private fun DetailContent(
     onRemoveProgress: (String) -> Unit,
     onToggleWatched: (Int, Int, String) -> Unit,
     onMarkSeasonWatched: (Int) -> Unit,
-    onMarkSeasonUnwatched: (Int) -> Unit
+    onMarkSeasonUnwatched: (Int) -> Unit,
+    onRelatedClick: (String) -> Unit
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -264,6 +270,62 @@ private fun DetailContent(
                             tint = if (state.inWatchlist) Primary else TextSecondary,
                             modifier = Modifier.size(24.dp)
                         )
+                    }
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(BgSurfaceElevated)
+                            .clickable {
+                                val deepLink = "novastream://detail/$slug"
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "Schau dir ${series.title} auf NovaStream an: $deepLink")
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Teilen"))
+                            }
+                            .focusable(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Teilen",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                if (!state.trailerUrl.isNullOrBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BgSurfaceElevated)
+                            .clickable {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(state.trailerUrl)
+                                )
+                                context.startActivity(intent)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.SmartDisplay,
+                                contentDescription = null,
+                                tint = Primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Trailer ansehen",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
                     }
                 }
                 series.description?.let { desc ->
@@ -531,6 +593,24 @@ private fun DetailContent(
 
         item { Spacer(Modifier.height(40.dp)) }
         } // end !series.isMovie
+
+        if (state.relatedTitles.isNotEmpty()) {
+            item { SectionHeader("Ähnliche Titel") }
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(state.relatedTitles, key = { it.id }) { related ->
+                        SeriesPosterCard(
+                            series = related,
+                            onClick = { onRelatedClick(related.id) }
+                        )
+                    }
+                }
+            }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
 
         if (series.isMovie) {
             item { Spacer(Modifier.height(40.dp)) }

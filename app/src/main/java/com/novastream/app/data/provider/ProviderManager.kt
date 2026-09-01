@@ -71,7 +71,8 @@ object ProviderManager {
             baseUrl = it.baseUrl,
             supportsSeries = it.supportsSeries,
             supportsMovies = it.supportsMovies,
-            catalogHint = it.catalogHint
+            catalogHint = it.catalogHint,
+            capabilities = it.capabilities()
         )
     }
 
@@ -95,7 +96,8 @@ data class ProviderInfo(
     val baseUrl: String,
     val supportsSeries: Boolean,
     val supportsMovies: Boolean = !supportsSeries,
-    val catalogHint: String? = null
+    val catalogHint: String? = null,
+    val capabilities: ProviderCapabilities = ProviderCapabilities()
 ) {
     val hostLabel: String
         get() = try {

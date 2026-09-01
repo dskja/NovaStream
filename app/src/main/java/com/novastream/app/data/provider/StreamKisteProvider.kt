@@ -115,6 +115,44 @@ class StreamKisteProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val path = when {
+            page <= 0 -> "/serien"
+            else -> "/serien?page=${page + 1}"
+        }
+        parseStreamKisteSeriesList(fetchUrl("$baseUrl$path")).map { it.copy(isMovie = false, providerId = id) }
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<com.novastream.app.data.model.LatestEpisode>> = runCatching {
+        val html = fetchUrl(baseUrl)
+        val doc = Jsoup.parse(html, baseUrl)
+        val results = mutableListOf<com.novastream.app.data.model.LatestEpisode>()
+        for (a in doc.select("a[href*=/serien/]")) {
+            val href = a.absUrl("href")
+            val slug = extractStreamKisteSlug(href) ?: continue
+            if (href.contains("/staffel-") || href.contains("/episode-")) continue
+            val title = a.text().trim().ifBlank { slugToTitle(slug) }
+            if (results.any { it.seriesSlug == slug }) continue
+            results.add(
+                com.novastream.app.data.model.LatestEpisode(
+                    seriesSlug = slug,
+                    seriesTitle = title,
+                    season = 1,
+                    episode = 1,
+                    coverUrl = findStreamKisteCover(a)
+                )
+            )
+            if (results.size >= 24) break
+        }
+        results
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
     private suspend fun fetchUrl(url: String): String {

@@ -17,7 +17,9 @@ import com.novastream.app.ui.navigation.NovaStreamNavHost
 import com.novastream.app.ui.theme.NovaStreamTheme
 import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.util.VoeWebViewResolver
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -38,15 +40,28 @@ class MainActivity : ComponentActivity() {
             val appSettings = remember { com.novastream.app.data.prefs.AppSettings(this) }
             val dynamicColor by appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = true)
             val isTv = remember { TvUtils.isTvDevice(this) }
+            val deepLinkSlug = remember(intent) { parseDetailDeepLink(intent) }
             NovaStreamTheme(useDynamicColor = dynamicColor, isTvDevice = isTv) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    NovaStreamNavHost()
+                    NovaStreamNavHost(deepLinkSlug = deepLinkSlug)
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
+    private fun parseDetailDeepLink(intent: android.content.Intent?): String? {
+        val uri = intent?.data ?: return null
+        if (uri.scheme != "novastream" || uri.host != "detail") return null
+        return uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: uri.lastPathSegment?.takeIf { it.isNotBlank() }
     }
 
     override fun onDestroy() {

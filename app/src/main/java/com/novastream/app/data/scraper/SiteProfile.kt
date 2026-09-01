@@ -24,6 +24,12 @@ data class SiteProfile(
     val episodeLinkPattern: String = "",
     val hosterSelector: String = "iframe[src], a[href*=embed], a[href*=player], [data-play-url], [data-src]",
     val genrePathTemplate: String = "/genre/{genre}",
+    /** Paginierte Katalog-URL; {page} ist 1-basiert. */
+    val catalogPageTemplate: String = "",
+    /** Paginierte Genre-URL; {genre} und {page}. */
+    val genrePageTemplate: String = "",
+    /** Dedizierter Film-Katalog-Pfad. */
+    val moviePath: String = "",
     val supportsSeries: Boolean = true,
     val isMovieFocused: Boolean = false,
     /** True wenn der Katalog auch Filme enthält (z.B. /movie/-Links). */
@@ -51,7 +57,10 @@ object SiteProfiles {
         detailTitleSelector = "h1, .film-name, title",
         detailDescriptionSelector = ".description, .film-description, .plot-text, meta[name=description]",
         episodeLinkSelector = "a[href*=episode], a[href*=-ep-], .episodes-ul a",
-        hosterSelector = "iframe[src], .watch_block iframe, #watch iframe, a[data-video], [data-link]"
+        hosterSelector = "iframe[src], .watch_block iframe, #watch iframe, a[data-video], [data-link]",
+        catalogPageTemplate = "/series/page/{page}",
+        genrePageTemplate = "/series/page/{page}",
+        moviePath = "/movie/"
     )
 
     val cinezo = SiteProfile(
@@ -66,7 +75,9 @@ object SiteProfiles {
         detailTitleSelector = "h1",
         detailDescriptionSelector = ".overview, .description, meta[name=description]",
         episodeLinkSelector = "a[href*=/season/], button[data-season], [data-episode]",
-        hosterSelector = "iframe[src], [data-src]"
+        hosterSelector = "iframe[src], [data-src]",
+        catalogPageTemplate = "/?page={page}",
+        moviePath = "/movie/"
     )
 
     val showsSt = SiteProfile(
@@ -79,7 +90,9 @@ object SiteProfiles {
         seriesLinkPattern = "/watch/(tv|movie)/(\\d+)",
         slugRegex = "/watch/(tv|movie)/(\\d+)",
         detailTitleSelector = "h1, title",
-        hosterSelector = "iframe[src]"
+        hosterSelector = "iframe[src]",
+        catalogPageTemplate = "/?page={page}",
+        moviePath = "/watch/movie/"
     )
 
     val phantomFlix = SiteProfile(
@@ -91,7 +104,9 @@ object SiteProfiles {
         seriesLinkSelector = "a[href*=/watch/], a[href*=/movie/], a[href*=/tv/]",
         seriesLinkPattern = "/(?:watch|movie|tv)/([\\w-]+)",
         slugRegex = "/(?:watch|movie|tv)/([\\w-]+)",
-        hosterSelector = "iframe[src]"
+        hosterSelector = "iframe[src]",
+        catalogPageTemplate = "/?page={page}",
+        moviePath = "/movie/"
     )
 
     val flixer = SiteProfile(
@@ -103,7 +118,9 @@ object SiteProfiles {
         seriesLinkSelector = "a[href*=/show/], a[href*=/movie/], a[href*=/tv/]",
         seriesLinkPattern = "/(?:show|movie|tv)/([\\w-]+)",
         slugRegex = "/(?:show|movie|tv)/([\\w-]+)",
-        hosterSelector = "iframe[src]"
+        hosterSelector = "iframe[src]",
+        catalogPageTemplate = "/shows?page={page}",
+        moviePath = "/movie/"
     )
 
     val dramaCool = SiteProfile(
@@ -117,7 +134,10 @@ object SiteProfiles {
         slugRegex = "https?://[^/]+/([\\w-]+?)(?:-episode-\\d+|-full-movie)?/?",
         detailTitleSelector = "h1, .title",
         episodeLinkSelector = "ul.list-episode-item-wrap.all-episode li a, a[href*=-episode-]",
-        hosterSelector = "iframe[src], .watch_block iframe, #watch iframe, .anime_muti_link a"
+        hosterSelector = "iframe[src], .watch_block iframe, #watch iframe, .anime_muti_link a",
+        catalogPageTemplate = "/page/{page}/",
+        genrePageTemplate = "/?s={genre}&page={page}",
+        moviePath = "/"
     )
 
     val pressPlay = SiteProfile(
@@ -129,7 +149,9 @@ object SiteProfiles {
         seriesLinkSelector = "a[href*=/movie/], a[href*=/tv/], a[href*=/watch/]",
         seriesLinkPattern = "/(?:movie|tv|watch)/([\\w-]+)",
         slugRegex = "/(?:movie|tv|watch)/([\\w-]+)",
-        hosterSelector = "iframe[src]"
+        hosterSelector = "iframe[src]",
+        catalogPageTemplate = "/?page={page}",
+        moviePath = "/movie/"
     )
 
     val all: List<SiteProfile> = listOf(

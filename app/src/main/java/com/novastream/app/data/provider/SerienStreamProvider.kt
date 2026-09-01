@@ -172,9 +172,22 @@ open class SerienStreamProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> =
-        if (page <= 0) loadExtendedCatalog()
-        else StreamingProvider.ProviderResult.Success(emptyList())
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        if (page <= 0) {
+            val html = api.catalog()
+            parseWithBase { tagAll(NovaStreamScraper.parseSeriesList(html)) }
+        } else {
+            val html = try {
+                api.catalogPaged(page + 1)
+            } catch (_: Exception) {
+                api.raw("serien/page/${page + 1}")
+            }
+            parseWithBase { tagAll(NovaStreamScraper.parseSeriesList(html)) }
+        }
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
         loadGenrePaged(genre, page + 1)

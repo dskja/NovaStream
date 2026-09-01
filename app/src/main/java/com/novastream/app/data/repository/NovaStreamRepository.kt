@@ -1,5 +1,11 @@
 package com.novastream.app.data.repository
 
+import android.content.Context
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.novastream.app.data.db.CatalogCacheEntry
+import com.novastream.app.data.db.CatalogCacheDao
+import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HomeCatalog
 import com.novastream.app.data.model.HosterLink
@@ -8,7 +14,11 @@ import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.AniWorldProvider
+import com.novastream.app.data.provider.FreeCatalogProvider
+import com.novastream.app.data.provider.MegaKinoProvider
 import com.novastream.app.data.provider.SerienStreamProvider
+import com.novastream.app.data.provider.StreamKisteProvider
 import com.novastream.app.data.provider.StreamingProvider
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -17,8 +27,32 @@ import kotlinx.coroutines.delay
 /**
  * Repository: kapselt den aktiven Streaming-Provider.
  * Liest den aktiven Provider bei JEDEM Aufruf von ActiveProvider.
+ * Cached Katalog- und Detail-Responses in Room mit TTL.
  */
-class NovaStreamRepository {
+class NovaStreamRepository private constructor(
+    private val cacheDao: CatalogCacheDao?
+) {
+
+    private val gson = Gson()
+
+    companion object {
+        private const val TTL_HOME_MS = 60L * 60 * 1000
+        private const val TTL_CATALOG_MS = 45L * 60 * 1000
+        private const val TTL_DETAIL_MS = 30L * 60 * 1000
+        private const val TTL_SEARCH_MS = 15L * 60 * 1000
+
+        @Volatile
+        private var INSTANCE: NovaStreamRepository? = null
+
+        fun get(context: Context): NovaStreamRepository =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: NovaStreamRepository(
+                    NovaStreamDatabase.get(context.applicationContext).catalogCacheDao()
+                ).also { INSTANCE = it }
+            }
+
+        fun forCache(cacheDao: CatalogCacheDao?): NovaStreamRepository = NovaStreamRepository(cacheDao)
+    }
 
     private val provider: StreamingProvider get() = ActiveProvider.get()
 
@@ -30,14 +64,15 @@ class NovaStreamRepository {
     suspend fun loadHome(): RepoResult<List<Series>> =
         withRetry { provider.loadHome().tag().toRepoResult() }
 
-    /**
-     * Lädt Home parallel mit Popular/Newest/Genres wenn der Provider das unterstützt.
-     * Für SerienStream: echte Sektionen statt Round-Robin.
-     */
     suspend fun loadHomeCatalog(): RepoResult<HomeCatalog> = withRetry {
         val p = provider
         val expectedId = p.id
-        if (p is SerienStreamProvider) {
+        val cacheKey = CatalogCacheEntry.key(expectedId, CatalogCacheEntry.TYPE_HOME)
+        getCachedHome(cacheKey)?.let { cached ->
+            return@withRetry RepoResult.Success(cached.tagAll(expectedId))
+        }
+
+        val result = if (p is SerienStreamProvider) {
             p.loadHomeCatalog().map { it.tagAll(expectedId) }.toRepoResult()
         } else {
             coroutineScope {
@@ -63,47 +98,137 @@ class NovaStreamRepository {
                 )
             }
         }
+
+        if (result is RepoResult.Success) {
+            putCached(cacheKey, expectedId, CatalogCacheEntry.TYPE_HOME, result.data, TTL_HOME_MS)
+        }
+        result
     }
 
-    suspend fun loadGenre(genre: String): RepoResult<List<Series>> =
-        withRetry { provider.loadGenre(genre).tag().toRepoResult() }
+    suspend fun loadGenre(genre: String): RepoResult<List<Series>> = withRetry {
+        val pid = provider.id
+        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_GENRE, genre)
+        getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
+        val result = provider.loadGenre(genre).tag().toRepoResult()
+        if (result is RepoResult.Success) {
+            putCached(cacheKey, pid, CatalogCacheEntry.TYPE_GENRE, result.data, TTL_CATALOG_MS)
+        }
+        result
+    }
 
-    suspend fun loadNewest(): RepoResult<List<Series>> =
-        withRetry { provider.loadNewest().tag().toRepoResult() }
+    suspend fun loadNewest(): RepoResult<List<Series>> = cachedListCall(CatalogCacheEntry.TYPE_LIST, "newest") {
+        provider.loadNewest().tag().toRepoResult()
+    }
 
-    suspend fun loadPopular(): RepoResult<List<Series>> =
-        withRetry { provider.loadPopular().tag().toRepoResult() }
+    suspend fun loadPopular(): RepoResult<List<Series>> = cachedListCall(CatalogCacheEntry.TYPE_LIST, "popular") {
+        provider.loadPopular().tag().toRepoResult()
+    }
 
-    suspend fun loadMovies(): RepoResult<List<Series>> =
-        withRetry { provider.loadMovies().tag().toRepoResult() }
+    suspend fun loadMovies(): RepoResult<List<Series>> = cachedListCall(CatalogCacheEntry.TYPE_LIST, "movies") {
+        provider.loadMovies().tag().toRepoResult()
+    }
 
-    suspend fun loadExtendedCatalog(): RepoResult<List<Series>> =
-        withRetry { provider.loadExtendedCatalog().tag().toRepoResult() }
+    suspend fun loadExtendedCatalog(): RepoResult<List<Series>> = cachedListCall(CatalogCacheEntry.TYPE_LIST, "extended") {
+        provider.loadExtendedCatalog().tag().toRepoResult()
+    }
 
-    suspend fun loadCatalogPage(page: Int): RepoResult<List<Series>> =
-        withRetry { provider.loadCatalogPage(page).tag().toRepoResult() }
+    suspend fun loadCatalogPage(page: Int): RepoResult<List<Series>> = withRetry {
+        val pid = provider.id
+        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_CATALOG, page.toString())
+        getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
+        val result = provider.loadCatalogPage(page).tag().toRepoResult()
+        if (result is RepoResult.Success) {
+            putCached(cacheKey, pid, CatalogCacheEntry.TYPE_CATALOG, result.data, TTL_CATALOG_MS)
+        }
+        result
+    }
 
-    suspend fun loadGenrePage(genre: String, page: Int): RepoResult<List<Series>> =
-        withRetry { provider.loadGenrePage(genre, page).tag().toRepoResult() }
+    suspend fun loadGenrePage(genre: String, page: Int): RepoResult<List<Series>> = withRetry {
+        val pid = provider.id
+        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_GENRE, genre, page.toString())
+        getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
+        val result = provider.loadGenrePage(genre, page).tag().toRepoResult()
+        if (result is RepoResult.Success) {
+            putCached(cacheKey, pid, CatalogCacheEntry.TYPE_GENRE, result.data, TTL_CATALOG_MS)
+        }
+        result
+    }
 
     suspend fun loadLatestEpisodes(): RepoResult<List<LatestEpisode>> = withRetry {
         val p = provider
-        if (p is SerienStreamProvider) {
-            p.loadLatestEpisodes().toRepoResult()
-        } else {
-            RepoResult.Success(emptyList())
+        when (p) {
+            is SerienStreamProvider -> p.loadLatestEpisodes().toRepoResult()
+            is AniWorldProvider -> p.loadLatestEpisodes().toRepoResult()
+            is MegaKinoProvider -> p.loadLatestEpisodes().toRepoResult()
+            is StreamKisteProvider -> p.loadLatestEpisodes().toRepoResult()
+            is FreeCatalogProvider -> run {
+                val newest = p.loadNewest().getOrNull().orEmpty()
+                RepoResult.Success(
+                    newest.take(24).map { s ->
+                        LatestEpisode(
+                            seriesSlug = s.id,
+                            seriesTitle = s.title,
+                            season = 1,
+                            episode = 1,
+                            coverUrl = s.coverUrl
+                        )
+                    }
+                )
+            }
+            else -> {
+                val fallback = p.loadNewest().getOrNull().orEmpty()
+                if (fallback.isNotEmpty()) {
+                    RepoResult.Success(
+                        fallback.take(24).map { s ->
+                            LatestEpisode(
+                                seriesSlug = s.id,
+                                seriesTitle = s.title,
+                                season = 1,
+                                episode = 1,
+                                coverUrl = s.coverUrl
+                            )
+                        }
+                    )
+                } else {
+                    RepoResult.Success(emptyList())
+                }
+            }
         }
     }
 
-    suspend fun search(query: String): RepoResult<List<Series>> =
-        withRetry { provider.search(query).tag().toRepoResult() }
-
-    suspend fun loadSeriesDetail(slug: String): RepoResult<Pair<Series, List<Season>>> =
-        withRetry {
-            provider.loadSeriesDetail(slug).map { (series, seasons) ->
-                series.copy(providerId = provider.id) to seasons
-            }.toRepoResult()
+    suspend fun search(query: String): RepoResult<List<Series>> = withRetry {
+        val pid = provider.id
+        val normalized = query.trim().lowercase()
+        if (normalized.isBlank()) return@withRetry RepoResult.Success(emptyList())
+        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_SEARCH, normalized)
+        getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
+        val result = provider.search(query).tag().toRepoResult()
+        if (result is RepoResult.Success) {
+            putCached(cacheKey, pid, CatalogCacheEntry.TYPE_SEARCH, result.data, TTL_SEARCH_MS)
         }
+        result
+    }
+
+    suspend fun loadSeriesDetail(slug: String): RepoResult<Pair<Series, List<Season>>> = withRetry {
+        val pid = provider.id
+        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_DETAIL, slug)
+        getCachedDetail(cacheKey)?.let { (series, seasons) ->
+            return@withRetry RepoResult.Success(series.copy(providerId = pid) to seasons)
+        }
+        val result = provider.loadSeriesDetail(slug).map { (series, seasons) ->
+            series.copy(providerId = pid) to seasons
+        }.toRepoResult()
+        if (result is RepoResult.Success) {
+            putCached(
+                cacheKey,
+                pid,
+                CatalogCacheEntry.TYPE_DETAIL,
+                DetailCache(result.data.first, result.data.second),
+                TTL_DETAIL_MS
+            )
+        }
+        result
+    }
 
     suspend fun loadSeason(slug: String, season: Int): RepoResult<List<Episode>> =
         withRetry { provider.loadSeason(slug, season).toRepoResult() }
@@ -113,6 +238,97 @@ class NovaStreamRepository {
 
     suspend fun resolveHoster(hoster: HosterLink): RepoResult<List<StreamSource>> =
         withRetry(maxRetries = 1) { provider.resolveHoster(hoster).toRepoResult() }
+
+    suspend fun purgeExpiredCache() {
+        try {
+            cacheDao?.deleteExpired()
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun cachedListCall(
+        type: String,
+        suffix: String,
+        block: suspend () -> RepoResult<List<Series>>
+    ): RepoResult<List<Series>> = withRetry {
+        val pid = provider.id
+        val cacheKey = CatalogCacheEntry.key(pid, type, suffix)
+        getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
+        val result = block()
+        if (result is RepoResult.Success) {
+            putCached(cacheKey, pid, type, result.data, TTL_CATALOG_MS)
+        }
+        result
+    }
+
+    private suspend fun getCachedHome(key: String): HomeCatalog? {
+        val dao = cacheDao ?: return null
+        val entry = dao.get(key) ?: return null
+        if (entry.isExpired) {
+            dao.delete(key)
+            return null
+        }
+        return try {
+            gson.fromJson(entry.payload, HomeCatalog::class.java)
+        } catch (_: Exception) {
+            dao.delete(key)
+            null
+        }
+    }
+
+    private suspend fun getCachedList(key: String): List<Series>? {
+        val dao = cacheDao ?: return null
+        val entry = dao.get(key) ?: return null
+        if (entry.isExpired) {
+            dao.delete(key)
+            return null
+        }
+        return try {
+            val type = object : TypeToken<List<Series>>() {}.type
+            gson.fromJson<List<Series>>(entry.payload, type)
+        } catch (_: Exception) {
+            dao.delete(key)
+            null
+        }
+    }
+
+    private suspend fun getCachedDetail(key: String): Pair<Series, List<Season>>? {
+        val dao = cacheDao ?: return null
+        val entry = dao.get(key) ?: return null
+        if (entry.isExpired) {
+            dao.delete(key)
+            return null
+        }
+        return try {
+            val cached = gson.fromJson(entry.payload, DetailCache::class.java)
+            cached.series to cached.seasons
+        } catch (_: Exception) {
+            dao.delete(key)
+            null
+        }
+    }
+
+    private suspend fun putCached(
+        key: String,
+        providerId: String,
+        cacheType: String,
+        data: Any,
+        ttlMs: Long
+    ) {
+        val dao = cacheDao ?: return
+        try {
+            val now = System.currentTimeMillis()
+            dao.upsert(
+                CatalogCacheEntry(
+                    cacheKey = key,
+                    providerId = providerId,
+                    cacheType = cacheType,
+                    payload = gson.toJson(data),
+                    cachedAt = now,
+                    expiresAt = now + ttlMs
+                )
+            )
+        } catch (_: Exception) {}
+    }
 
     private suspend fun <T> withRetry(
         maxRetries: Int = 2,
@@ -153,4 +369,6 @@ class NovaStreamRepository {
         topShows = topShows.tagAll(providerId),
         all = all.tagAll(providerId)
     )
+
+    private data class DetailCache(val series: Series, val seasons: List<Season>)
 }

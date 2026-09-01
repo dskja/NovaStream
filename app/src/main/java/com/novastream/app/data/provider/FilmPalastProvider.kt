@@ -158,6 +158,29 @@ class FilmPalastProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val path = when {
+            page <= 0 -> "/serien/view"
+            else -> "/serien/view?page=${page + 1}"
+        }
+        parseFilmPalastList(fetchUrl(baseUrl + path))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val basePath = when (genre.trim().lowercase()) {
+            "filme", "movies", "movie", "neu", "new" -> "/movies/new"
+            else -> "/serien/view"
+        }
+        val path = if (page <= 0) basePath else "$basePath?page=${page + 1}"
+        parseFilmPalastList(fetchUrl(baseUrl + path))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     // ─── Networking ─────────────────────────────────────────────────────────
 
     private suspend fun fetchUrl(url: String): String = withContext(Dispatchers.IO) {

@@ -67,7 +67,7 @@ data class SearchUiState(
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo = com.novastream.app.data.repository.NovaStreamRepository()
+    private val repo = com.novastream.app.data.repository.NovaStreamRepository.get(application)
 
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
@@ -310,7 +310,10 @@ fun SearchScreen(
                         items(6) { ShimmerPoster(Modifier.width(130.dp)) }
                     }
                 }
-                state.error != null -> PremiumError(state.error ?: "Unbekannter Fehler")
+                state.error != null -> PremiumError(
+                    state.error ?: "Unbekannter Fehler",
+                    onRetry = { vm.onQueryChange(state.query) }
+                )
                 state.query.isBlank() -> {
                     // Show recent searches + trending when query is blank
                     Column {

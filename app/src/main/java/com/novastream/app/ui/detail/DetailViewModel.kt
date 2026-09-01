@@ -1,8 +1,7 @@
 package com.novastream.app.ui.detail
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.meta.FreeMetaService
@@ -12,6 +11,8 @@ import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,7 +32,9 @@ data class DetailUiState(
     val metaCast: List<com.novastream.app.data.meta.MetaPerson> = emptyList(),
     val metaRating: Double? = null,
     val metaNetwork: String? = null,
-    val imdbId: String? = null
+    val imdbId: String? = null,
+    val trailerUrl: String? = null,
+    val relatedTitles: List<Series> = emptyList()
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -81,14 +84,14 @@ data class DetailUiState(
     }
 }
 
-class DetailViewModel(
-    application: Application,
-    savedStateHandle: SavedStateHandle
-) : AndroidViewModel(application) {
+@HiltViewModel
+class DetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val repo: NovaStreamRepository,
+    private val watchRepo: WatchRepository
+) : ViewModel() {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
-    private val repo = NovaStreamRepository()
-    private val watchRepo = WatchRepository.get(application)
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -132,6 +135,7 @@ class DetailViewModel(
                             it.copy(loading = false, series = series, seasons = seasons, error = null)
                         }
                         enrichMetadata(series)
+                        loadRelatedTitles(series)
                         val firstWithEps = seasons.indexOfFirst { it.episodes.isNotEmpty() }
                         if (firstWithEps >= 0) {
                             _state.update { it.copy(selectedSeasonIndex = firstWithEps) }
@@ -304,11 +308,40 @@ class DetailViewModel(
                         metaCast = meta.cast,
                         metaRating = meta.rating,
                         metaNetwork = meta.network,
-                        imdbId = meta.imdbId
+                        imdbId = meta.imdbId,
+                        trailerUrl = meta.trailerUrl
                     )
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "meta enrich failed", e)
+            }
+        }
+    }
+
+    private fun loadRelatedTitles(series: Series) {
+        viewModelScope.launch {
+            try {
+                val genre = series.genres.firstOrNull() ?: return@launch
+                val provider = ActiveProvider.get()
+                val genreSlug = provider.availableGenres
+                    .firstOrNull { g ->
+                        g.name.equals(genre, ignoreCase = true) ||
+                            g.slug.equals(genre, ignoreCase = true) ||
+                            genre.contains(g.name, ignoreCase = true)
+                    }
+                    ?.slug
+                    ?: genre.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+
+                val related = when (val res = repo.loadGenre(genreSlug)) {
+                    is NovaStreamRepository.RepoResult.Success ->
+                        res.data.filter { it.id != series.id }.distinctBy { it.id }.take(20)
+                    else -> emptyList()
+                }
+                if (related.isNotEmpty()) {
+                    _state.update { it.copy(relatedTitles = related) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "related titles failed", e)
             }
         }
     }

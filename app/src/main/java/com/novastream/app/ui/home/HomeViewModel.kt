@@ -1,17 +1,21 @@
 package com.novastream.app.ui.home
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import android.content.Context
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -43,15 +47,17 @@ data class HomeUiState(
     val latestEpisodes: List<LatestEpisode> = emptyList(),
     val continueWatching: List<WatchProgress> = emptyList(),
     val watchlist: List<WatchlistItem> = emptyList(),
+    val reduceMotion: Boolean = false,
     val error: String? = null
 )
 
-class HomeViewModel(
-    application: Application
-) : AndroidViewModel(application) {
-
-    private val repo = NovaStreamRepository()
-    private val watchRepo = WatchRepository.get(application)
+@HiltViewModel
+class HomeViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val repo: NovaStreamRepository,
+    private val watchRepo: WatchRepository,
+    private val appSettings: AppSettings
+) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
@@ -92,11 +98,20 @@ class HomeViewModel(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "watchlist flow error", e)
             }
         }
+        viewModelScope.launch {
+            try {
+                appSettings.reduceMotion.collect { enabled ->
+                    _state.update { it.copy(reduceMotion = enabled) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "reduceMotion flow error", e)
+            }
+        }
         // Kritisch: erst DataStore abwarten, ActiveProvider setzen, dann laden.
         // Verhindert SerienStream-Leaks bei AniWorld & Co.
         viewModelScope.launch {
             try {
-                ProviderManager.activeProviderIdFlow(application).collect { providerId ->
+                ProviderManager.activeProviderIdFlow(context).collect { providerId ->
                     ActiveProvider.setById(providerId)
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId

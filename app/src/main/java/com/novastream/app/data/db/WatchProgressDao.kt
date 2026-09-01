@@ -62,4 +62,10 @@ interface WatchProgressDao {
      */
     @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9 AND updatedAt < :cutoffTimestamp")
     suspend fun deleteOldCompleted(cutoffTimestamp: Long): Int
+
+    @Query("SELECT COUNT(*) FROM watch_progress WHERE providerId = 'unknown'")
+    suspend fun countUnknownProvider(): Int
+
+    @Query("DELETE FROM watch_progress WHERE providerId = 'unknown'")
+    suspend fun deleteUnknownProvider(): Int
 }
