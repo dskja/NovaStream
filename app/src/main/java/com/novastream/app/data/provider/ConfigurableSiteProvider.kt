@@ -43,8 +43,8 @@ open class ConfigurableSiteProvider(
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
         if (!supportsMovies) return StreamingProvider.ProviderResult.Success(emptyList())
         return runCatching {
-            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl + profile.homePath), profile)
-                .filter { it.isMovie || it.detailUrl.contains("/movie", ignoreCase = true) }
+            val path = profile.moviePath.ifBlank { profile.homePath }
+            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
                 .map { it.copy(isMovie = true) }
         }.toResult()
     }
@@ -136,6 +136,31 @@ open class ConfigurableSiteProvider(
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
+
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        if (page <= 0) {
+            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl + profile.homePath), profile)
+        } else {
+            val template = profile.catalogPageTemplate.ifBlank { "${profile.homePath}?page={page}" }
+            val path = template.replace("{page}", (page + 1).toString())
+            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+        }
+    }.toResult()
+
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        if (page <= 0) {
+            val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
+            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+        } else {
+            val template = profile.genrePageTemplate.ifBlank {
+                profile.genrePathTemplate + "?page={page}"
+            }
+            val path = template
+                .replace("{genre}", genre.trim())
+                .replace("{page}", (page + 1).toString())
+            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+        }
+    }.toResult()
 
     protected open fun resolveDetailUrl(slug: String): String {
         val base = profile.baseUrl.trimEnd('/')

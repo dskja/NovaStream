@@ -88,6 +88,12 @@ object FreeMetaService {
         seen.values.toList()
     }
 
+    /** Trailer-Link (IMDb Video Gallery) wenn IMDb-ID bekannt. */
+    fun trailerUrlFor(meta: MetaShow): String? {
+        val imdb = meta.imdbId?.takeIf { it.isNotBlank() } ?: return null
+        return "https://www.imdb.com/title/$imdb/videogallery/"
+    }
+
     suspend fun enrichByTitle(title: String, preferAnime: Boolean = false): MetaShow? {
         if (title.isBlank()) return null
         return try {
@@ -194,7 +200,9 @@ object FreeMetaService {
             language = obj.optString("language").takeIf { it.isNotBlank() && it != "null" },
             officialSite = obj.optString("officialSite").takeIf { it.isNotBlank() && it != "null" },
             cast = cast
-        )
+        ).let { show ->
+            show.copy(trailerUrl = trailerUrlFor(show))
+        }
     }
 
     private fun parseCast(embedded: JSONObject?): List<MetaPerson> {

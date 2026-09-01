@@ -15,32 +15,46 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.novastream.app.data.prefs.AppSettings
+import kotlinx.coroutines.launch
+import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.ui.components.PremiumBottomBar
 import com.novastream.app.ui.components.PremiumTopTabBar
 import com.novastream.app.ui.detail.DetailScreen
 import com.novastream.app.ui.browse.BrowseScreen
+import com.novastream.app.ui.continuewatching.ContinueWatchingScreen
 import com.novastream.app.ui.home.HomeScreen
+import com.novastream.app.ui.onboarding.OnboardingScreen
 import com.novastream.app.ui.player.PlayerScreen
 import com.novastream.app.ui.search.SearchScreen
 import com.novastream.app.ui.settings.SettingsScreen
 import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.watchlist.WatchlistScreen
+import kotlinx.coroutines.launch
 
 object Routes {
+    const val ONBOARDING = "onboarding"
     const val HOME = "home"
     const val WATCHLIST = "watchlist"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
-    const val BROWSE = "browse"
+    const val BROWSE = "browse?section={section}&genre={genre}&filter={filter}"
+    const val CONTINUE_WATCHING = "continue_watching"
     const val DETAIL = "detail/{slug}"
     const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}"
+
+    fun browse(section: String = "", genre: String? = null, filter: String? = null): String {
+        fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
+        return "browse?section=${enc(section)}&genre=${enc(genre.orEmpty())}&filter=${enc(filter.orEmpty())}"
+    }
 
     fun detail(slug: String) = "detail/$slug"
     fun player(
@@ -60,7 +74,7 @@ object Routes {
     }
 
     /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
-    val mainRoutes = listOf(HOME, BROWSE, WATCHLIST, SEARCH, SETTINGS)
+    val mainRoutes = listOf(HOME, WATCHLIST, SEARCH, SETTINGS, "browse")
 
     /** True wenn eine Route eine der Haupt-Routes ist. */
     fun isMainRoute(route: String?): Boolean = route != null && route in mainRoutes
@@ -73,16 +87,32 @@ object Routes {
 }
 
 @Composable
-fun NovaStreamNavHost() {
+fun NovaStreamNavHost(deepLinkSlug: String? = null) {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route?.substringBefore("?")
     val context = LocalContext.current
+    val appSettings = remember { AppSettings(context) }
+    val onboardingComplete by appSettings.onboardingComplete.collectAsStateWithLifecycle(initialValue = false)
+    val watchRepo = remember { WatchRepository.get(context) }
+    val watchlistItems by watchRepo.watchlist().collectAsStateWithLifecycle(initialValue = emptyList())
+    val watchlistCount = remember(watchlistItems) {
+        val pid = ActiveProvider.id
+        watchlistItems.count { it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown" }
+    }
+
+    LaunchedEffect(deepLinkSlug, onboardingComplete) {
+        if (onboardingComplete && !deepLinkSlug.isNullOrBlank()) {
+            nav.navigate(Routes.detail(deepLinkSlug)) {
+                launchSingleTop = true
+            }
+        }
+    }
 
     // TV detection - auf TV Geräten wird eine Top Tab Bar statt Bottom Bar verwendet
     val isTvDevice = remember { TvUtils.isTvDevice(context) }
 
-    val showNavBars = Routes.isMainRoute(currentRoute)
+    val showNavBars = Routes.isMainRoute(currentRoute) && currentRoute != Routes.ONBOARDING
 
     // Double-back to exit on home screen
     val snackbarHostState = remember { SnackbarHostState() }
@@ -129,9 +159,11 @@ fun NovaStreamNavHost() {
                 // Phone/Tablet: Bottom Bar
                 PremiumBottomBar(
                     currentRoute = currentRoute ?: Routes.HOME,
+                    watchlistCount = watchlistCount,
                     onNavigate = { route ->
-                        if (route != currentRoute) {
-                            nav.navigate(route) {
+                        val target = if (route == "browse") Routes.browse() else route
+                        if (currentRoute != route) {
+                            nav.navigate(target) {
                                 popUpTo(Routes.HOME) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
@@ -144,21 +176,61 @@ fun NovaStreamNavHost() {
     ) { padding ->
         NavHost(
             navController = nav,
-            startDestination = Routes.HOME,
+            startDestination = if (onboardingComplete) Routes.HOME else Routes.ONBOARDING,
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
+            composable(Routes.ONBOARDING) {
+                OnboardingScreen(
+                    onComplete = {
+                        nav.navigate(Routes.HOME) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+
             composable(Routes.HOME) {
                 HomeScreen(
                     onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) },
                     onContinueWatchingClick = { slug, season, episode, title, seriesTitle, coverUrl, isMovie ->
                         nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl, isMovie))
+                    },
+                    onBrowseSection = { section, genre ->
+                        nav.navigate(Routes.browse(section = section, genre = genre))
+                    },
+                    onSeeAllWatchlist = {
+                        nav.navigate(Routes.WATCHLIST) {
+                            popUpTo(Routes.HOME) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onSeeAllContinueWatching = {
+                        nav.navigate(Routes.CONTINUE_WATCHING)
                     }
                 )
             }
 
-            composable(Routes.BROWSE) {
+            composable(
+                route = Routes.BROWSE,
+                arguments = listOf(
+                    navArgument("section") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("genre") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("filter") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) {
                 BrowseScreen(
                     onSeriesClick = { slug -> nav.navigate(Routes.detail(slug)) }
+                )
+            }
+
+            composable(Routes.CONTINUE_WATCHING) {
+                ContinueWatchingScreen(
+                    onBack = { nav.popBackStack() },
+                    onPlay = { slug, season, episode, title, seriesTitle, coverUrl, isMovie ->
+                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl, isMovie))
+                    }
                 )
             }
 
@@ -208,6 +280,9 @@ fun NovaStreamNavHost() {
                     onBack = { nav.popBackStack() },
                     onPlay = { slug, season, episode, title, seriesTitle, coverUrl, isMovie ->
                         nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl, isMovie))
+                    },
+                    onRelatedClick = { relatedSlug ->
+                        nav.navigate(Routes.detail(relatedSlug)) { launchSingleTop = true }
                     }
                 )
             }
@@ -260,6 +335,11 @@ fun NovaStreamNavHost() {
                 PlayerScreen(
                     onBack = { nav.popBackStack() },
                     onNextEpisode = { season, episode, title ->
+                        nav.navigate(Routes.player(slugArg, season, episode, title, seriesTitleArg, coverUrlArg)) {
+                            popUpTo(Routes.PLAYER) { inclusive = true }
+                        }
+                    },
+                    onPreviousEpisode = { season, episode, title ->
                         nav.navigate(Routes.player(slugArg, season, episode, title, seriesTitleArg, coverUrlArg)) {
                             popUpTo(Routes.PLAYER) { inclusive = true }
                         }

@@ -20,6 +20,7 @@ data class MetaShow(
     val runtime: Int? = null,
     val language: String? = null,
     val officialSite: String? = null,
+    val trailerUrl: String? = null,
     val cast: List<MetaPerson> = emptyList(),
     val seasonCount: Int? = null
 ) {

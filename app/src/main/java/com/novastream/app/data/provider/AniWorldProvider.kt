@@ -197,7 +197,42 @@ class AniWorldProvider(
     )
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
-        if (page <= 0) loadGenre(genre) else StreamingProvider.ProviderResult.Success(emptyList())
+        if (page <= 0) loadGenre(genre) else runCatching {
+            val slug = genre.trim().lowercase()
+            tagAll(parseSeriesListAniWorld(fetchUrl("$baseUrl/genre/$slug?page=${page + 1}")))
+        }.fold(
+            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+        )
+
+    suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<com.novastream.app.data.model.LatestEpisode>> = runCatching {
+        val html = fetchUrl("$baseUrl/neue-episode").ifBlank { fetchUrl("$baseUrl/neu") }
+        val doc = org.jsoup.Jsoup.parse(html, baseUrl)
+        val results = mutableListOf<com.novastream.app.data.model.LatestEpisode>()
+        for (a in doc.select("a[href*=/anime/stream/]")) {
+            val href = a.absUrl("href")
+            val m = Regex("""/anime/stream/([^/]+)/staffel-(\d+)/episode-(\d+)""").find(href) ?: continue
+            val slug = m.groupValues[1]
+            val season = m.groupValues[2].toIntOrNull() ?: 1
+            val ep = m.groupValues[3].toIntOrNull() ?: 1
+            val title = a.text().trim().ifBlank { slug }
+            if (results.any { it.seriesSlug == slug && it.season == season && it.episode == ep }) continue
+            results.add(
+                com.novastream.app.data.model.LatestEpisode(
+                    seriesSlug = slug,
+                    seriesTitle = title.substringBefore(" S").trim(),
+                    season = season,
+                    episode = ep,
+                    coverUrl = a.selectFirst("img")?.absUrl("src")
+                )
+            )
+            if (results.size >= 24) break
+        }
+        results
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
 
     private suspend fun loadByLetterInternal(letter: String): List<Series> {
         if (letter.isBlank()) return emptyList()

@@ -2,9 +2,7 @@ package com.novastream.app.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,22 +21,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
-import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.novastream.app.R
 import com.novastream.app.data.model.Series
 import com.novastream.app.ui.theme.*
+import com.novastream.app.ui.tv.TvUtils
+import com.novastream.app.ui.tv.tvFocusRing
+import com.novastream.app.ui.tv.tvFocusable
 
 // ─── Shimmer Loading ────────────────────────────────────────────────────────
 
@@ -109,17 +113,31 @@ fun SeriesPosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     cardWidth: Int = 130,
-    inWatchlist: Boolean = false
+    inWatchlist: Boolean = false,
+    focusRequester: FocusRequester? = null
 ) {
     val context = LocalContext.current
+    val isTv = remember { TvUtils.isTvDevice(context) }
+    val effectiveWidth = if (isTv) (cardWidth * 1.35f).toInt().coerceAtLeast(cardWidth + 20) else cardWidth
     var isLoading by remember(series.id, series.coverUrl) { mutableStateOf(true) }
     var isError by remember(series.id, series.coverUrl) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
-            .width(cardWidth.dp)
+            .width(effectiveWidth.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = series.title
+            }
+            .then(
+                if (isTv) {
+                    Modifier
+                        .tvFocusable(focusRequester = focusRequester)
+                        .tvFocusRing(cornerRadius = 12.dp)
+                } else {
+                    Modifier
+                }
+            )
             .clickable(onClick = onClick)
-            .focusable()
             .padding(4.dp)
     ) {
         Box(
@@ -198,7 +216,7 @@ fun SeriesPosterCard(
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        "Film",
+                        stringResource(R.string.movie_badge),
                         color = Color.White,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold
@@ -219,7 +237,7 @@ fun SeriesPosterCard(
                 ) {
                     Icon(
                         androidx.compose.material.icons.Icons.Filled.Bookmark,
-                        contentDescription = "In Watchlist",
+                        contentDescription = stringResource(R.string.in_watchlist),
                         tint = Color.White,
                         modifier = Modifier.size(12.dp)
                     )
@@ -243,7 +261,7 @@ fun SeriesPosterCard(
 @Composable
 fun PremiumLoading(
     modifier: Modifier = Modifier,
-    label: String = "Lädt…"
+    label: String = stringResource(R.string.loading)
 ) {
     Box(
         modifier.fillMaxSize().wrapContentSize(Alignment.Center),
@@ -289,7 +307,7 @@ fun PremiumError(
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Etwas ist schiefgelaufen",
+                stringResource(R.string.error_title),
                 color = TextPrimary,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
@@ -311,7 +329,7 @@ fun PremiumError(
                         .padding(horizontal = 32.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        "Erneut versuchen",
+                        stringResource(R.string.retry),
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.labelLarge
@@ -361,6 +379,7 @@ fun PremiumEmpty(
 fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
+    onSeeAll: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
@@ -380,9 +399,23 @@ fun SectionHeader(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
             color = TextPrimary,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() }
         )
         Spacer(Modifier.weight(1f))
-        trailing?.invoke()
+        if (onSeeAll != null) {
+            Text(
+                text = "Alle anzeigen",
+                color = Primary,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onSeeAll)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        } else {
+            trailing?.invoke()
+        }
     }
 }

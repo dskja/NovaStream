@@ -8,13 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [WatchProgress::class, WatchlistItem::class],
-    version = 6,
-    exportSchema = false
+    entities = [WatchProgress::class, WatchlistItem::class, CatalogCacheEntry::class],
+    version = 7,
+    exportSchema = true
 )
 abstract class NovaStreamDatabase : RoomDatabase() {
     abstract fun watchProgressDao(): WatchProgressDao
     abstract fun watchlistDao(): WatchlistDao
+    abstract fun catalogCacheDao(): CatalogCacheDao
 
     companion object {
         @Volatile
@@ -111,6 +112,25 @@ abstract class NovaStreamDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS catalog_cache (
+                        cacheKey TEXT NOT NULL PRIMARY KEY,
+                        providerId TEXT NOT NULL,
+                        cacheType TEXT NOT NULL,
+                        payload TEXT NOT NULL,
+                        cachedAt INTEGER NOT NULL,
+                        expiresAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_catalog_cache_providerId ON catalog_cache(providerId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_catalog_cache_expiresAt ON catalog_cache(expiresAt)")
+            }
+        }
+
         fun get(context: Context): NovaStreamDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -119,7 +139,8 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     "novastream.db"
                 )
                     .addMigrations(
-                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                        MIGRATION_6_7
                     )
                     .apply {
                         if (com.novastream.app.BuildConfig.DEBUG) {

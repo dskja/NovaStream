@@ -35,8 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
@@ -46,24 +46,53 @@ import androidx.compose.runtime.setValue
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.ui.components.ContinueWatchingCard
+import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.components.ShimmerRow
 import com.novastream.app.ui.theme.*
+import com.novastream.app.ui.tv.rememberInitialFocusRequester
+import com.novastream.app.ui.tv.tvFocusRing
+import com.novastream.app.ui.tv.tvFocusable
+import androidx.compose.ui.focus.onFocusChanged
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun HomeScreen(
     onSeriesClick: (String) -> Unit,
-    onContinueWatchingClick: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit
+    onContinueWatchingClick: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit,
+    onBrowseSection: (section: String, genre: String?) -> Unit = { _, _ -> },
+    onSeeAllWatchlist: () -> Unit = {},
+    onSeeAllContinueWatching: () -> Unit = {}
 ) {
-    val vm: HomeViewModel = viewModel()
+    val vm: HomeViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val initialFocus = rememberInitialFocusRequester()
     val activeProviderName = state.providerName.ifBlank {
         com.novastream.app.data.provider.ActiveProvider.displayName
+    }
+    val catalogEmpty = !state.loading &&
+        state.error == null &&
+        state.hero.isEmpty() &&
+        state.popular.isEmpty() &&
+        state.newest.isEmpty() &&
+        state.trending.isEmpty() &&
+        state.movies.isEmpty() &&
+        state.genreRows.isEmpty() &&
+        state.action.isEmpty() &&
+        state.drama.isEmpty() &&
+        state.scifi.isEmpty() &&
+        state.comedy.isEmpty()
+
+    LaunchedEffect(state.loading, state.hero, state.popular) {
+        if (!state.loading && (state.hero.isNotEmpty() || state.popular.isNotEmpty())) {
+            try {
+                initialFocus.requestFocus()
+            } catch (_: Exception) {}
+        }
     }
 
     PullToRefreshBox(
@@ -136,7 +165,9 @@ fun HomeScreen(
                 } else if (state.hero.isNotEmpty()) {
                     HeroCarousel(
                         series = state.hero.take(8),
-                        onClick = onSeriesClick
+                        onClick = onSeriesClick,
+                        autoScrollEnabled = !state.reduceMotion,
+                        focusRequester = initialFocus
                     )
                 }
             }
@@ -145,7 +176,7 @@ fun HomeScreen(
             if (state.continueWatching.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(8.dp))
-                    SectionHeader("Weitersehen")
+                    SectionHeader("Weitersehen", onSeeAll = onSeeAllContinueWatching)
                 }
                 item {
                     LazyRow(
@@ -178,7 +209,7 @@ fun HomeScreen(
             if (state.watchlist.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Meine Liste")
+                    SectionHeader("Meine Liste", onSeeAll = onSeeAllWatchlist)
                 }
                 item {
                     LazyRow(
@@ -222,14 +253,26 @@ fun HomeScreen(
                 }
             }
 
+            // Empty catalog
+            if (catalogEmpty) {
+                item {
+                    PremiumEmpty(
+                        text = "Kein Katalog verfügbar.\nZiehe nach unten zum Aktualisieren oder wechsle den Provider in den Einstellungen.",
+                        modifier = Modifier
+                            .fillParentMaxWidth()
+                            .height(280.dp)
+                    )
+                }
+            }
+
             // Beliebt
             if (state.popular.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(8.dp))
-                    SectionHeader("Beliebt")
+                    SectionHeader("Beliebt", onSeeAll = { onBrowseSection("popular", null) })
                 }
                 item {
-                    SeriesRow(state.popular, onSeriesClick)
+                    SeriesRow(state.popular, onSeriesClick, initialFocusRequester = if (state.hero.isEmpty()) initialFocus else null)
                 }
             }
 
@@ -237,7 +280,7 @@ fun HomeScreen(
             if (state.newest.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Neu hinzugefügt")
+                    SectionHeader("Neu hinzugefügt", onSeeAll = { onBrowseSection("newest", null) })
                 }
                 item {
                     SeriesRow(state.newest, onSeriesClick)
@@ -248,7 +291,7 @@ fun HomeScreen(
             if (state.trending.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Angesagt")
+                    SectionHeader("Angesagt", onSeeAll = { onBrowseSection("trending", null) })
                 }
                 item {
                     SeriesRow(state.trending, onSeriesClick)
@@ -259,7 +302,7 @@ fun HomeScreen(
             if (state.movies.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Filme")
+                    SectionHeader("Filme", onSeeAll = { onBrowseSection("movies", null) })
                 }
                 item {
                     SeriesRow(state.movies, onSeriesClick)
@@ -314,7 +357,7 @@ fun HomeScreen(
                 if (series.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        SectionHeader(genre.displayName)
+                        SectionHeader(genre.displayName, onSeeAll = { onBrowseSection("genre", genre.slug) })
                     }
                     item {
                         SeriesRow(series, onSeriesClick)
@@ -371,7 +414,8 @@ fun HomeScreen(
                             state.supportsMovies && state.supportsSeries -> "Alle Titel"
                             state.supportsMovies -> "Alle Filme"
                             else -> "Alle Serien"
-                        }
+                        },
+                        onSeeAll = { onBrowseSection("all", null) }
                     )
                 }
                 item {
@@ -390,14 +434,24 @@ fun HomeScreen(
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun SeriesRow(series: List<Series>, onSeriesClick: (String) -> Unit) {
+private fun SeriesRow(
+    series: List<Series>,
+    onSeriesClick: (String) -> Unit,
+    initialFocusRequester: androidx.compose.ui.focus.FocusRequester? = null
+) {
+    val distinct = series.distinctBy { it.id }
     LazyRow(
         Modifier.focusRestorer(),
         contentPadding = PaddingValues(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        items(series.distinctBy { it.id }, key = { it.id }) { s ->
-            SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
+        items(distinct, key = { it.id }) { s ->
+            val isFirst = s.id == distinct.firstOrNull()?.id
+            SeriesPosterCard(
+                s,
+                onClick = { onSeriesClick(s.id) },
+                focusRequester = if (isFirst) initialFocusRequester else null
+            )
         }
     }
 }
@@ -406,19 +460,22 @@ private fun SeriesRow(series: List<Series>, onSeriesClick: (String) -> Unit) {
 @Composable
 private fun HeroCarousel(
     series: List<Series>,
-    onClick: (String) -> Unit
+    onClick: (String) -> Unit,
+    autoScrollEnabled: Boolean = true,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null
 ) {
     val pagerState = rememberPagerState(pageCount = { series.size })
     val context = LocalContext.current
+    var heroFocused by remember { mutableStateOf(false) }
 
-    // Auto-scroll
-    LaunchedEffect(pagerState, series.size) {
-        if (series.size <= 1) return@LaunchedEffect
+    // Auto-scroll – pausiert bei D-Pad-Fokus auf dem Hero
+    LaunchedEffect(pagerState, series.size, autoScrollEnabled, heroFocused) {
+        if (!autoScrollEnabled || series.size <= 1 || heroFocused) return@LaunchedEffect
         try {
             while (true) {
                 kotlinx.coroutines.delay(5000)
                 kotlinx.coroutines.yield()
-                if (pagerState.isScrollInProgress) continue
+                if (heroFocused || pagerState.isScrollInProgress) continue
                 val next = (pagerState.currentPage + 1) % series.size
                 pagerState.animateScrollToPage(next, animationSpec = tween(800))
             }
@@ -429,6 +486,7 @@ private fun HeroCarousel(
         Modifier
             .fillMaxWidth()
             .height(300.dp)
+            .onFocusChanged { heroFocused = it.hasFocus }
     ) {
         HorizontalPager(
             state = pagerState,
@@ -441,6 +499,13 @@ private fun HeroCarousel(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .then(
+                        if (page == 0 && focusRequester != null) {
+                            Modifier.tvFocusable(focusRequester = focusRequester).tvFocusRing(cornerRadius = 0.dp)
+                        } else {
+                            Modifier.tvFocusable().tvFocusRing(cornerRadius = 0.dp)
+                        }
+                    )
                     .clickable { onClick(s.id) }
             ) {
                 if (!s.coverUrl.isNullOrBlank() && !isError) {

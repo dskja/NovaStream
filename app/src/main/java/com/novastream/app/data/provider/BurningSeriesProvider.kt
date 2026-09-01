@@ -122,7 +122,35 @@ class BurningSeriesProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val letters = ('A'..'Z').map { it.toString() }
+        if (page <= 0) {
+            val html = fetchUrlWithCaptcha("$baseUrl/andelselect")
+            parseBsSeriesList(html).map { it.copy(providerId = id) }
+        } else {
+            val letter = letters.getOrNull(page - 1) ?: return@runCatching emptyList()
+            val html = fetchUrlWithCaptcha("$baseUrl/andere-serien?letter=$letter")
+                .ifBlank { fetchUrlWithCaptcha("$baseUrl/andere-serien") }
+            val list = parseBsSeriesList(html)
+            val filtered = list.filter { it.title.startsWith(letter, ignoreCase = true) || it.id.startsWith(letter, ignoreCase = true) }
+            (if (filtered.isNotEmpty()) filtered else list).map { it.copy(providerId = id) }
+        }
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     // ─── HTML Parsing ───────────────────────────────────────────────────────
+
+    /** Lädt HTML; bei Captcha/leerem OkHttp-Ergebnis WebView-Fallback. */
+    private suspend fun fetchUrlWithCaptcha(url: String): String {
+        val http = fetchUrl(url)
+        if (http.isNotBlank() && !http.contains("captcha", ignoreCase = true) && !http.contains("recaptcha", ignoreCase = true)) {
+            return http
+        }
+        val web = com.novastream.app.util.CaptchaWebViewFetcher.fetchHtml(url)
+        return web.ifBlank { http }
+    }
 
     /** Lädt eine absolute URL via OkHttp. */
     private suspend fun fetchUrl(url: String): String {

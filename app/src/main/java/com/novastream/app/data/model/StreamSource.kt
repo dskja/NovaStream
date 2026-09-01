@@ -5,7 +5,9 @@ data class StreamSource(
     val hoster: String,
     val url: String,
     val mimeType: String = "application/x-mpegURL",
-    val isHls: Boolean = true
+    val isHls: Boolean = true,
+    val subtitleUrl: String? = null,
+    val qualityLabel: String? = null
 ) {
     /** True wenn die URL nicht leer und abspielbar ist. */
     val isPlayable: Boolean
@@ -15,15 +17,19 @@ data class StreamSource(
     val displayName: String
         get() = "$hoster (${if (isHls) "HLS" else "MP4"})"
 
-    /** Quality hint basierend auf URL-Patterns (z.B. 1080p, 720p). */
+    /** Quality hint aus qualityLabel oder URL-Patterns (z.B. 1080p, 720p). */
     val qualityHint: String?
-        get() = when {
+        get() = qualityLabel?.takeIf { it.isNotBlank() } ?: when {
             url.contains("1080", ignoreCase = true) -> "1080p"
             url.contains("720", ignoreCase = true) -> "720p"
             url.contains("480", ignoreCase = true) -> "480p"
             url.contains("360", ignoreCase = true) -> "360p"
             else -> null
         }
+
+    /** True wenn Untertitel verfügbar sind. */
+    val hasSubtitles: Boolean
+        get() = !subtitleUrl.isNullOrBlank()
 
     /** True wenn es ein HLS-Stream ist (m3u8). */
     val isHlsStream: Boolean get() = isHls || url.contains(".m3u8")

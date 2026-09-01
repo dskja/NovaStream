@@ -30,6 +30,9 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.DataSaverOn
 import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
@@ -47,6 +50,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,11 +59,15 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.novastream.app.R
 import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.ui.theme.*
+import com.novastream.app.ui.tv.rememberInitialFocusRequester
+import com.novastream.app.ui.tv.tvFocusIfNeeded
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -72,11 +80,20 @@ data class SettingsUiState(
     val dynamicColor: Boolean = true,
     val playbackSpeed: Float = 1.0f,
     val skipIntroButton: Boolean = true,
+    val preferredHoster: String = "VOE",
+    val preferredLanguage: String = "Deutsch",
+    val dataSaverMode: Boolean = false,
+    val reduceMotion: Boolean = false,
     val message: String? = null,
     val updateChecking: Boolean = false,
     val updateInfo: com.novastream.app.util.UpdateChecker.UpdateInfo? = null,
-    val updateChecked: Boolean = false
+    val updateChecked: Boolean = false,
+    val unknownProviderRowCount: Int = 0,
+    val showUnknownProviderCleanup: Boolean = false
 )
+
+private val PREFERRED_HOSTERS = listOf("VOE", "Streamtape", "Doodstream", "Filemoon", "Vidoza", "Vidmoly", "Mixdrop")
+private val PREFERRED_LANGUAGES = listOf("Deutsch", "Englisch", "Ger-Sub", "Eng-Sub")
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val watchRepo = WatchRepository.get(application)
@@ -124,8 +141,55 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             appSettings.skipIntroButton.collect { v -> _state.update { it.copy(skipIntroButton = v) } }
         }
+        viewModelScope.launch {
+            appSettings.preferredHoster.collect { v -> _state.update { it.copy(preferredHoster = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.preferredLanguage.collect { v -> _state.update { it.copy(preferredLanguage = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.dataSaverMode.collect { v -> _state.update { it.copy(dataSaverMode = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.reduceMotion.collect { v -> _state.update { it.copy(reduceMotion = v) } }
+        }
+        viewModelScope.launch {
+            val prompted = appSettings.unknownProviderCleanupPrompted.first()
+            val unknownCount = watchRepo.countUnknownProviderRows()
+            _state.update {
+                it.copy(
+                    unknownProviderRowCount = unknownCount,
+                    showUnknownProviderCleanup = unknownCount > 0 && !prompted
+                )
+            }
+        }
         // Auto-check for updates once
         checkForUpdates()
+    }
+
+    fun dismissUnknownProviderCleanup() {
+        viewModelScope.launch {
+            appSettings.setUnknownProviderCleanupPrompted(true)
+            _state.update { it.copy(showUnknownProviderCleanup = false) }
+        }
+    }
+
+    fun cleanupUnknownProviderRows() {
+        viewModelScope.launch {
+            val removed = watchRepo.cleanupUnknownProviderRows()
+            appSettings.setUnknownProviderCleanupPrompted(true)
+            _state.update {
+                it.copy(
+                    showUnknownProviderCleanup = false,
+                    unknownProviderRowCount = 0,
+                    message = if (removed > 0) {
+                        "$removed Einträge mit unbekanntem Provider entfernt"
+                    } else {
+                        "Keine unbekannten Provider-Einträge gefunden"
+                    }
+                )
+            }
+        }
     }
 
     fun checkForUpdates() {
@@ -142,9 +206,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     updateChecked = true,
                     updateInfo = info,
                     message = when {
-                        info == null -> "Update-Check fehlgeschlagen oder keine Releases"
-                        info.isNewer -> "Update verfügbar: v${info.latestVersion}"
-                        else -> "Du bist auf dem neuesten Stand (v${info.currentVersion})"
+                        info == null -> getApplication<Application>().getString(R.string.settings_update_check_failed)
+                        info.isNewer -> getApplication<Application>().getString(R.string.settings_update_available, info.latestVersion)
+                        else -> getApplication<Application>().getString(R.string.settings_up_to_date, info.currentVersion)
                     }
                 )
             }
@@ -154,21 +218,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearContinueWatching() {
         viewModelScope.launch {
             watchRepo.clearAllProgress()
-            _state.update { it.copy(message = "Weitersehen wurde geleert") }
+            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_continue_cleared)) }
         }
     }
 
     fun clearWatchlist() {
         viewModelScope.launch {
             watchRepo.clearWatchlist()
-            _state.update { it.copy(message = "Watchlist wurde geleert") }
+            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_watchlist_cleared)) }
         }
     }
 
     fun clearCompleted() {
         viewModelScope.launch {
             watchRepo.removeCompleted()
-            _state.update { it.copy(message = "Abgeschlossene Episoden wurden entfernt") }
+            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_completed_cleared)) }
         }
     }
 
@@ -177,19 +241,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun showUrlError() {
-        _state.update { it.copy(message = "Link konnte nicht geöffnet werden") }
+        _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_url_error)) }
     }
 
     fun setProvider(providerId: String) {
         viewModelScope.launch {
             val provider = com.novastream.app.data.provider.ProviderManager.getProviderOrNull(providerId)
             if (provider == null) {
-                _state.update { it.copy(message = "Provider nicht gefunden") }
+                _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_provider_not_found)) }
                 return@launch
             }
             com.novastream.app.data.provider.ProviderManager.setActiveProvider(getApplication(), providerId)
             com.novastream.app.data.provider.ActiveProvider.setById(providerId)
-            _state.update { it.copy(message = "Provider gewechselt zu ${provider.displayName}") }
+            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_provider_switched, provider.displayName)) }
         }
     }
 
@@ -208,6 +272,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setSkipIntroButton(enabled: Boolean) {
         viewModelScope.launch { appSettings.setSkipIntroButton(enabled) }
     }
+
+    fun setPreferredHoster(hoster: String) {
+        viewModelScope.launch { appSettings.setPreferredHoster(hoster) }
+    }
+
+    fun setPreferredLanguage(language: String) {
+        viewModelScope.launch { appSettings.setPreferredLanguage(language) }
+    }
+
+    fun setDataSaverMode(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setDataSaverMode(enabled) }
+    }
+
+    fun setReduceMotion(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setReduceMotion(enabled) }
+    }
 }
 
 @Composable
@@ -218,12 +298,19 @@ fun SettingsScreen() {
     val context = LocalContext.current
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingActionTitle by remember { mutableStateOf("") }
+    val initialFocus = rememberInitialFocusRequester()
 
     LaunchedEffect(state.message) {
         state.message?.let {
             snackbarHostState.showSnackbar(it)
             vm.clearMessage()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        try {
+            initialFocus.requestFocus()
+        } catch (_: Exception) {}
     }
 
     Scaffold(
@@ -264,7 +351,7 @@ fun SettingsScreen() {
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Einstellungen",
+                    stringResource(R.string.settings_title),
                     style = MaterialTheme.typography.headlineLarge,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold
@@ -279,25 +366,29 @@ fun SettingsScreen() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 StatCard(
-                    label = "Weitersehen",
+                    label = stringResource(R.string.settings_continue_watching),
                     value = state.continueWatchingCount,
                     modifier = Modifier.weight(1f)
                 )
                 StatCard(
-                    label = "Watchlist",
+                    label = stringResource(R.string.settings_watchlist),
                     value = state.watchlistCount,
                     modifier = Modifier.weight(1f)
                 )
             }
 
             // Section: Streaming Provider
-            SettingsSectionHeader("Streaming Provider")
-            state.availableProviders.forEach { providerInfo ->
+            SettingsSectionHeader(stringResource(R.string.settings_streaming_provider))
+            state.availableProviders.forEachIndexed { index, providerInfo ->
                 val isSelected = providerInfo.id == state.activeProviderId
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .clickable { vm.setProvider(providerInfo.id) }
+                        .tvFocusIfNeeded(
+                            cornerRadius = 12.dp,
+                            focusRequester = if (index == 0) initialFocus else null
+                        )
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -344,7 +435,7 @@ fun SettingsScreen() {
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                "Aktiv",
+                                stringResource(R.string.active),
                                 color = Primary,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
@@ -356,8 +447,13 @@ fun SettingsScreen() {
 
             Spacer(Modifier.height(8.dp))
 
+            SettingsSectionHeader(stringResource(R.string.settings_provider_capabilities))
+            ProviderCapabilityMatrix(state.availableProviders)
+
+            Spacer(Modifier.height(8.dp))
+
             // Section: Wiedergabe
-            SettingsSectionHeader("Wiedergabe")
+            SettingsSectionHeader(stringResource(R.string.settings_playback))
 
             // Autoplay toggle
             Row(
@@ -377,8 +473,8 @@ fun SettingsScreen() {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Autoplay nächste Folge", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text("Nächste Episode automatisch abspielen", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                    Text(stringResource(R.string.settings_autoplay_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_autoplay_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
                 }
                 Switch(
                     checked = state.autoplayNext,
@@ -410,12 +506,62 @@ fun SettingsScreen() {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Intro überspringen", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text("Skip-Button im Player anzeigen", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                    Text(stringResource(R.string.settings_skip_intro_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_skip_intro_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
                 }
                 Switch(
                     checked = state.skipIntroButton,
                     onCheckedChange = { vm.setSkipIntroButton(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Primary,
+                        checkedTrackColor = Primary.copy(alpha = 0.3f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = BgSurfaceElevated
+                    )
+                )
+            }
+
+            SettingsDropdownRow(
+                icon = Icons.Default.HighQuality,
+                title = stringResource(R.string.settings_preferred_hoster_title),
+                subtitle = stringResource(R.string.settings_preferred_hoster_subtitle),
+                selectedValue = state.preferredHoster,
+                options = PREFERRED_HOSTERS,
+                onSelect = { vm.setPreferredHoster(it) }
+            )
+
+            SettingsDropdownRow(
+                icon = Icons.Default.Language,
+                title = stringResource(R.string.settings_preferred_language_title),
+                subtitle = stringResource(R.string.settings_preferred_language_subtitle),
+                selectedValue = state.preferredLanguage,
+                options = PREFERRED_LANGUAGES,
+                onSelect = { vm.setPreferredLanguage(it) }
+            )
+
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.DataSaverOn, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_data_saver_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_data_saver_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Switch(
+                    checked = state.dataSaverMode,
+                    onCheckedChange = { vm.setDataSaverMode(it) },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Primary,
                         checkedTrackColor = Primary.copy(alpha = 0.3f),
@@ -443,8 +589,8 @@ fun SettingsScreen() {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Wiedergabegeschwindigkeit", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text("Standard-Tempo für neue Videos", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                    Text(stringResource(R.string.settings_playback_speed_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_playback_speed_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
                 }
                 Text(
                     "${state.playbackSpeed}x",
@@ -484,7 +630,40 @@ fun SettingsScreen() {
             Spacer(Modifier.height(8.dp))
 
             // Section: Design
-            SettingsSectionHeader("Design")
+            SettingsSectionHeader(stringResource(R.string.settings_design))
+
+            // Reduce motion toggle
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Speed, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_reduce_motion_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_reduce_motion_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Switch(
+                    checked = state.reduceMotion,
+                    onCheckedChange = { vm.setReduceMotion(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Primary,
+                        checkedTrackColor = Primary.copy(alpha = 0.3f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = BgSurfaceElevated
+                    )
+                )
+            }
 
             // Dynamic Color toggle
             Row(
@@ -504,8 +683,8 @@ fun SettingsScreen() {
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Dynamic Color", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text("Material You - Farben an Wallpaper anpassen (Android 12+)", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                    Text(stringResource(R.string.settings_dynamic_color_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_dynamic_color_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
                 }
                 Switch(
                     checked = state.dynamicColor,
@@ -522,12 +701,12 @@ fun SettingsScreen() {
             Spacer(Modifier.height(8.dp))
 
             // Section: Datenverwaltung
-            SettingsSectionHeader("Datenverwaltung")
+            SettingsSectionHeader(stringResource(R.string.settings_data_management))
 
             SettingsItem(
                 icon = Icons.Default.PlayCircle,
-                title = "Weitersehen leeren",
-                subtitle = "Entfernt alle gespeicherten Wiedergabefortschritte",
+                title = stringResource(R.string.settings_clear_continue_title),
+                subtitle = stringResource(R.string.settings_clear_continue_subtitle),
                 onClick = {
                     pendingActionTitle = "Weitersehen leeren?"
                     pendingAction = { vm.clearContinueWatching() }
@@ -535,8 +714,8 @@ fun SettingsScreen() {
             )
             SettingsItem(
                 icon = Icons.Default.CleaningServices,
-                title = "Abgeschlossene Episoden entfernen",
-                subtitle = "Löscht Episoden die zu >90% geschaut wurden",
+                title = stringResource(R.string.settings_clear_completed_title),
+                subtitle = stringResource(R.string.settings_clear_completed_subtitle),
                 onClick = {
                     pendingActionTitle = "Abgeschlossene Episoden entfernen?"
                     pendingAction = { vm.clearCompleted() }
@@ -544,8 +723,8 @@ fun SettingsScreen() {
             )
             SettingsItem(
                 icon = Icons.Default.DeleteSweep,
-                title = "Watchlist leeren",
-                subtitle = "Entfernt alle Serien aus deiner Watchlist",
+                title = stringResource(R.string.settings_clear_watchlist_title),
+                subtitle = stringResource(R.string.settings_clear_watchlist_subtitle),
                 onClick = {
                     pendingActionTitle = "Watchlist leeren?"
                     pendingAction = { vm.clearWatchlist() }
@@ -809,23 +988,52 @@ fun SettingsScreen() {
         }
     }
 
+    // One-time dialog: unknown providerId rows from v5→v6 migration
+    if (state.showUnknownProviderCleanup) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissUnknownProviderCleanup() },
+            title = {
+                Text("Alte Einträge bereinigen?", color = TextPrimary, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "${state.unknownProviderRowCount} Watchlist- oder Fortschritts-Einträge stammen von vor dem Provider-Update (providerId „unknown“). Möchtest du sie entfernen?",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.cleanupUnknownProviderRows() }) {
+                    Text("Entfernen", color = Primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissUnknownProviderCleanup() }) {
+                    Text("Behalten", color = TextTertiary)
+                }
+            },
+            containerColor = BgSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
+    }
+
     // Confirmation Dialog for destructive actions
     if (pendingAction != null) {
         AlertDialog(
             onDismissRequest = { pendingAction = null },
             title = { Text(pendingActionTitle, color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Diese Aktion kann nicht rückgängig gemacht werden.", color = TextSecondary) },
+            text = { Text(stringResource(R.string.settings_confirm_irreversible), color = TextSecondary) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         pendingAction?.invoke()
                         pendingAction = null
                     }
-                ) { Text("Bestätigen", color = Primary, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.confirm), color = Primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingAction = null }) {
-                    Text("Abbrechen", color = TextTertiary)
+                    Text(stringResource(R.string.cancel), color = TextTertiary)
                 }
             },
             containerColor = BgSurface,
@@ -861,6 +1069,157 @@ private fun TechBadge(label: String) {
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+private fun ProviderCapabilityMatrix(
+    providers: List<com.novastream.app.data.provider.ProviderInfo>
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(BgSurface)
+            .padding(12.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Text(
+                stringResource(R.string.settings_streaming_provider),
+                Modifier.weight(1.4f),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                stringResource(R.string.settings_capability_movies),
+                Modifier.weight(0.6f),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                stringResource(R.string.settings_capability_pagination),
+                Modifier.weight(0.8f),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                stringResource(R.string.settings_capability_latest),
+                Modifier.weight(0.8f),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+        }
+        providers.forEach { provider ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    provider.displayName,
+                    Modifier.weight(1.4f),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    if (provider.supportsMovies) stringResource(R.string.yes) else stringResource(R.string.no),
+                    Modifier.weight(0.6f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (provider.supportsMovies) Primary else TextTertiary,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    if (provider.capabilities.supportsPagination) stringResource(R.string.yes) else stringResource(R.string.no),
+                    Modifier.weight(0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (provider.capabilities.supportsPagination) Primary else TextTertiary,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    if (provider.capabilities.supportsLatestEpisodes) stringResource(R.string.yes) else stringResource(R.string.no),
+                    Modifier.weight(0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (provider.capabilities.supportsLatestEpisodes) Primary else TextTertiary,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsDropdownRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    selectedValue: String,
+    options: List<String>,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(BgSurface),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+            }
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Primary.copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(selectedValue, color = Primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(BgSurface)
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            option,
+                            color = if (option == selectedValue) Primary else TextPrimary,
+                            fontWeight = if (option == selectedValue) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -915,7 +1274,7 @@ private fun SettingsItem(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .focusable()
+            .tvFocusIfNeeded(cornerRadius = 12.dp)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -953,7 +1312,7 @@ private fun ClickableSettingsItem(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .focusable()
+            .tvFocusIfNeeded(cornerRadius = 12.dp)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

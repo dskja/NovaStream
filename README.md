@@ -1,56 +1,58 @@
 # NovaStream
 
 <p align="center">
-  <strong>High-End Android Streaming Client · Multi-Provider · Free Metadata · Auto-Updates</strong>
+  <strong>High-End Android Streaming Client · Multi-Provider · Hilt DI · i18n · v7.0</strong>
 </p>
 
 ---
 
-## Highlights (v4.0)
+## Highlights (v7.0)
 
-- **17 Provider** – DE-Klassiker + FMHY-Quellen + Free Catalog
-- **Universal Html Scraper** – profilbasiert für alle Sites, nicht nur SerienStream
-- **Free Catalog (TVMaze)** – TMDb-Alternative **ohne API-Key**, inkl. Cast, Rating, Episoden
-- **Embed-Player-Stack** – VidSrc / 2Embed / VidLink / VidLove (IMDb/TMDb)
-- **GitHub Update-Checker** – erkennt neue Releases und APK-Downloads
-- **Metadata Enrichment** – Detail-Screen mit Genres, Cast, Network, IMDb
-- Continue Watching, Watchlist, Multi-Hoster, DNS-over-HTTPS, Autoplay
+| Feature | v6 | v7 |
+|---------|:--:|:--:|
+| Hilt dependency injection | — | ✓ |
+| `@HiltViewModel` (Home, Browse, Player, Detail) | — | ✓ |
+| German + English string resources | — | ✓ |
+| Accessibility (section headings, merged poster semantics) | — | ✓ |
+| Reduce motion (disables hero auto-scroll) | — | ✓ |
+| Provider capability matrix in Settings | — | ✓ |
+| Unit tests (scraper fixtures, capabilities, browse filters) | partial | ✓ |
+| 17 streaming providers | ✓ | ✓ |
+| Universal HTML scraper + site profiles | ✓ | ✓ |
+| Continue Watching / Watchlist / Room | ✓ | ✓ |
+| Multi-hoster player + DNS-over-HTTPS | ✓ | ✓ |
+| GitHub update checker | ✓ | ✓ |
 
-## Provider
-
-| Provider | Typ |
-|----------|-----|
-| SerienStream / CX | Serien (DE) |
-| AniWorld | Anime |
-| KinoGer | Filme/Serien |
-| Burning Series | Serien |
-| MegaKino | Filme/Serien |
-| StreamKiste | Filme/Serien |
-| FilmPalast | Filme/Serien |
-| KinoZ | Filme/Serien |
-| **Free Catalog (TVMaze)** | Globaler Katalog + Embeds |
-| HydraHD | FMHY |
-| Cinezo | FMHY / TMDb-IDs |
-| Shows.st | FMHY |
-| PhantomFlix | FMHY |
-| Flixer | FMHY |
-| DramaCool | Asian Drama |
-| PressPlay | FMHY |
-
-## Architektur
+### v7 architecture
 
 ```
-data/
-  api/          NovaStreamScraper, NetworkModule
-  scraper/      UniversalHtmlScraper + SiteProfiles (alle Provider)
-  meta/         FreeMetaService (TVMaze, kein Key)
-  provider/     17 StreamingProvider-Implementierungen
-  repository/   NovaStreamRepository
-util/
-  HosterResolver, EmbedStreamResolver, UpdateChecker
+di/
+  DatabaseModule.kt    Room singleton
+  RepositoryModule.kt  NovaStreamRepository, WatchRepository
+  ProviderModule.kt    AppSettings, provider list
 ui/
-  home, detail (+ Meta), settings (+ Updates), player, search, watchlist
+  *ViewModel.kt        @HiltViewModel + constructor injection
+res/
+  values/strings.xml       German (default)
+  values-en/strings.xml    English
 ```
+
+## Provider capability matrix
+
+| Provider | Movies | Pagination | Latest episodes |
+|----------|:------:|:----------:|:---------------:|
+| SerienStream / CX | — | ✓ | ✓ |
+| AniWorld | — | ✓ | ✓ |
+| KinoGer | ✓ | ✓ | — |
+| Burning Series | — | ✓ | — |
+| MegaKino | ✓ | ✓ | ✓ |
+| StreamKiste | ✓ | ✓ | ✓ |
+| FilmPalast | ✓ | ✓ | — |
+| KinoZ | ✓ | ✓ | — |
+| Free Catalog | ✓ | ✓ | ✓ |
+| FMHY sites (Cinezo, HydraHD, …) | varies | ✓ | — |
+
+See **Settings → Provider-Fähigkeiten** for the live matrix in the app.
 
 ## Build
 
@@ -60,30 +62,41 @@ ui/
 
 # Release APK
 ./gradlew :app:assembleRelease
+
+# Unit tests
+./gradlew :app:testDebugUnitTest
 ```
 
 ### GitHub Actions
 
-Bei Push auf `main`, Pull Requests und manuell unter **Actions → Build APK** wird automatisch gebaut.
+Push to `main`, pull requests, and manual **Actions → Build APK** runs CI.
 
 - Artifacts: `NovaStream-debug-apk`, `NovaStream-release-apk`
-- Tag `v*` (z.B. `v4.0.1`) erstellt zusätzlich ein GitHub Release mit APKs
+- Tag `v7.0.0` creates a GitHub Release with APKs
 
 ```bash
-git tag v4.0.1
-git push origin v4.0.1
+git tag v7.0.0
+git push origin v7.0.0
 ```
+
+## Tests (v7)
+
+- `UniversalHtmlScraperTest` — fixture HTML for SerienStream, StreamKiste, Cinezo
+- `ProviderCapabilitiesTest` — pagination / movies / latest flags per provider
+- `BrowseViewModelTest` — content filter (all / series / movies)
+
+Fixtures live under `app/src/test/resources/html/`.
 
 ## Updates
 
-Die App prüft automatisch `https://github.com/dskja/NovaStream/releases/latest`.
-Unter Settings → App-Updates kannst du manuell prüfen und die APK öffnen.
+The app checks `https://github.com/dskja/NovaStream/releases/latest`.
+Settings → App-Updates for manual checks and APK download.
 
 ## Requirements
 
-- Android 7.0+ (API 24)
+- Android 5.1+ (API 22)
 - Internet
-- HLS/MP4 Codec-Support
+- HLS/MP4 codec support
 
 ## Disclaimer
 

@@ -67,6 +67,9 @@ interface NovaStreamApi {
     @GET("/serien")
     suspend fun catalog(): String
 
+    @GET("/serien/page/{page}")
+    suspend fun catalogPaged(@Path("page") page: Int): String
+
     @GET("/serienkalender")
     suspend fun calendar(): String
 
