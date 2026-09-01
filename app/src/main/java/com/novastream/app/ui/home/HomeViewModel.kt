@@ -279,9 +279,9 @@ class HomeViewModel @Inject constructor(
             try {
                 val genres = provider.availableGenres.take(2)
                 if (genres.isEmpty()) return@launch
-                val genreRows = kotlinx.coroutines.coroutineScope {
+                val genreRows = coroutineScope {
                     genres.map { genre ->
-                        kotlinx.coroutines.async {
+                        async {
                             when (val res = repo.loadGenre(genre.slug)) {
                                 is NovaStreamRepository.RepoResult.Success -> {
                                     val list = res.data.filter { it.belongsToActiveProvider() || it.providerId == null }

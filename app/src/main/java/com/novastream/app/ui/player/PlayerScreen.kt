@@ -53,6 +53,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.ui.PlayerView
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.tvPlayerKeyHandler
