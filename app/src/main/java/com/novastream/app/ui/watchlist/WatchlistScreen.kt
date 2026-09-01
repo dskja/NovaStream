@@ -92,9 +92,16 @@ class WatchlistViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            providerController.activeProviderId.collect { providerId ->
+                val filtered = filterByProvider(_state.value.allItems, _state.value.providerFilter, providerId)
+                val sorted = sortItems(filtered, _state.value.sortOption)
+                _state.update { it.copy(items = sorted) }
+            }
+        }
+        viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { items ->
-                    val pid = ActiveProvider.id
+                    val pid = providerController.activeProviderId.value
                     val filtered = filterByProvider(items, _state.value.providerFilter, pid)
                     val sorted = sortItems(filtered, _state.value.sortOption)
                     _state.update {
@@ -113,7 +120,7 @@ class WatchlistViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progressList ->
-                    val pid = ActiveProvider.id
+                    val pid = providerController.activeProviderId.value
                     val slugs = progressList
                         .filter {
                             !it.isCompleted &&
@@ -155,7 +162,7 @@ class WatchlistViewModel @Inject constructor(
     }
 
     fun setProviderFilter(filter: WatchlistProviderFilter) {
-        val pid = ActiveProvider.id
+        val pid = providerController.activeProviderId.value
         val filtered = filterByProvider(_state.value.allItems, filter, pid)
         val sorted = sortItems(filtered, _state.value.sortOption)
         _state.update { it.copy(providerFilter = filter, items = sorted) }
@@ -416,6 +423,7 @@ fun WatchlistScreen(
                                     series = item.toSeries(),
                                     onClick = { onSeriesClick(item.slug) },
                                     inWatchlist = true,
+                                    showWatchlistBadge = false,
                                     cardWidth = if (isTv) 160 else 130,
                                     focusRequester = if (isFirst) initialFocus else null
                                 )

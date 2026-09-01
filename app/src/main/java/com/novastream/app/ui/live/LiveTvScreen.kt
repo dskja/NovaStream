@@ -50,7 +50,8 @@ data class LiveTvUiState(
     val error: String? = null,
     val iptvEnabled: Boolean = false,
     val epgPrograms: List<EpgProgram> = emptyList(),
-    val epgLoading: Boolean = false
+    val epgLoading: Boolean = false,
+    val epgError: String? = null
 )
 
 @HiltViewModel
@@ -82,17 +83,29 @@ class LiveTvViewModel @Inject constructor(
 
     fun loadEpg() {
         viewModelScope.launch {
-            _state.update { it.copy(epgLoading = true) }
+            _state.update { it.copy(epgLoading = true, epgError = null) }
             try {
                 val url = appSettings.epgUrl.first().trim()
                 if (url.isBlank()) {
-                    _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
+                    _state.update { it.copy(epgLoading = false, epgPrograms = emptyList(), epgError = null) }
                     return@launch
                 }
                 val xml = withContext(Dispatchers.IO) { URL(url).readText() }
-                _state.update { it.copy(epgLoading = false, epgPrograms = XmlTvEpgParser.parse(xml)) }
+                _state.update {
+                    it.copy(
+                        epgLoading = false,
+                        epgPrograms = XmlTvEpgParser.parse(xml),
+                        epgError = null
+                    )
+                }
             } catch (e: Exception) {
-                _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
+                _state.update {
+                    it.copy(
+                        epgLoading = false,
+                        epgPrograms = emptyList(),
+                        epgError = ErrorMapper.toUserMessage(e)
+                    )
+                }
             }
         }
     }
@@ -199,6 +212,16 @@ fun LiveTvScreen(
                                 stringResource(R.string.live_tv_epg_loading),
                                 Modifier.padding(16.dp),
                                 style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    uiState.epgError?.let { epgError ->
+                        item {
+                            Text(
+                                epgError,
+                                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
                             )
                         }
                     }

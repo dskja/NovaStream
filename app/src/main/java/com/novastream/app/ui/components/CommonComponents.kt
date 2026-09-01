@@ -186,6 +186,7 @@ fun SeriesPosterCard(
     modifier: Modifier = Modifier,
     cardWidth: Int = 130,
     inWatchlist: Boolean = false,
+    showWatchlistBadge: Boolean = true,
     focusRequester: FocusRequester? = null
 ) {
     val context = LocalContext.current
@@ -285,7 +286,7 @@ fun SeriesPosterCard(
             }
 
             // Watchlist indicator badge (top-right corner)
-            if (inWatchlist) {
+            if (inWatchlist && showWatchlistBadge) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)

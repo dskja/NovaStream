@@ -589,7 +589,12 @@ class NovaStreamRepository private constructor(
     }
 
     private fun List<Series>.tagAll(providerId: String): List<Series> =
-        map { s -> if (s.providerId == providerId) s else s.copy(providerId = providerId) }
+        map { s ->
+            val tagged = if (s.providerId == providerId) s else s.copy(providerId = providerId)
+            val cleanTitle = com.novastream.app.util.MediaUrls.sanitizeTitle(tagged.title)
+                .ifBlank { tagged.title }
+            if (cleanTitle == tagged.title) tagged else tagged.copy(title = cleanTitle)
+        }
 
     private fun HomeCatalog.tagAll(providerId: String): HomeCatalog = copy(
         hero = hero.tagAll(providerId),

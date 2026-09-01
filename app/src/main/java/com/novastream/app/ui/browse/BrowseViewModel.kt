@@ -192,7 +192,13 @@ class BrowseViewModel @Inject constructor(
             val result = when (section) {
                 "popular" -> repo.loadPopular()
                 "newest" -> repo.loadNewest()
-                "trending" -> repo.loadPopular()
+                "trending" -> repo.loadHomeCatalog().let { result ->
+                    when (result) {
+                        is NovaStreamRepository.RepoResult.Success ->
+                            NovaStreamRepository.RepoResult.Success(result.data.trending)
+                        is NovaStreamRepository.RepoResult.Error -> result
+                    }
+                }
                 "movies" -> repo.loadMovies()
                 "genre" -> {
                     val slug = _state.value.selectedGenre

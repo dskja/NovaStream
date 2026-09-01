@@ -645,34 +645,37 @@ fun PlayerScreen(
                 }
             }
             if (playerVisible && castEnabled && castHelper.isAvailable) {
-                Box(
-                    Modifier
-                        .padding(start = 8.dp)
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(GlassMedium)
-                        .clickable {
-                            if (!castHelper.isCastSessionActive()) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_no_device))
-                                }
-                                return@clickable
-                            }
-                            val url = currentSource?.url ?: return@clickable
-                            val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
-                            exoPlayer.pause()
-                            exoPlayer.playWhenReady = false
-                            val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
-                            cp?.let { castHelper.loadOnCast(it, url, title) }
-                            isCasting = true
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Cast,
-                        stringResource(R.string.player_cast),
-                        tint = if (castHelper.isCastSessionActive()) Primary else Color.White,
-                        modifier = Modifier.size(22.dp)
+                if (castHelper.isCastSessionActive()) {
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(GlassMedium)
+                            .clickable {
+                                val url = currentSource?.url ?: return@clickable
+                                val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
+                                exoPlayer.pause()
+                                exoPlayer.playWhenReady = false
+                                val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
+                                cp?.let { castHelper.loadOnCast(it, url, title) }
+                                isCasting = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Cast,
+                            stringResource(R.string.player_cast),
+                            tint = Primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                } else {
+                    com.novastream.app.ui.cast.CastMediaRouteButton(
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(36.dp),
+                        castHelper = castHelper
                     )
                 }
             }

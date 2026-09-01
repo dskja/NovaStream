@@ -128,16 +128,13 @@ fun DetailScreen(
                 onRelatedClick = onRelatedClick,
                 onDownload = vm::downloadCurrentEpisode,
                 onCast = {
-                    if (castEnabled && !castHelper.isCastSessionActive()) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_no_device))
-                        }
-                    } else {
+                    if (castEnabled && castHelper.isCastSessionActive()) {
                         vm.castCurrentEpisode()
                     }
                 },
                 onRetrySeason = vm::retrySeasonLoad,
                 castEnabled = castEnabled && castHelper.isAvailable,
+                castHelper = castHelper,
                 casting = state.casting
             )
         }
@@ -165,6 +162,7 @@ private fun DetailContent(
     onCast: () -> Unit,
     onRetrySeason: () -> Unit,
     castEnabled: Boolean,
+    castHelper: com.novastream.app.cast.CastHelper,
     casting: Boolean
 ) {
     val series = state.series ?: return
@@ -371,26 +369,43 @@ private fun DetailContent(
                         }
                     }
                     if (castEnabled) {
-                        Box(
-                            Modifier
-                                .padding(start = 8.dp)
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(BgSurfaceElevated)
-                                .clickable(onClick = onCast, enabled = !casting)
-                                .focusable(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (casting) {
+                        if (casting) {
+                            Box(
+                                Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BgSurfaceElevated)
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Primary)
-                            } else {
+                            }
+                        } else if (castHelper.isCastSessionActive()) {
+                            Box(
+                                Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BgSurfaceElevated)
+                                    .clickable(onClick = onCast)
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Icon(
                                     Icons.Default.Cast,
                                     contentDescription = stringResource(R.string.detail_cast_to_tv),
-                                    tint = TextSecondary,
+                                    tint = Primary,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
+                        } else {
+                            com.novastream.app.ui.cast.CastMediaRouteButton(
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp),
+                                castHelper = castHelper
+                            )
                         }
                     }
                     Box(

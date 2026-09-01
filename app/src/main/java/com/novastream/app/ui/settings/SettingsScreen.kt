@@ -379,8 +379,6 @@ fun SettingsScreen(
 ) {
     val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
-    val providerController = remember { vm.providerController }
-    val isSwitchingProvider by providerController.isSwitching.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -889,25 +887,6 @@ fun SettingsScreen(
             titleContentColor = TextPrimary,
             textContentColor = TextSecondary
         )
-    }
-
-    if (isSwitchingProvider) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = Primary)
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    stringResource(R.string.settings_provider_switching),
-                    color = TextPrimary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
     }
 
     // Confirmation Dialog for destructive actions

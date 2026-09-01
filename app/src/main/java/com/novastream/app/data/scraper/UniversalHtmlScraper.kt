@@ -334,10 +334,12 @@ object UniversalHtmlScraper {
     }
 
     private fun cleanTitle(title: String): String =
-        title.replace(Regex("\\s+"), " ")
-            .replace(Regex("(?i)\\s*online\\s*(free|schauen|stream).*"), "")
-            .replace(Regex("(?i)\\s*watch\\s+"), " ")
-            .trim()
+        com.novastream.app.util.MediaUrls.sanitizeTitle(
+            title.replace(Regex("\\s+"), " ")
+                .replace(Regex("(?i)\\s*online\\s*(free|schauen|stream).*"), "")
+                .replace(Regex("(?i)\\s*watch\\s+"), " ")
+                .trim()
+        ).ifBlank { title.trim() }
 
     private fun slugToTitle(slug: String): String {
         val cleaned = if (slug.matches(Regex("""(?i)(tv|movie)-\d+"""))) {

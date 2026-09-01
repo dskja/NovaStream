@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -138,17 +139,18 @@ class SearchViewModel @Inject constructor(
         val expected = ActiveProvider.id
         trendingJob = viewModelScope.launch {
             try {
-                when (val res = repo.loadPopular()) {
+                when (val res = repo.loadHomeCatalog()) {
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id == expected) {
-                            _state.update { it.copy(trending = res.data.take(20)) }
+                            val trending = res.data.trending.ifEmpty { res.data.popular }
+                            _state.update { it.copy(trending = trending.take(20)) }
                         }
                     }
                     else -> {
-                        when (val home = repo.loadHome()) {
+                        when (val popular = repo.loadPopular()) {
                             is NovaStreamRepository.RepoResult.Success -> {
                                 if (ActiveProvider.id == expected) {
-                                    _state.update { it.copy(trending = home.data.take(20)) }
+                                    _state.update { it.copy(trending = popular.data.take(20)) }
                                 }
                             }
                             else -> {}
@@ -158,6 +160,9 @@ class SearchViewModel @Inject constructor(
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) {
                     android.util.Log.w("SearchVM", "loadTrending failed", e)
+                }
+                _state.update {
+                    it.copy(error = com.novastream.app.util.ErrorMapper.toUserMessage(e))
                 }
             }
         }
@@ -416,12 +421,10 @@ fun SearchScreen(
                         // Trending section
                         if (state.trending.isNotEmpty()) {
                             SectionHeader(stringResource(R.string.search_trending), modifier = Modifier.padding(top = 8.dp))
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 130.dp),
-                                contentPadding = PaddingValues(12.dp, bottom = 80.dp),
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.height(((state.trending.size / 2 + 1) * 280).dp)
+                                modifier = Modifier.padding(bottom = 80.dp)
                             ) {
                                 items(state.trending, key = { it.id }) { s ->
                                     SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })

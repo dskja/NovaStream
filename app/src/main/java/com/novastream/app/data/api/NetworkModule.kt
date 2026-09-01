@@ -75,9 +75,6 @@ object NetworkModule {
                 }
             }
             attempt++
-            if (attempt < 3) {
-                Thread.sleep(250L * attempt)
-            }
         }
         throw lastException ?: java.io.IOException("Max retries exceeded")
     }

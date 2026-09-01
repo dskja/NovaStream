@@ -94,8 +94,8 @@ object ProviderRegistry {
     private fun buildRegistry(appContext: Context?): List<RegisteredProvider> {
         val ctx = appContext
         return listOf(
-            reg(SerienStreamProvider(), ContentLanguage.DE, movies = false, cap = capsSs()),
-            reg(SerienStreamCxProvider(), ContentLanguage.DE, movies = false, cap = capsSs()),
+            reg(SerienStreamProvider(appContext = ctx), ContentLanguage.DE, movies = false, cap = capsSs()),
+            reg(SerienStreamCxProvider(appContext = ctx), ContentLanguage.DE, movies = false, cap = capsSs()),
             reg(AniWorldProvider(), ContentLanguage.DE, movies = false, cap = capsAniworld()),
             reg(KinoGerProvider(), ContentLanguage.DE, movies = true, cap = capsKinoger()),
             reg(BurningSeriesProvider(), ContentLanguage.DE, movies = false, cap = capsBs()),
