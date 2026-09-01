@@ -48,7 +48,7 @@ class MegaKinoProvider(
     @Volatile
     private var resolvedBaseUrl: String? = null
 
-    private val hosterResolver get() = HosterResolver(baseUrl = activeBaseUrl())
+    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl.trimEnd('/'))
 
     private suspend fun activeBaseUrl(): String {
         resolvedBaseUrl?.let { return it }

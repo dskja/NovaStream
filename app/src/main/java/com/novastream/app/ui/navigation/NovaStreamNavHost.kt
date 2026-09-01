@@ -25,6 +25,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.novastream.app.R
 import com.novastream.app.data.prefs.AppSettings
 import kotlinx.coroutines.launch
 import com.novastream.app.data.provider.ActiveProvider

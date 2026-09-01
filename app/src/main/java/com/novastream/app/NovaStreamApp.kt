@@ -13,6 +13,8 @@ import com.novastream.app.util.VoeWebViewResolver
 import com.novastream.app.util.CaptchaWebViewFetcher
 import com.novastream.app.data.repository.CatalogCachePurgeWorker
 import com.novastream.app.data.repository.NovaStreamRepository
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import com.novastream.app.util.LocaleManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
