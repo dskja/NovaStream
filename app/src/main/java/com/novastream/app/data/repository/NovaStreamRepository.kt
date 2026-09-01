@@ -13,7 +13,7 @@ import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
-import com.novastream.app.data.network.RequestCoalescer
+import com.novastream.app.data.network.GlobalRequestCoalescer
 import com.novastream.app.data.network.ScrapeLimiter
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.AniWorldProvider
@@ -316,7 +316,7 @@ class NovaStreamRepository private constructor(
     }
 
     private suspend fun <T> coalesceNetwork(key: String, block: suspend () -> RepoResult<T>): RepoResult<T> =
-        RequestCoalescer.coalesce(key) { block() }
+        GlobalRequestCoalescer.instance.coalesce(key) { block() }
 
     private suspend fun cachedListCall(
         type: String,

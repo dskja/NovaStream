@@ -3,13 +3,10 @@ package com.novastream.app.util
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.NovaStreamConfig
 import com.novastream.app.data.model.Series
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.cancelChildren
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.Request
@@ -78,27 +75,25 @@ object AjaxSearchClient {
         probes: List<suspend () -> List<Series>>
     ): List<Series>? = coroutineScope {
         if (probes.isEmpty()) return@coroutineScope null
-        val channel = Channel<List<Series>>(capacity = probes.size)
-        probes.forEach { probe ->
+        val winner = CompletableDeferred<List<Series>?>()
+        val jobs = probes.map { probe ->
             launch {
+                if (winner.isCompleted) return@launch
                 val result = try {
                     probe()
                 } catch (_: Exception) {
                     emptyList()
                 }
                 if (result.isNotEmpty()) {
-                    channel.send(result)
+                    winner.complete(result)
                 }
             }
         }
-        val winner = select<List<Series>?> {
-            repeat(probes.size) {
-                channel.onReceive { it }
-            }
+        jobs.forEach { it.join() }
+        if (!winner.isCompleted) {
+            winner.complete(null)
         }
-        coroutineContext.cancelChildren()
-        channel.close()
-        winner
+        winner.await()
     }
 
     private fun parseJsonIfValid(

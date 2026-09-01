@@ -61,4 +61,22 @@ class UniversalHtmlScraperTest {
         assertTrue(series.any { it.id == "tv-1396" && it.title.contains("Breaking", ignoreCase = true) })
         assertTrue(series.any { it.id == "movie-550" && it.isMovie })
     }
+
+    @Test
+    fun parseSeriesList_burningSeries_extractsSerieLinks() {
+        val html = loadFixture("burningseries.html")
+        val profile = SiteProfile(
+            id = "burningseries",
+            displayName = "Burning Series",
+            baseUrl = "https://bs.to",
+            seriesLinkSelector = "a[href^=/serie/]",
+            seriesLinkPattern = "/serie/([\\w-]+)",
+            slugRegex = "/serie/([\\w-]+)",
+            titleSelector = "h3, h2",
+            coverSelector = "img[src], img[data-src]"
+        )
+        val series = UniversalHtmlScraper.parseSeriesList(html, profile)
+        assertTrue(series.any { it.id == "game-of-thrones" })
+        assertTrue(series.any { it.id == "breaking-bad" })
+    }
 }

@@ -9,9 +9,6 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.AjaxSearchClient
 import com.novastream.app.util.HosterResolver
 import com.novastream.app.util.MediaUrls
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
