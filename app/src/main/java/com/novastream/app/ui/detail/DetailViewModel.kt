@@ -572,13 +572,13 @@ class DetailViewModel @Inject constructor(
                                     )
                                 }
                             }
-                            else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                            else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
                         }
                     }
-                    else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                    else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
                 }
             } catch (_: Exception) {
-                _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
             }
         }
     }
