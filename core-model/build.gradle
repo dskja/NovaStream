@@ -1,0 +1,27 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.novastream.core.model'
+    compileSdk 36
+    defaultConfig {
+        minSdk 22
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+}
+
+/*
+ * v15 target module :core-model
+ * Migrate here: StreamSource, Series, Episode, HosterLink, NovaStreamConfig
+ * Current app still hosts models in com.novastream.app.data.model during transition.
+ */

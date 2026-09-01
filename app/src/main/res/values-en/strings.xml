@@ -110,4 +110,156 @@
     <string name="press_back_again">Press back again to exit</string>
     <string name="invalid_playback_params">Invalid playback parameters</string>
     <string name="stale_cache_notice">Offline catalog (provider unreachable)</string>
+
+    <!-- Home -->
+    <string name="home_catalog_loaded_fmt">%1$d loaded · %2$s</string>
+    <string name="home_titles_available_fmt">%1$d titles available</string>
+    <string name="home_movies_available_fmt">%1$d movies available</string>
+    <string name="home_series_available_fmt">%1$d series available</string>
+    <string name="home_my_list">My list</string>
+    <string name="home_popular">Popular</string>
+    <string name="home_newest">Recently added</string>
+    <string name="home_trending">Trending</string>
+    <string name="home_movies_section">Movies</string>
+    <string name="home_latest_episodes">New episodes</string>
+    <string name="home_genre_action">Action</string>
+    <string name="home_genre_drama">Drama</string>
+    <string name="home_genre_scifi">Sci-Fi &amp; Fantasy</string>
+    <string name="home_genre_comedy">Comedy</string>
+    <string name="home_all_titles">All titles</string>
+    <string name="home_all_movies">All movies</string>
+    <string name="home_all_series">All series</string>
+    <string name="home_catalog_empty">No catalog available.\nPull down to refresh or switch provider in Settings.</string>
+    <string name="home_watch">Watch</string>
+    <string name="cd_watch">Watch</string>
+    <string name="error_unknown">Unknown error</string>
+
+    <!-- Browse -->
+    <string name="browse_loading_catalog">Loading catalog…</string>
+    <string name="browse_header_subtitle_fmt">%1$s · %2$d titles</string>
+    <string name="browse_empty_filter">No titles found for this filter.</string>
+    <string name="browse_sort_title_asc">A-Z</string>
+    <string name="browse_sort_newest">Newest</string>
+    <string name="browse_sort_popular">Popular</string>
+
+    <!-- Detail -->
+    <string name="detail_provider_reloading">Provider switched – reloading content…</string>
+    <string name="cd_back_to_overview">Back to overview</string>
+    <string name="detail_play_movie">Play movie</string>
+    <string name="detail_play_first_episode">Watch first episode</string>
+    <string name="detail_remove_from_watchlist">Remove from watchlist</string>
+    <string name="detail_add_to_watchlist">Add to watchlist</string>
+    <string name="cd_share">Share</string>
+    <string name="detail_share_message_fmt">Watch %1$s on NovaStream: %2$s</string>
+    <string name="detail_share_chooser">Share</string>
+    <string name="detail_watch_trailer">Watch trailer</string>
+    <string name="detail_show_less">Show less</string>
+    <string name="detail_show_more">Show more</string>
+    <string name="detail_cast">Cast</string>
+    <string name="detail_seasons_count_fmt">%1$d seasons</string>
+    <string name="detail_episodes_count_fmt">%1$d episodes</string>
+    <string name="detail_watched_count_fmt">%1$d watched (%2$d%%)</string>
+    <string name="detail_season_label_fmt">Season %1$d</string>
+    <string name="detail_seasons_header">Seasons</string>
+    <string name="detail_episodes_header">Episodes</string>
+    <string name="detail_watched_progress_fmt">%1$d/%2$d watched</string>
+    <string name="detail_episodes_count_short_fmt">%1$d episodes</string>
+    <string name="detail_mark_all_unwatched">Reset all</string>
+    <string name="detail_mark_all_watched">Mark all watched</string>
+    <string name="detail_filter_episodes_placeholder">Filter episodes…</string>
+    <string name="cd_clear">Clear</string>
+    <string name="detail_no_episodes_for_filter_fmt">No episodes found for \'%1$s\'</string>
+    <string name="detail_no_episodes">No episodes found</string>
+    <string name="detail_related_titles">Similar titles</string>
+    <string name="detail_also_on">Also on</string>
+    <string name="detail_continue_watching_header">CONTINUE WATCHING</string>
+    <string name="cd_remove">Remove</string>
+    <string name="cd_play">Play</string>
+    <string name="detail_season_episode_fmt">Season %1$d · Episode %2$d</string>
+    <string name="detail_progress_remaining_fmt">%1$d%% watched · %2$d min left</string>
+    <string name="detail_remaining_min_fmt">%1$d min left</string>
+    <string name="detail_watched">Watched</string>
+    <string name="cd_watched">Watched</string>
+    <string name="detail_episode_compact_fmt">S%1$dE%2$d</string>
+    <string name="detail_episode_fallback_fmt">E%1$d</string>
+
+    <!-- Player -->
+    <string name="player_resolving_stream">Resolving stream…</string>
+    <string name="player_skip_intro">Skip intro</string>
+    <string name="cd_back">Back</string>
+    <string name="player_quality">Quality</string>
+    <string name="player_hoster">Hoster</string>
+    <string name="player_resolving_hoster">Resolving hoster…</string>
+    <string name="player_next_episode">Next episode</string>
+    <string name="player_episode_code_fmt">S%1$d E%2$d</string>
+    <string name="cd_next">Next</string>
+    <string name="player_continue">Continue</string>
+    <string name="player_tap_to_cancel">Tap to cancel</string>
+    <string name="player_try_alternate_hoster">Try another hoster</string>
+    <string name="player_no_hosters_found">No hosters found</string>
+    <string name="player_no_more_hosters">No more hosters available</string>
+    <string name="player_hoster_failed_fmt">%1$s failed — trying %2$s</string>
+    <string name="player_hoster_failed_next">Hoster failed — trying next</string>
+    <string name="player_resolve_failed">Could not resolve any hoster. Try again later or choose another hoster.</string>
+    <string name="player_episode_fallback_fmt">Episode %1$d</string>
+    <string name="player_season_episode_title_fmt">Season %1$d Episode %2$d</string>
+
+    <!-- Watchlist -->
+    <string name="watchlist_filter_current">Current</string>
+    <string name="watchlist_sort_added_desc">Recently added</string>
+    <string name="watchlist_sort_added_asc">Oldest first</string>
+    <string name="watchlist_sort_title_asc">Title A-Z</string>
+    <string name="watchlist_sort_title_desc">Title Z-A</string>
+    <string name="watchlist_remove_title">Remove?</string>
+    <string name="watchlist_remove_message_fmt">Remove \'%1$s\' from your watchlist?</string>
+    <string name="watchlist_remove_confirm">Remove</string>
+    <string name="watchlist_unknown_provider_title">Unknown provider</string>
+    <string name="watchlist_unknown_provider_message">No provider is available for this entry. You can remove it or show \"All\" in the list view.</string>
+    <string name="watchlist_ok">OK</string>
+    <string name="watchlist_error_loading">Error loading watchlist</string>
+    <string name="watchlist_empty">Your watchlist is empty.\nAdd movies &amp; series you want to watch.</string>
+    <string name="watchlist_watching_badge">Watching</string>
+    <string name="watchlist_provider_unknown">Unknown</string>
+
+    <!-- Continue watching -->
+    <string name="continue_watching_back">Back</string>
+    <string name="continue_watching_nothing">Nothing to continue watching.</string>
+    <string name="cw_remove_title">Remove?</string>
+    <string name="cw_remove_message_fmt">Remove \'%1$s - %2$s\' from continue watching?</string>
+
+    <!-- Playback notification -->
+    <string name="playback_channel_name">Playback</string>
+    <string name="playback_channel_description">Background playback</string>
+    <string name="playback_notification_text">Now playing</string>
+    <string name="playback_stop">Stop</string>
+
+    <!-- Search (remaining) -->
+    <string name="cd_search">Search</string>
+    <string name="cd_clear_search">Clear</string>
+
+    <!-- Errors -->
+    <string name="error_timeout">Loading timed out. Please check your internet connection.</string>
+    <string name="error_unknown_host">Server unreachable. Check your connection or try again later.</string>
+    <string name="error_ssl_handshake">Secure connection failed. Your device date may be incorrect.</string>
+    <string name="error_ssl">Could not establish a secure connection. Try again.</string>
+    <string name="error_connect">Connection refused. Try again later.</string>
+    <string name="error_io">Network error: %1$s</string>
+    <string name="error_io_unknown">Unknown connection error</string>
+    <string name="error_site_structure">The site structure has changed. An update may help.</string>
+    <string name="error_invalid_request">Invalid request: %1$s</string>
+    <string name="error_internal">An internal error occurred. Try again.</string>
+    <string name="error_data_processing">Could not process data. Try again.</string>
+    <string name="error_security">Access denied. Check your permissions.</string>
+    <string name="error_coroutine_timeout">Timed out. The server is taking too long to respond.</string>
+    <string name="error_cancelled">Operation cancelled.</string>
+    <string name="error_http_403">Access denied (403). The site may be blocking the app.</string>
+    <string name="error_http_404">Page not found (404). Content may have been removed.</string>
+    <string name="error_http_429">Too many requests (429). Wait a moment and try again.</string>
+    <string name="error_http_server">Server error (%1$d). Try again later.</string>
+    <string name="error_http_generic">HTTP error %1$d: %2$s</string>
+    <string name="error_json">Could not read data. Try again.</string>
+    <string name="error_jsoup_http">HTTP error %1$d: %2$s</string>
+    <string name="error_mime">Unsupported content type. Try again.</string>
+    <string name="error_with_message">Error: %1$s</string>
+    <string name="error_empty_search">Empty search</string>
 </resources>

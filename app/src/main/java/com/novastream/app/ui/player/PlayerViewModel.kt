@@ -9,7 +9,11 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import android.content.Context
+import com.novastream.app.R
+import com.novastream.app.util.AppContext
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -79,6 +83,7 @@ data class PreviousEpisodeInfo(
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
@@ -90,8 +95,9 @@ class PlayerViewModel @Inject constructor(
     private val episode: Int = savedStateHandle.get<Int>("episode") ?: 1
     private val title: String = run {
         val raw = savedStateHandle.get<String>("title") ?: ""
-        try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }
-    }.ifBlank { "Episode $episode" }
+        val decoded = try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }
+        decoded.ifBlank { null }
+    } ?: AppContext.get().getString(R.string.player_episode_fallback_fmt, episode)
     private val seriesTitle: String = run {
         val raw = savedStateHandle.get<String>("seriesTitle") ?: ""
         try { java.net.URLDecoder.decode(raw, "UTF-8") } catch (_: Exception) { raw }
@@ -206,7 +212,7 @@ class PlayerViewModel @Inject constructor(
                 is NovaStreamRepository.RepoResult.Success -> {
                     val hosters = h.data
                     if (hosters.isEmpty()) {
-                        _state.update { it.copy(loading = false, error = "Keine Hoster gefunden") }
+                        _state.update { it.copy(loading = false, error = context.getString(R.string.player_no_hosters_found)) }
                         return@launch
                     }
                     val prefs = _state.value
@@ -253,7 +259,7 @@ class PlayerViewModel @Inject constructor(
         if (nextIndex < _state.value.hosters.size) {
             selectHoster(nextIndex)
         } else {
-            _state.update { it.copy(error = "Keine weiteren Hoster verfügbar") }
+            _state.update { it.copy(error = context.getString(R.string.player_no_more_hosters)) }
         }
     }
 
@@ -347,7 +353,9 @@ class PlayerViewModel @Inject constructor(
                                     resolvedNext = NextEpisodeInfo(
                                         season = nextSeason,
                                         episode = first.number,
-                                        title = first.title.ifBlank { "Staffel $nextSeason Episode ${first.number}" },
+                                        title = first.title.ifBlank {
+                                            context.getString(R.string.player_season_episode_title_fmt, nextSeason, first.number)
+                                        },
                                         coverUrl = coverUrl
                                     )
                                 }
@@ -365,7 +373,9 @@ class PlayerViewModel @Inject constructor(
                                     resolvedPrevious = PreviousEpisodeInfo(
                                         season = prevSeason,
                                         episode = last.number,
-                                        title = last.title.ifBlank { "Staffel $prevSeason Episode ${last.number}" },
+                                        title = last.title.ifBlank {
+                                            context.getString(R.string.player_season_episode_title_fmt, prevSeason, last.number)
+                                        },
                                         coverUrl = coverUrl
                                     )
                                 }
@@ -452,9 +462,9 @@ class PlayerViewModel @Inject constructor(
                 it.copy(
                     selectedHosterIndex = nextIndex,
                     hosterFallbackNotice = if (failedName.isNotBlank() && nextName.isNotBlank()) {
-                        "$failedName fehlgeschlagen — versuche $nextName"
+                        context.getString(R.string.player_hoster_failed_fmt, failedName, nextName)
                     } else {
-                        "Hoster fehlgeschlagen — versuche nächsten"
+                        context.getString(R.string.player_hoster_failed_next)
                     }
                 )
             }
@@ -465,7 +475,7 @@ class PlayerViewModel @Inject constructor(
                     loading = false,
                     hosterSwitching = false,
                     hosterFallbackNotice = null,
-                    error = "Kein Hoster konnte aufgelöst werden. Versuche es später erneut oder wähle einen anderen Hoster."
+                    error = context.getString(R.string.player_resolve_failed)
                 )
             }
         }

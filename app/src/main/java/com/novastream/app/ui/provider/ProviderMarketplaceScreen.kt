@@ -24,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +33,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.novastream.app.R
 import com.novastream.app.data.provider.*
 import com.novastream.app.ui.theme.*
@@ -194,13 +197,28 @@ private fun MarketplaceProviderCard(
                 .background(Primary.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Stream, contentDescription = null, tint = Primary)
+            if (!info.logoUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(info.logoUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = info.displayName,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Default.Stream, contentDescription = null, tint = Primary)
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(info.displayName, color = TextPrimary, fontWeight = FontWeight.Bold)
+            val regionPart = info.regionLabel?.let { "$it · " }.orEmpty()
             Text(
-                "${info.contentLabel(context)} · ${info.languageTag.uppercase()} · ${info.hostLabel}",
+                "${info.contentLabel(context)} · ${info.languageTag.uppercase()} · $regionPart${info.hostLabel}",
                 color = TextTertiary,
                 style = MaterialTheme.typography.labelSmall
             )

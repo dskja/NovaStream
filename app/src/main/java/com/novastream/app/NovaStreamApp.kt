@@ -15,6 +15,7 @@ import com.novastream.app.data.repository.CatalogCachePurgeWorker
 import com.novastream.app.data.repository.NovaStreamRepository
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
+import com.novastream.app.util.AppContext
 import com.novastream.app.util.LocaleManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -45,6 +46,9 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        AppContext.init(this)
+        com.novastream.app.telemetry.PlaySuccessTracker.init(this)
+        com.novastream.app.download.DownloadForegroundService.ensureChannel(this)
         // Set VoeWebViewResolver context for VOE hoster resolution
         VoeWebViewResolver.setContext(this)
         CaptchaWebViewFetcher.setContext(this)

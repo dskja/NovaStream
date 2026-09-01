@@ -22,7 +22,13 @@ data class MetaShow(
     val officialSite: String? = null,
     val trailerUrl: String? = null,
     val cast: List<MetaPerson> = emptyList(),
-    val seasonCount: Int? = null
+    val seasonCount: Int? = null,
+    val tmdbId: Int? = null,
+    val anilistId: Int? = null,
+    val wikidataId: String? = null,
+    val tvmazeId: String? = null,
+    val mediaType: String? = null,
+    val similar: List<MetaShow> = emptyList()
 ) {
     val year: String?
         get() = premiered?.take(4)

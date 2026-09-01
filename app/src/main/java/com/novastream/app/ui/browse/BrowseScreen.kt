@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -79,10 +81,10 @@ fun BrowseScreen(
         modifier = Modifier.fillMaxSize().background(BgPure)
     ) {
         when {
-            state.loading && state.items.isEmpty() -> PremiumLoading(label = "Katalog laden…")
-            state.error != null && state.items.isEmpty() -> PremiumError(state.error ?: "Fehler", onRetry = vm::refresh)
+            state.loading && state.items.isEmpty() -> PremiumLoading(label = stringResource(R.string.browse_loading_catalog))
+            state.error != null && state.items.isEmpty() -> PremiumError(state.error ?: stringResource(R.string.error_title), onRetry = vm::refresh)
             !state.loading && state.items.isEmpty() -> PremiumEmpty(
-                text = "Keine Titel für diesen Filter gefunden.",
+                text = stringResource(R.string.browse_empty_filter),
                 modifier = Modifier.fillMaxSize()
             )
             else -> LazyVerticalGrid(
@@ -103,13 +105,13 @@ fun BrowseScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "Entdecken",
+                                stringResource(R.string.nav_browse),
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = TextPrimary,
                                 fontWeight = FontWeight.Black
                             )
                             Text(
-                                "${state.providerName} · ${state.items.size} Titel",
+                                stringResource(R.string.browse_header_subtitle_fmt, state.providerName, state.items.size),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = TextTertiary
                             )
@@ -124,7 +126,7 @@ fun BrowseScreen(
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Text(
-                                    state.sort.label,
+                                    stringResource(state.sort.labelRes),
                                     color = TextSecondary,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Medium
@@ -139,7 +141,7 @@ fun BrowseScreen(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                option.label,
+                                                stringResource(option.labelRes),
                                                 color = if (state.sort == option) Primary else TextPrimary
                                             )
                                         },
@@ -164,9 +166,9 @@ fun BrowseScreen(
                                 val selected = state.contentFilter == filter
                                 BrowseFilterChip(
                                     label = when (filter) {
-                                        BrowseContentFilter.ALL -> "Alle"
-                                        BrowseContentFilter.SERIES -> "Serien"
-                                        BrowseContentFilter.MOVIES -> "Filme"
+                                        BrowseContentFilter.ALL -> stringResource(R.string.provider_filter_all)
+                                        BrowseContentFilter.SERIES -> stringResource(R.string.provider_content_series)
+                                        BrowseContentFilter.MOVIES -> stringResource(R.string.provider_content_movies)
                                     },
                                     selected = selected,
                                     onClick = { vm.setContentFilter(filter) },
@@ -186,7 +188,7 @@ fun BrowseScreen(
                                 .horizontalScroll(rememberScrollState())
                         ) {
                             BrowseFilterChip(
-                                label = "Alle",
+                                label = stringResource(R.string.provider_filter_all),
                                 selected = state.selectedGenre == null,
                                 onClick = { vm.selectGenre(null) },
                                 isTv = isTv

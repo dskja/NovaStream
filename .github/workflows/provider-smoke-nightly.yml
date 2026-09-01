@@ -1,0 +1,31 @@
+name: Provider Smoke Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Live provider reachability (51)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run provider smoke script
+        shell: pwsh
+        run: ./scripts/provider-smoke.ps1
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-smoke-report
+          path: scripts/provider-smoke.ps1
+          retention-days: 14

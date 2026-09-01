@@ -48,10 +48,10 @@ class PlaybackForegroundService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Wiedergabe",
+            getString(R.string.playback_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Hintergrund-Wiedergabe"
+            description = getString(R.string.playback_channel_description)
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)
@@ -75,9 +75,9 @@ class PlaybackForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText("Wiedergabe läuft")
+            .setContentText(getString(R.string.playback_notification_text))
             .setContentIntent(openIntent)
-            .addAction(0, "Stoppen", stopIntent)
+            .addAction(0, getString(R.string.playback_stop), stopIntent)
             .setOngoing(true)
             .setSilent(true)
             .build()

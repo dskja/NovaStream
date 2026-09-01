@@ -69,6 +69,7 @@ import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.ui.provider.ProviderLanguageFilterChips
 import com.novastream.app.ui.provider.ProviderLanguageSectionHeader
 import com.novastream.app.util.LocaleManager
+import com.novastream.app.util.findActivity
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -709,7 +710,10 @@ fun SettingsScreen(
                 onSelect = { label ->
                     val tag = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
                         .first { LocaleManager.localeDisplayName(it) == label }
-                    vm.setUiLocale(tag)
+                    if (tag != state.uiLocale) {
+                        vm.setUiLocale(tag)
+                        context.findActivity()?.recreate()
+                    }
                 }
             )
             SettingsDropdownRow(
@@ -827,6 +831,10 @@ fun SettingsScreen(
                     )
                 )
             }
+
+            Spacer(Modifier.height(8.dp))
+
+            SettingsUltraSections(appSettings = remember { AppSettings(context) })
 
             Spacer(Modifier.height(8.dp))
 
@@ -1495,7 +1503,7 @@ private fun SettingsNavigationRow(
 }
 
 @Composable
-private fun SettingsSectionHeader(title: String) {
+internal fun SettingsSectionHeader(title: String) {
     Text(
         title,
         style = MaterialTheme.typography.labelLarge,

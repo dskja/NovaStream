@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "NovaStream"
 include ':app'
+include ':core-model'
+include ':provider-api'

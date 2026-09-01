@@ -36,6 +36,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -359,10 +361,10 @@ fun PlayerScreen(
                     .focusable()
             )
         } else if (state.loading) {
-            PremiumLoading(label = "Stream wird aufgelöst…")
+            PremiumLoading(label = stringResource(R.string.player_resolving_stream))
         } else if (state.error != null) {
             PlayerErrorOverlay(
-                message = state.error ?: "Unbekannter Fehler",
+                message = state.error ?: stringResource(R.string.error_unknown),
                 canTryAlternateHoster = state.hasAlternateHoster,
                 onRetry = { vm.retry() },
                 onTryAlternateHoster = { vm.tryAlternateHoster() }
@@ -408,9 +410,9 @@ fun PlayerScreen(
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.SkipNext, "Intro überspringen", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.SkipNext, stringResource(R.string.player_skip_intro), tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Intro überspringen", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(stringResource(R.string.player_skip_intro), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
@@ -443,7 +445,7 @@ fun PlayerScreen(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    "Zurück",
+                    stringResource(R.string.cd_back),
                     tint = Color.White,
                     modifier = Modifier.size(22.dp)
                 )
@@ -482,7 +484,7 @@ fun PlayerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            currentSource?.qualityHint ?: "Qualität",
+                            currentSource?.qualityHint ?: stringResource(R.string.player_quality),
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
@@ -523,7 +525,7 @@ fun PlayerScreen(
                 ) {
                     Icon(
                         if (showHosters) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                        "Hoster",
+                        stringResource(R.string.player_hoster),
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
@@ -628,7 +630,7 @@ fun PlayerScreen(
                     )
             ) {
                 Text(
-                    "Hoster",
+                    stringResource(R.string.player_hoster),
                     color = Color.White.copy(0.6f),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
@@ -680,7 +682,7 @@ fun PlayerScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Hoster wird aufgelöst…",
+                            stringResource(R.string.player_resolving_hoster),
                             color = Color.White.copy(0.6f),
                             fontSize = 12.sp
                         )
@@ -726,7 +728,7 @@ fun PlayerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "Nächste Folge",
+                            stringResource(R.string.player_next_episode),
                             color = Color.White.copy(0.6f),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
@@ -763,7 +765,7 @@ fun PlayerScreen(
                                 Modifier.align(Alignment.BottomStart).padding(16.dp)
                             ) {
                                 Text(
-                                    "S${next.season} E${next.episode}",
+                                    stringResource(R.string.player_episode_code_fmt, next.season, next.episode),
                                     color = Color.White.copy(0.7f),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
@@ -791,10 +793,10 @@ fun PlayerScreen(
                                 .padding(horizontal = 32.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.SkipNext, "Nächste", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.SkipNext, stringResource(R.string.cd_next), tint = Color.White, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Weiter",
+                                stringResource(R.string.player_continue),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
@@ -809,7 +811,7 @@ fun PlayerScreen(
                         }
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "Tippen um abzubrechen",
+                            stringResource(R.string.player_tap_to_cancel),
                             color = Color.White.copy(0.4f),
                             fontSize = 12.sp
                         )
@@ -843,7 +845,7 @@ private fun PlayerErrorOverlay(
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Etwas ist schiefgelaufen",
+                stringResource(R.string.error_title),
                 color = TextPrimary,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
@@ -865,7 +867,7 @@ private fun PlayerErrorOverlay(
                         .padding(horizontal = 32.dp, vertical = 12.dp)
                 ) {
                     Text(
-                        "Anderen Hoster versuchen",
+                        stringResource(R.string.player_try_alternate_hoster),
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.labelLarge
@@ -881,7 +883,7 @@ private fun PlayerErrorOverlay(
                     .padding(horizontal = 32.dp, vertical = 12.dp)
             ) {
                 Text(
-                    "Erneut versuchen",
+                    stringResource(R.string.retry),
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.labelLarge

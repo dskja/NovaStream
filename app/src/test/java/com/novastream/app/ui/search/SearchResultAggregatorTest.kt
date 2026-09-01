@@ -34,4 +34,43 @@ class SearchResultAggregatorTest {
         assertTrue(detailed.first().providerIds.contains("p1"))
         assertTrue(detailed.first().providerIds.contains("p2"))
     }
+
+    @Test
+    fun `dedupes by imdb id across providers`() {
+        val s1 = Series(id = "a", title = "Breaking Bad", imdbId = "tt0903747", providerId = "p1")
+        val s2 = Series(id = "b", title = "Breaking Bad DE", imdbId = "tt0903747", providerId = "p2")
+        val result = SearchResultAggregator.aggregate(
+            listOf("p1" to listOf(s1), "p2" to listOf(s2))
+        )
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `dedupes by tvmaze id across providers`() {
+        val s1 = Series(id = "a", title = "Dark", tvmazeId = "536", providerId = "p1")
+        val s2 = Series(id = "b", title = "Dark", tvmazeId = "536", providerId = "p2")
+        val result = SearchResultAggregator.aggregate(
+            listOf("p1" to listOf(s1), "p2" to listOf(s2))
+        )
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `dedupes by tmdb id even when titles differ`() {
+        val s1 = Series(id = "a", title = "Breaking Bad", year = "2008", providerId = "p1", canonicalKey = "tmdb:1396", tmdbId = 1396)
+        val s2 = Series(id = "b", title = "Breaking Bad DE", year = "2008", providerId = "p2", canonicalKey = "tmdb:1396", tmdbId = 1396)
+        val result = SearchResultAggregator.aggregate(
+            listOf("p1" to listOf(s1), "p2" to listOf(s2))
+        )
+        assertEquals(1, result.size)
+    }
+
+    @Test
+    fun `prefers entry with tmdb id when merging`() {
+        val s1 = Series(id = "a", title = "Inception", year = "2010", providerId = "p1")
+        val s2 = Series(id = "b", title = "Inception", year = "2010", providerId = "p2", tmdbId = 27205)
+        val detailed = SearchResultAggregator.aggregateDetailed(listOf("p1" to listOf(s1), "p2" to listOf(s2)))
+        assertEquals(1, detailed.size)
+        assertEquals(27205, detailed.first().series.tmdbId)
+    }
 }

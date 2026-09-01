@@ -3,13 +3,21 @@ package com.novastream.app.ui.detail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.novastream.app.data.db.ContentDao
+import com.novastream.app.data.db.ContentEntity
 import com.novastream.app.data.db.WatchProgress
+import com.novastream.app.data.meta.ExternalIds
+import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.meta.FreeMetaService
+import com.novastream.app.data.meta.MetaEnrichment
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.provider.ProviderRegistry
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class DetailUiState(
@@ -37,6 +46,7 @@ data class DetailUiState(
     val imdbId: String? = null,
     val trailerUrl: String? = null,
     val relatedTitles: List<Series> = emptyList(),
+    val alsoOnProviders: List<String> = emptyList(),
     val loadedProviderId: String? = null,
     val providerMismatch: Boolean = false
 ) {
@@ -91,7 +101,10 @@ class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val freeMetaGraph: FreeMetaGraph,
+    private val contentDao: ContentDao,
+    private val appSettings: AppSettings
 ) : ViewModel() {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
@@ -315,57 +328,89 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /** Reichert Detail mit kostenloser TVMaze-Metadata an (kein API-Key). */
+    /** FreeMetaGraph for cast, backdrop, similar titles, and cross-provider discovery. */
     private fun enrichMetadata(series: Series) {
         viewModelScope.launch {
             try {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
                 val preferAnime = ActiveProvider.isAniWorld ||
                     series.genres.any { it.contains("anime", true) } ||
                     series.detailUrl.contains("/anime/")
-                val meta = when {
-                    series.id.all { it.isDigit() } ->
-                        FreeMetaService.show(series.id)
-                    else ->
-                        FreeMetaService.enrichByTitle(series.title, preferAnime = preferAnime)
-                } ?: return@launch
 
-                // Keine falschen Matches übernehmen
+                val enrichment = freeMetaGraph.enrichBySeries(series, preferAnime, language)
+                    ?: return@launch
+
                 if (!series.id.all { it.isDigit() } &&
-                    !FreeMetaService.titlesSimilar(series.title, meta.title)
+                    !FreeMetaService.titlesSimilar(series.title, enrichment.show.title)
                 ) {
                     return@launch
                 }
 
-                val enriched = series.copy(
-                    description = series.description?.takeIf { it.isNotBlank() } ?: meta.summary,
-                    // Provider-Cover haben Vorrang – Meta nur als Fallback
-                    coverUrl = series.coverUrl ?: meta.posterUrl,
-                    backdropUrl = series.backdropUrl ?: meta.backdropUrl,
-                    // Genres vom Provider behalten; Meta nur ergänzen wenn leer
-                    genres = series.genres.ifEmpty {
-                        if (preferAnime && meta.genres.none { it.contains("anime", true) }) {
-                            emptyList()
-                        } else meta.genres
-                    },
-                    year = series.year ?: meta.year,
-                    rating = series.rating ?: meta.rating?.let { String.format("%.1f", it) },
-                    status = series.status ?: meta.status
-                )
-                _state.update {
-                    it.copy(
-                        series = enriched,
-                        metaCast = meta.cast,
-                        metaRating = meta.rating,
-                        metaNetwork = meta.network,
-                        imdbId = meta.imdbId,
-                        trailerUrl = meta.trailerUrl
-                    )
-                }
+                applyGraphEnrichment(series, enrichment)
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "meta enrich failed", e)
             }
         }
     }
+
+    private suspend fun applyGraphEnrichment(series: Series, enrichment: MetaEnrichment) {
+        val meta = enrichment.show
+        val ids = enrichment.externalIds
+        val enriched = mergeSeriesWithMeta(series, meta).copy(
+            imdbId = ids.imdbId ?: meta.imdbId,
+            tvmazeId = ids.tvmazeId ?: meta.tvmazeId,
+            anilistId = ids.anilistId ?: meta.anilistId,
+            canonicalKey = enrichment.canonicalKey,
+            tmdbId = ids.tmdbId ?: meta.tmdbId
+        )
+        val providerId = ActiveProvider.id
+        ContentEntity.fromExternalIds(
+            slug = series.id,
+            providerId = providerId,
+            contentType = if (series.isMovie) ContentEntity.TYPE_MOVIE else ContentEntity.TYPE_TV,
+            imdbId = ids.imdbId,
+            tvmazeId = ids.tvmazeId,
+            anilistId = ids.anilistId,
+            wikidataId = ids.wikidataId,
+            tmdbId = ids.tmdbId
+        )?.let { contentDao.upsert(it) }
+
+        val alsoOn = enrichment.canonicalKey?.let { key ->
+            contentDao.findByCanonicalKeyExcluding(key, providerId)
+                .mapNotNull { ProviderRegistry.getProviderOrNull(it.providerId)?.displayName }
+                .distinct()
+        } ?: emptyList()
+
+        val similar = enrichment.similar.take(20).map { similarShow ->
+            freeMetaGraph.toSeries(similarShow, providerId)
+        }
+
+        _state.update {
+            it.copy(
+                series = enriched,
+                metaCast = enrichment.cast.ifEmpty { meta.cast },
+                metaRating = meta.rating,
+                metaNetwork = meta.network,
+                imdbId = ids.imdbId ?: meta.imdbId,
+                trailerUrl = meta.trailerUrl ?: FreeMetaService.trailerUrlFor(meta),
+                relatedTitles = similar.ifEmpty { it.relatedTitles },
+                alsoOnProviders = alsoOn
+            )
+        }
+    }
+
+    private fun mergeSeriesWithMeta(
+        series: Series,
+        meta: com.novastream.app.data.meta.MetaShow
+    ): Series = series.copy(
+        description = series.description?.takeIf { it.isNotBlank() } ?: meta.summary,
+        coverUrl = series.coverUrl ?: meta.posterUrl,
+        backdropUrl = series.backdropUrl ?: meta.backdropUrl,
+        genres = series.genres.ifEmpty { meta.genres },
+        year = series.year ?: meta.year,
+        rating = series.rating ?: meta.rating?.let { String.format("%.1f", it) },
+        status = series.status ?: meta.status
+    )
 
     private fun loadRelatedTitles(series: Series) {
         viewModelScope.launch {
@@ -393,7 +438,11 @@ class DetailViewModel @Inject constructor(
                     else -> emptyList()
                 }
                 if (related.isNotEmpty()) {
-                    _state.update { it.copy(relatedTitles = related) }
+                    _state.update { current ->
+                        if (current.relatedTitles.isEmpty()) {
+                            current.copy(relatedTitles = related)
+                        } else current
+                    }
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "related titles failed", e)

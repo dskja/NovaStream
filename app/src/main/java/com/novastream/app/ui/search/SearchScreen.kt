@@ -303,7 +303,7 @@ fun SearchScreen(
         ) {
             Icon(
                 Icons.Default.Search,
-                contentDescription = "Suche",
+                contentDescription = stringResource(R.string.cd_search),
                 tint = Primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -344,7 +344,7 @@ fun SearchScreen(
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Löschen",
+                        contentDescription = stringResource(R.string.cd_clear_search),
                         tint = TextTertiary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -384,10 +384,10 @@ fun SearchScreen(
                             ) {
                                 Icon(Icons.Default.History, null, tint = TextTertiary, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Letzte Suchen", color = TextTertiary, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelLarge)
+                                Text(stringResource(R.string.search_recent), color = TextTertiary, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelLarge)
                                 Spacer(Modifier.weight(1f))
                                 Text(
-                                    "Löschen",
+                                    stringResource(R.string.search_clear),
                                     color = Primary,
                                     style = MaterialTheme.typography.labelSmall,
                                     modifier = Modifier.clickable { vm.clearRecentSearches() }
@@ -409,7 +409,7 @@ fun SearchScreen(
                         }
                         // Trending section
                         if (state.trending.isNotEmpty()) {
-                            SectionHeader("Beliebt jetzt", modifier = Modifier.padding(top = 8.dp))
+                            SectionHeader(stringResource(R.string.search_trending), modifier = Modifier.padding(top = 8.dp))
                             LazyVerticalGrid(
                                 columns = GridCells.Adaptive(minSize = 130.dp),
                                 contentPadding = PaddingValues(12.dp, bottom = 80.dp),
@@ -423,7 +423,7 @@ fun SearchScreen(
                             }
                         }
                         if (state.recentSearches.isEmpty() && state.trending.isEmpty()) {
-                            PremiumEmpty("Suche nach Filmen & Serien", icon = Icons.Default.Search)
+                            PremiumEmpty(stringResource(R.string.search_empty), icon = Icons.Default.Search)
                         }
                     }
                 }

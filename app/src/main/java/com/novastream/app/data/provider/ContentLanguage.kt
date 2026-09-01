@@ -10,6 +10,7 @@ enum class ContentLanguage(val tag: String) {
     ES("es"),
     IT("it"),
     PL("pl"),
+    AR("ar"),
     MULTI("multi");
 
     companion object {

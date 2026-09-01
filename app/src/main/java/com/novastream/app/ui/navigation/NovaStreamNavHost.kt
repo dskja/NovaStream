@@ -27,6 +27,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.novastream.app.R
 import com.novastream.app.data.prefs.AppSettings
+import com.novastream.app.util.LocaleManager
+import com.novastream.app.util.findActivity
 import kotlinx.coroutines.launch
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ProviderManager
@@ -44,10 +46,12 @@ import com.novastream.app.ui.provider.ProviderMarketplaceScreen
 import com.novastream.app.ui.search.SearchScreen
 import com.novastream.app.ui.settings.SettingsScreen
 import com.novastream.app.ui.tv.TvUtils
+import com.novastream.app.ui.live.LiveTvScreen
 import com.novastream.app.ui.watchlist.WatchlistScreen
 
 object Routes {
     const val ONBOARDING = "onboarding"
+    const val LIVE_TV = "live_tv"
     const val HOME = "home"
     const val WATCHLIST = "watchlist"
     const val SEARCH = "search"
@@ -113,15 +117,18 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             it.providerId.isBlank() || it.providerId == activeProviderId || it.providerId == "unknown"
         }
     }
+    val uiLocale by appSettings.uiLocale.collectAsStateWithLifecycle(initialValue = LocaleManager.SYSTEM_LOCALE)
 
     if (onboardingComplete == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            PremiumLoading(label = "Lädt…")
+            PremiumLoading(label = context.getString(R.string.loading))
         }
         return
     }
 
     val onboardingDone = onboardingComplete == true
+
+    LocaleManager.ProvideLayoutDirection(uiLocale) {
 
     LaunchedEffect(deepLinkSlug, onboardingDone) {
         if (onboardingDone && !deepLinkSlug.isNullOrBlank()) {
@@ -230,6 +237,9 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     },
                     onSeeAllContinueWatching = {
                         nav.navigate(Routes.CONTINUE_WATCHING)
+                    },
+                    onLiveTvClick = {
+                        nav.navigate(Routes.LIVE_TV) { launchSingleTop = true }
                     }
                 )
             }
@@ -376,16 +386,27 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     }
                 )
             }
+
+            composable(Routes.LIVE_TV) {
+                LiveTvScreen(
+                    onBack = { nav.popBackStack() },
+                    onPlayChannel = { channel ->
+                        nav.navigate(
+                            Routes.player(
+                                slug = "live_${channel.id.take(32)}",
+                                season = 1,
+                                episode = 1,
+                                title = channel.name,
+                                seriesTitle = channel.group ?: "Live TV",
+                                coverUrl = channel.logoUrl,
+                                isMovie = true
+                            )
+                        )
+                    }
+                )
+            }
         }
+    }
     }
 }
 
-/** Findet die Activity aus einem Context (sicherer Cast). */
-private fun android.content.Context.findActivity(): android.app.Activity? {
-    var ctx = this
-    while (ctx is android.content.ContextWrapper) {
-        if (ctx is android.app.Activity) return ctx
-        ctx = ctx.baseContext
-    }
-    return null
-}

@@ -8,14 +8,24 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [WatchProgress::class, WatchlistItem::class, CatalogCacheEntry::class],
-    version = 7,
+    entities = [
+        WatchProgress::class,
+        WatchlistItem::class,
+        CatalogCacheEntry::class,
+        ContentEntity::class,
+        DownloadEntity::class,
+        ProfileEntity::class
+    ],
+    version = 10,
     exportSchema = true
 )
 abstract class NovaStreamDatabase : RoomDatabase() {
     abstract fun watchProgressDao(): WatchProgressDao
     abstract fun watchlistDao(): WatchlistDao
     abstract fun catalogCacheDao(): CatalogCacheDao
+    abstract fun contentDao(): ContentDao
+    abstract fun downloadDao(): DownloadDao
+    abstract fun profileDao(): ProfileDao
 
     companion object {
         @Volatile
@@ -131,6 +141,109 @@ abstract class NovaStreamDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS content_mapping (
+                        tmdbId INTEGER NOT NULL,
+                        slug TEXT NOT NULL,
+                        providerId TEXT NOT NULL,
+                        contentType TEXT NOT NULL,
+                        PRIMARY KEY(providerId, slug)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_content_mapping_tmdbId ON content_mapping(tmdbId)")
+            }
+        }
+
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS content_mapping_new (
+                        slug TEXT NOT NULL,
+                        providerId TEXT NOT NULL,
+                        contentType TEXT NOT NULL,
+                        canonicalKey TEXT NOT NULL,
+                        imdbId TEXT,
+                        tvmazeId TEXT,
+                        anilistId INTEGER,
+                        wikidataId TEXT,
+                        PRIMARY KEY(providerId, slug)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO content_mapping_new (slug, providerId, contentType, canonicalKey)
+                    SELECT slug, providerId, contentType, 'tmdb:' || tmdbId
+                    FROM content_mapping
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE content_mapping")
+                db.execSQL("ALTER TABLE content_mapping_new RENAME TO content_mapping")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_content_mapping_canonicalKey ON content_mapping(canonicalKey)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_content_mapping_imdbId ON content_mapping(imdbId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_content_mapping_tvmazeId ON content_mapping(tvmazeId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_content_mapping_anilistId ON content_mapping(anilistId)")
+            }
+        }
+
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS downloads (
+                        downloadId TEXT NOT NULL PRIMARY KEY,
+                        profileId TEXT NOT NULL DEFAULT 'default',
+                        providerId TEXT NOT NULL,
+                        slug TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        episodeTitle TEXT NOT NULL DEFAULT '',
+                        season INTEGER NOT NULL DEFAULT 1,
+                        episode INTEGER NOT NULL DEFAULT 1,
+                        coverUrl TEXT,
+                        streamUrl TEXT NOT NULL,
+                        mimeType TEXT NOT NULL DEFAULT 'application/x-mpegURL',
+                        hosterName TEXT NOT NULL DEFAULT '',
+                        status TEXT NOT NULL DEFAULT 'QUEUED',
+                        bytesDownloaded INTEGER NOT NULL DEFAULT 0,
+                        contentLength INTEGER NOT NULL DEFAULT 0,
+                        localPath TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        errorMessage TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status ON downloads(status)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_profileId ON downloads(profileId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_createdAt ON downloads(createdAt)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS profiles (
+                        profileId TEXT NOT NULL PRIMARY KEY,
+                        displayName TEXT NOT NULL,
+                        avatarEmoji TEXT NOT NULL DEFAULT '👤',
+                        pinHash TEXT,
+                        isActive INTEGER NOT NULL DEFAULT 0,
+                        isKids INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_profiles_isActive ON profiles(isActive)")
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO profiles (profileId, displayName, avatarEmoji, isActive, isKids, createdAt)
+                    VALUES ('default', 'Default', '👤', 1, 0, ${System.currentTimeMillis()})
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun get(context: Context): NovaStreamDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -140,7 +253,7 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                        MIGRATION_6_7
+                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10
                     )
                     .apply {
                         if (com.novastream.app.BuildConfig.DEBUG) {

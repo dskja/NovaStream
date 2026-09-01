@@ -47,7 +47,11 @@ object LocaleManager {
             else -> Locale.forLanguageTag(tag).getDisplayLanguage(displayLocale)
         }
 
-    fun isRtl(tag: String): Boolean = tag == "ar"
+    fun isRtl(tag: String): Boolean = when (tag) {
+        "ar" -> true
+        SYSTEM_LOCALE -> java.util.Locale.getDefault().language == "ar"
+        else -> false
+    }
 
     @Composable
     fun ProvideLayoutDirection(uiLocale: String, content: @Composable () -> Unit) {

@@ -1,10 +1,13 @@
 package com.novastream.app.ui.search
 
+import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.model.Series
 import java.text.Normalizer
 import kotlin.math.abs
 
 object SearchResultAggregator {
+
+    private val metaGraph = FreeMetaGraph()
 
     data class AggregatedResult(
         val series: Series,
@@ -40,11 +43,7 @@ object SearchResultAggregator {
             .sortedByDescending { it.score }
     }
 
-    private fun dedupeKey(series: Series): String {
-        val title = normalizeTitle(series.title)
-        val year = series.year.orEmpty()
-        return "$title|$year"
-    }
+    fun dedupeKey(series: Series): String = metaGraph.dedupeKeyForSeries(series)
 
     private fun normalizeTitle(title: String): String {
         val n = Normalizer.normalize(title.lowercase(), Normalizer.Form.NFD)
@@ -55,6 +54,11 @@ object SearchResultAggregator {
 
     private fun scoreSeries(series: Series): Int {
         var score = 0
+        if (series.canonicalKey != null) score += 5
+        if (!series.imdbId.isNullOrBlank()) score += 4
+        if (series.tvmazeId != null) score += 3
+        if (series.anilistId != null) score += 3
+        if (series.tmdbId != null) score += 2
         if (!series.coverUrl.isNullOrBlank()) score += 2
         if (!series.year.isNullOrBlank()) score += 1
         if (!series.description.isNullOrBlank()) score += 1

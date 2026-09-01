@@ -44,9 +44,7 @@ open class ConfigurableSiteProvider(
     override val supportsSeries: Boolean get() = profile.supportsSeries
     override val supportsMovies: Boolean get() = profile.supportsMovies
     override val catalogHint: String?
-        get() = if (supportsMovies && supportsSeries) "Filme & Serien"
-        else if (supportsMovies) "Filme"
-        else null
+        get() = null
 
     private val hosterResolver get() = HosterResolver(baseUrl = profile.baseUrl)
 
@@ -70,7 +68,9 @@ open class ConfigurableSiteProvider(
     }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
             val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")

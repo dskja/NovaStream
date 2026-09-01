@@ -27,6 +27,8 @@ import com.novastream.app.ui.components.ContinueWatchingCard
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
 import com.novastream.app.ui.theme.*
 
 @Composable
@@ -63,14 +65,14 @@ fun ContinueWatchingScreen(
             ) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Zurück",
+                    contentDescription = stringResource(R.string.continue_watching_back),
                     tint = Color.White,
                     modifier = Modifier.size(22.dp)
                 )
             }
             Spacer(Modifier.width(12.dp))
             Text(
-                "Weitersehen",
+                stringResource(R.string.settings_continue_watching),
                 style = MaterialTheme.typography.headlineLarge,
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold
@@ -79,9 +81,9 @@ fun ContinueWatchingScreen(
 
         Box(Modifier.fillMaxSize()) {
             when {
-                state.loading && state.items.isEmpty() -> PremiumLoading(label = "Lädt…")
-                state.error != null -> PremiumError(state.error ?: "Fehler")
-                state.items.isEmpty() -> PremiumEmpty("Nichts zum Weitersehen.")
+                state.loading && state.items.isEmpty() -> PremiumLoading(label = stringResource(R.string.loading))
+                state.error != null -> PremiumError(state.error ?: stringResource(R.string.error_title))
+                state.items.isEmpty() -> PremiumEmpty(stringResource(R.string.continue_watching_nothing))
                 else -> LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)

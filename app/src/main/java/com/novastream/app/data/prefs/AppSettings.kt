@@ -39,6 +39,13 @@ class AppSettings(private val context: Context) {
         val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
         val UI_LOCALE = stringPreferencesKey("ui_locale")
         val CONTENT_LANGUAGE = stringPreferencesKey("content_language")
+        val PLAY_TELEMETRY = booleanPreferencesKey("play_telemetry_enabled")
+        val IPTV_ENABLED = booleanPreferencesKey("iptv_enabled")
+        val USER_M3U_URL = stringPreferencesKey("user_m3u_url")
+        val EPG_URL = stringPreferencesKey("epg_xmltv_url")
+        val SYNC_URL = stringPreferencesKey("sync_url")
+        val SYNC_DEVICE_KEY = stringPreferencesKey("sync_device_key")
+        val CAST_ENABLED = booleanPreferencesKey("cast_enabled")
     }
 
     // ─── Flows ──────────────────────────────────────────────────────
@@ -58,6 +65,13 @@ class AppSettings(private val context: Context) {
     val performanceMode: Flow<Boolean> = context.dataStore.data.map { it[PERFORMANCE_MODE] ?: false }
     val uiLocale: Flow<String> = context.dataStore.data.map { it[UI_LOCALE] ?: LocaleManager.SYSTEM_LOCALE }
     val contentLanguage: Flow<String> = context.dataStore.data.map { it[CONTENT_LANGUAGE] ?: ContentLanguage.DE.tag }
+    val playTelemetry: Flow<Boolean> = context.dataStore.data.map { it[PLAY_TELEMETRY] ?: false }
+    val iptvEnabled: Flow<Boolean> = context.dataStore.data.map { it[IPTV_ENABLED] ?: false }
+    val userM3uUrl: Flow<String> = context.dataStore.data.map { it[USER_M3U_URL].orEmpty() }
+    val epgUrl: Flow<String> = context.dataStore.data.map { it[EPG_URL].orEmpty() }
+    val syncUrl: Flow<String> = context.dataStore.data.map { it[SYNC_URL].orEmpty() }
+    val syncDeviceKey: Flow<String> = context.dataStore.data.map { it[SYNC_DEVICE_KEY].orEmpty() }
+    val castEnabled: Flow<Boolean> = context.dataStore.data.map { it[CAST_ENABLED] ?: true }
 
     // ─── Setters ────────────────────────────────────────────────────
 
@@ -115,5 +129,33 @@ class AppSettings(private val context: Context) {
 
     suspend fun setContentLanguage(tag: String) {
         context.dataStore.edit { it[CONTENT_LANGUAGE] = tag }
+    }
+
+    suspend fun setPlayTelemetry(enabled: Boolean) {
+        context.dataStore.edit { it[PLAY_TELEMETRY] = enabled }
+    }
+
+    suspend fun setIptvEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[IPTV_ENABLED] = enabled }
+    }
+
+    suspend fun setUserM3uUrl(url: String) {
+        context.dataStore.edit { it[USER_M3U_URL] = url.trim() }
+    }
+
+    suspend fun setEpgUrl(url: String) {
+        context.dataStore.edit { it[EPG_URL] = url.trim() }
+    }
+
+    suspend fun setSyncUrl(url: String) {
+        context.dataStore.edit { it[SYNC_URL] = url.trim() }
+    }
+
+    suspend fun setSyncDeviceKey(key: String) {
+        context.dataStore.edit { it[SYNC_DEVICE_KEY] = key.trim() }
+    }
+
+    suspend fun setCastEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[CAST_ENABLED] = enabled }
     }
 }

@@ -416,12 +416,135 @@ object InternationalSiteProfiles {
         hosterSelector = "iframe[src], a[href*=download]"
     )
 
+    val hianime = SiteProfile(
+        id = "hianime",
+        displayName = "HiAnime",
+        baseUrl = "https://hianime.to",
+        homePath = "/home",
+        searchPath = "/search?keyword={query}",
+        seriesLinkSelector = "a[href*=/watch/]",
+        seriesLinkPattern = "/watch/([\\w-]+)",
+        slugRegex = "/watch/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val animefenix = SiteProfile(
+        id = "animefenix",
+        displayName = "AnimeFénix",
+        baseUrl = "https://www.animefenix.tv",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=/anime/]",
+        seriesLinkPattern = "/anime/([\\w-]+)",
+        slugRegex = "/anime/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val tioanime = SiteProfile(
+        id = "tioanime",
+        displayName = "TioAnime",
+        baseUrl = "https://tioanime.com",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=/anime/]",
+        seriesLinkPattern = "/anime/([\\w-]+)",
+        slugRegex = "/anime/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val seriesflix = SiteProfile(
+        id = "seriesflix",
+        displayName = "SeriesFlix",
+        baseUrl = "https://seriesflix.store",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=/serie/], a[href*=/filme/]",
+        seriesLinkPattern = "/(?:serie|filme)/([\\w-]+)",
+        slugRegex = "/(?:serie|filme)/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val anymovie = SiteProfile(
+        id = "anymovie",
+        displayName = "AnyMovie",
+        baseUrl = "https://anymovie.cc",
+        homePath = "/",
+        searchPath = "/search/{query}",
+        seriesLinkSelector = "a[href*=/movies/], a[href*=/tv/]",
+        seriesLinkPattern = "/(?:movies|tv)/([\\w-]+)",
+        slugRegex = "/(?:movies|tv)/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val flixlatam = SiteProfile(
+        id = "flixlatam",
+        displayName = "FlixLatam",
+        baseUrl = "https://flixlatam.com",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=/pelicula/], a[href*=/serie/]",
+        seriesLinkPattern = "/(?:pelicula|serie)/([\\w-]+)",
+        slugRegex = "/(?:pelicula|serie)/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val otakufr = SiteProfile(
+        id = "otakufr",
+        displayName = "OtakuFR",
+        baseUrl = "https://otakufr.cc",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=/anime/]",
+        seriesLinkPattern = "/anime/([\\w-]+)",
+        slugRegex = "/anime/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val latanime = SiteProfile(
+        id = "latanime",
+        displayName = "LatAnime",
+        baseUrl = "https://latanime.org",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=/anime/]",
+        seriesLinkPattern = "/anime/([\\w-]+)",
+        slugRegex = "/anime/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val guardaflix = SiteProfile(
+        id = "guardaflix",
+        displayName = "GuardaFlix",
+        baseUrl = "https://guardaflix.blog",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=film/]",
+        seriesLinkPattern = "film/([\\w-]+)",
+        slugRegex = "film/([\\w-]+)",
+        hosterSelector = "iframe[src]"
+    )
+
+    val cinecalidad = SiteProfile(
+        id = "cinecalidad",
+        displayName = "CineCalidad",
+        baseUrl = "https://www.cinecalidad.ec",
+        homePath = "/",
+        searchPath = "/?s={query}",
+        seriesLinkSelector = "a[href*=pelicula/]",
+        seriesLinkPattern = "pelicula/([\\w-]+)",
+        slugRegex = "pelicula/([\\w-]+)",
+        hosterSelector = "iframe[src]",
+        supportsSeries = false,
+        isMovieFocused = true
+    )
+
     val all: List<SiteProfile> = listOf(
         sflix, ridomovies, anikoto, hdfilme, einschalten, wiflix, frenchStream,
         frenchAnime, frembed, fanpelis, animeFlv, jkAnime, pelisplusto, doramasflix,
         guardaSerie, cb01, altadefinizione01, animeUnity, streamingCommunityIt,
         streamingCommunityEn, filmyOnline, zaluknij, mkissa, cuevana3, moflix,
         animeworld, lookmovie2, pelisflix, filmpertutti, cineblog01, voirfilms,
-        nekoSama, soap2day, mkvMovies
+        nekoSama, soap2day, mkvMovies, hianime, animefenix, tioanime, seriesflix,
+        anymovie, flixlatam, otakufr, latanime, guardaflix, cinecalidad
     )
 }

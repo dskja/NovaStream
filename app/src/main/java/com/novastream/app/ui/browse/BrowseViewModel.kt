@@ -5,10 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
+import com.novastream.app.data.provider.ContentLanguageGenres
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.capabilities
 import com.novastream.app.data.repository.NovaStreamRepository
+import androidx.annotation.StringRes
+import com.novastream.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -17,13 +22,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 enum class BrowseContentFilter { ALL, SERIES, MOVIES }
 
-enum class BrowseSort(val label: String) {
-    TITLE_ASC("A-Z"),
-    NEWEST("Neueste"),
-    POPULAR("Beliebt")
+enum class BrowseSort(@StringRes val labelRes: Int) {
+    TITLE_ASC(R.string.browse_sort_title_asc),
+    NEWEST(R.string.browse_sort_newest),
+    POPULAR(R.string.browse_sort_popular)
 }
 
 data class BrowseUiState(
@@ -48,7 +54,8 @@ data class BrowseUiState(
 class BrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val appSettings: AppSettings
 ) : ViewModel() {
     private val _state = MutableStateFlow(BrowseUiState(loading = true))
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
@@ -69,10 +76,10 @@ class BrowseViewModel @Inject constructor(
                 }
             }
         }
-        resetAndLoad()
+        viewModelScope.launch { resetAndLoad() }
     }
 
-    fun refresh() = resetAndLoad()
+    fun refresh() = viewModelScope.launch { resetAndLoad() }
 
     fun selectGenre(genre: String?) {
         if (_state.value.selectedGenre == genre) return
@@ -118,16 +125,18 @@ class BrowseViewModel @Inject constructor(
         loadPage(reset = false)
     }
 
-    private fun resetAndLoad() {
+    private suspend fun resetAndLoad() {
         val provider = ActiveProvider.get()
         val caps = provider.capabilities()
         allItems = emptyList()
         val section = initialSection
         val resolvedGenre = initialGenre
+        val contentLang = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+        val genres = ContentLanguageGenres.resolveForProvider(provider, contentLang)
         _state.update {
             BrowseUiState(
                 loading = true,
-                genres = provider.availableGenres,
+                genres = genres,
                 selectedGenre = resolvedGenre,
                 contentFilter = initialFilter,
                 section = section,

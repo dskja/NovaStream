@@ -26,6 +26,9 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
+import com.novastream.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +41,8 @@ import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import javax.inject.Inject
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
@@ -53,9 +58,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class WatchlistProviderFilter(val label: String) {
-    CURRENT("Aktuell"),
-    ALL("Alle")
+enum class WatchlistProviderFilter(@StringRes val labelRes: Int) {
+    CURRENT(R.string.watchlist_filter_current),
+    ALL(R.string.provider_filter_all)
 }
 
 data class WatchlistUiState(
@@ -68,15 +73,16 @@ data class WatchlistUiState(
     val error: String? = null
 )
 
-enum class SortOption(val label: String) {
-    ADDED_DESC("Zuletzt hinzugefügt"),
-    ADDED_ASC("Älteste zuerst"),
-    TITLE_ASC("Titel A-Z"),
-    TITLE_DESC("Titel Z-A")
+enum class SortOption(@StringRes val labelRes: Int) {
+    ADDED_DESC(R.string.watchlist_sort_added_desc),
+    ADDED_ASC(R.string.watchlist_sort_added_asc),
+    TITLE_ASC(R.string.watchlist_sort_title_asc),
+    TITLE_DESC(R.string.watchlist_sort_title_desc)
 }
 
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
     private val providerController: ProviderController
 ) : ViewModel() {
@@ -101,7 +107,7 @@ class WatchlistViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
-                _state.update { it.copy(loading = false, error = "Fehler beim Laden der Watchlist") }
+                _state.update { it.copy(loading = false, error = context.getString(R.string.watchlist_error_loading)) }
             }
         }
         viewModelScope.launch {
@@ -184,8 +190,8 @@ class WatchlistViewModel @Inject constructor(
     }
 }
 
-private fun providerDisplayName(providerId: String): String {
-    if (providerId.isBlank() || providerId == "unknown") return "Unbekannt"
+private fun providerDisplayName(context: Context, providerId: String): String {
+    if (providerId.isBlank() || providerId == "unknown") return context.getString(R.string.watchlist_provider_unknown)
     return ProviderManager.getProviderOrNull(providerId)?.displayName ?: providerId
 }
 
@@ -215,17 +221,17 @@ fun WatchlistScreen(
     pendingRemove?.let { item ->
         AlertDialog(
             onDismissRequest = { pendingRemove = null },
-            title = { Text("Entfernen?", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Möchtest du '${item.title}' aus deiner Watchlist entfernen?", color = TextSecondary) },
+            title = { Text(stringResource(R.string.watchlist_remove_title), color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text(stringResource(R.string.watchlist_remove_message_fmt, item.title), color = TextSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     vm.remove(item.slug)
                     pendingRemove = null
-                }) { Text("Entfernen", color = Primary, fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.watchlist_remove_confirm), color = Primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingRemove = null }) {
-                    Text("Abbrechen", color = TextTertiary)
+                    Text(stringResource(R.string.cancel), color = TextTertiary)
                 }
             },
             containerColor = BgSurface,
@@ -237,16 +243,16 @@ fun WatchlistScreen(
     if (showUnknownProviderDialog) {
         AlertDialog(
             onDismissRequest = { showUnknownProviderDialog = false },
-            title = { Text("Unbekannter Provider", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.watchlist_unknown_provider_title), color = TextPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Für diesen Eintrag ist kein Provider mehr verfügbar. Du kannst ihn entfernen oder in der Listenansicht „Alle“ anzeigen.",
+                    stringResource(R.string.watchlist_unknown_provider_message),
                     color = TextSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { showUnknownProviderDialog = false }) {
-                    Text("OK", color = Primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.watchlist_ok), color = Primary, fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = BgSurface,
@@ -279,7 +285,7 @@ fun WatchlistScreen(
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                "Meine Liste",
+                stringResource(R.string.home_my_list),
                 style = MaterialTheme.typography.headlineLarge,
                 color = TextPrimary,
                 fontWeight = FontWeight.Bold
@@ -323,7 +329,7 @@ fun WatchlistScreen(
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        filter.label,
+                        stringResource(filter.labelRes),
                         color = if (selected) Primary else TextSecondary,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
@@ -346,7 +352,7 @@ fun WatchlistScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            state.sortOption.label,
+                            stringResource(state.sortOption.labelRes),
                             color = TextSecondary,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium
@@ -359,7 +365,7 @@ fun WatchlistScreen(
                     ) {
                         SortOption.entries.forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(option.label, color = if (state.sortOption == option) Primary else TextPrimary) },
+                                text = { Text(stringResource(option.labelRes), color = if (state.sortOption == option) Primary else TextPrimary) },
                                 onClick = {
                                     vm.setSortOption(option)
                                     showSortMenu = false
@@ -374,7 +380,7 @@ fun WatchlistScreen(
         Box(Modifier.fillMaxSize()) {
             when {
                 state.error != null -> PremiumError(
-                    state.error ?: "Fehler beim Laden der Watchlist",
+                    state.error ?: stringResource(R.string.watchlist_error_loading),
                     modifier = Modifier.fillMaxSize()
                 )
                 state.items.isEmpty() && state.loading -> {
@@ -391,7 +397,7 @@ fun WatchlistScreen(
                 }
                 state.items.isEmpty() -> {
                     PremiumEmpty(
-                        "Deine Watchlist ist leer.\nFüge Filme & Serien hinzu die du schauen möchtest.",
+                        stringResource(R.string.watchlist_empty),
                         icon = Icons.Filled.Bookmark
                     )
                 }
@@ -434,7 +440,7 @@ fun WatchlistScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        providerDisplayName(item.providerId),
+                                        providerDisplayName(context, item.providerId),
                                         color = Primary,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontSize = 9.sp,
@@ -454,7 +460,7 @@ fun WatchlistScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.BookmarkRemove,
-                                        contentDescription = "Entfernen",
+                                        contentDescription = stringResource(R.string.cd_remove),
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -469,7 +475,7 @@ fun WatchlistScreen(
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
                                         Text(
-                                            "Läuft",
+                                            stringResource(R.string.watchlist_watching_badge),
                                             color = Color.White,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontSize = 9.sp,

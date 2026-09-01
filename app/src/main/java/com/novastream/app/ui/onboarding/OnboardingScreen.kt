@@ -34,6 +34,7 @@ import com.novastream.app.ui.tv.rememberInitialFocusRequester
 import com.novastream.app.ui.tv.tvFocusRing
 import com.novastream.app.ui.tv.tvFocusable
 import com.novastream.app.util.LocaleManager
+import com.novastream.app.util.findActivity
 import kotlinx.coroutines.launch
 
 @Composable
@@ -164,7 +165,7 @@ fun OnboardingScreen(
                             else -> {
                                 providerController.setActiveProvider(selectedId)
                                 appSettings.setOnboardingComplete(true)
-                                onComplete()
+                                context.findActivity()?.recreate()
                             }
                         }
                     }

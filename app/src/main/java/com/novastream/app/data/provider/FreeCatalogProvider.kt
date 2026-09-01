@@ -38,7 +38,8 @@ class FreeCatalogProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         coroutineScope {
-            val scheduleDef = async { FreeMetaService.schedule("US") }
+            val region = ContentRegionResolver.currentTvmazeRegion()
+            val scheduleDef = async { FreeMetaService.schedule(region) }
             val catalogDef = async { FreeMetaService.catalogPage(0) }
             (scheduleDef.await() + catalogDef.await()).distinctBy { it.id }.map { mapShow(it) }
         }
@@ -155,7 +156,7 @@ class FreeCatalogProvider(
     )
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        FreeMetaService.schedule("US").map { mapShow(it) }
+        FreeMetaService.schedule(ContentRegionResolver.currentTvmazeRegion()).map { mapShow(it) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -195,6 +196,14 @@ class FreeCatalogProvider(
         status = show.status,
         providerId = id,
         seasonCount = show.seasonCount,
+        imdbId = show.imdbId,
+        tvmazeId = show.id.takeIf { it.all(Char::isDigit) },
+        anilistId = show.anilistId,
+        canonicalKey = com.novastream.app.data.meta.ExternalIds(
+            imdbId = show.imdbId,
+            tvmazeId = show.id.takeIf { it.all(Char::isDigit) },
+            anilistId = show.anilistId
+        ).canonicalKey(),
         originalTitle = show.title
     )
 }

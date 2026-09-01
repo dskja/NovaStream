@@ -35,6 +35,8 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.novastream.app.data.db.WatchProgress
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
 import com.novastream.app.ui.theme.*
 
 /**
@@ -55,17 +57,17 @@ fun ContinueWatchingCard(
     if (showConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
-            title = { Text("Entfernen?") },
-            text = { Text("Möchtest du '${progress.seriesTitle} - ${progress.episodeTitle}' aus Weitersehen entfernen?") },
+            title = { Text(stringResource(R.string.cw_remove_title)) },
+            text = { Text(stringResource(R.string.cw_remove_message_fmt, progress.seriesTitle, progress.episodeTitle)) },
             confirmButton = {
                 TextButton(onClick = {
                     onRemove()
                     showConfirmDialog = false
-                }) { Text("Entfernen", color = Primary) }
+                }) { Text(stringResource(R.string.watchlist_remove_confirm), color = Primary) }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Abbrechen")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -144,7 +146,7 @@ fun ContinueWatchingCard(
             ) {
                 Icon(
                     Icons.Default.PlayArrow,
-                    contentDescription = "Abspielen",
+                    contentDescription = stringResource(R.string.cd_play),
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
                 )
@@ -163,7 +165,7 @@ fun ContinueWatchingCard(
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Entfernen",
+                    contentDescription = stringResource(R.string.cd_remove),
                     tint = Color.White,
                     modifier = Modifier.size(16.dp)
                 )

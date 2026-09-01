@@ -34,3 +34,12 @@ scr_*.png
 .agents/
 AGENTS.md
 
+
+# Local / CI artifacts
+.kotlin/
+.gradle-isolated/
+.gradle-local/
+ci-artifacts/
+scripts/ui-*.xml
+scripts/ns-provider-ui.xml
+scripts/mk.html

@@ -15,16 +15,23 @@ import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.network.GlobalRequestCoalescer
 import com.novastream.app.data.network.ScrapeLimiter
+import com.novastream.app.data.meta.FreeMetaService
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.AniWorldProvider
+import com.novastream.app.data.provider.ContentLanguage
+import com.novastream.app.data.provider.ContentRegionResolver
 import com.novastream.app.data.provider.FreeCatalogProvider
 import com.novastream.app.data.provider.MegaKinoProvider
+import com.novastream.app.data.provider.ProviderRegistry
 import com.novastream.app.data.provider.SerienStreamProvider
 import com.novastream.app.data.provider.StreamKisteProvider
 import com.novastream.app.data.provider.StreamingProvider
+import com.novastream.app.data.provider.capabilities
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 /**
  * Repository: kapselt den aktiven Streaming-Provider.
@@ -32,7 +39,8 @@ import kotlinx.coroutines.delay
  * Cached Katalog- und Detail-Responses in Room mit TTL.
  */
 class NovaStreamRepository private constructor(
-    private val cacheDao: CatalogCacheDao?
+    private val cacheDao: CatalogCacheDao?,
+    private val appSettings: AppSettings? = null
 ) {
 
     private val gson = Gson()
@@ -57,7 +65,8 @@ class NovaStreamRepository private constructor(
                 ).also { INSTANCE = it }
             }
 
-        fun forCache(cacheDao: CatalogCacheDao?): NovaStreamRepository = NovaStreamRepository(cacheDao)
+        fun forCache(cacheDao: CatalogCacheDao?, appSettings: AppSettings? = null): NovaStreamRepository =
+            NovaStreamRepository(cacheDao, appSettings)
     }
 
     private val provider: StreamingProvider get() = ActiveProvider.get()
@@ -203,54 +212,81 @@ class NovaStreamRepository private constructor(
     suspend fun loadLatestEpisodes(): RepoResult<List<LatestEpisode>> = withRetry {
         val p = provider
         val pid = p.id
-        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_LATEST)
+        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_LATEST, resolvedContentLanguage(p.id).tag)
         getCachedLatest(cacheKey)?.let { return@withRetry RepoResult.Success(it) }
         coalesceNetwork(cacheKey) {
             getCachedLatest(cacheKey)?.let { return@coalesceNetwork RepoResult.Success(it) }
-            val result = ScrapeLimiter.withPermit {
-                when (p) {
-                    is SerienStreamProvider -> p.loadLatestEpisodes().toRepoResult()
-                    is AniWorldProvider -> p.loadLatestEpisodes().toRepoResult()
-                    is MegaKinoProvider -> p.loadLatestEpisodes().toRepoResult()
-                    is StreamKisteProvider -> p.loadLatestEpisodes().toRepoResult()
-                    is FreeCatalogProvider -> run {
-                        val newest = p.loadNewest().getOrNull().orEmpty()
-                        RepoResult.Success(
-                            newest.take(24).map { s ->
-                                LatestEpisode(
-                                    seriesSlug = s.id,
-                                    seriesTitle = s.title,
-                                    season = 1,
-                                    episode = 1,
-                                    coverUrl = s.coverUrl
-                                )
-                            }
-                        )
-                    }
-                    else -> {
-                        val fallback = p.loadNewest().getOrNull().orEmpty()
-                        if (fallback.isNotEmpty()) {
-                            RepoResult.Success(
-                                fallback.take(24).map { s ->
-                                    LatestEpisode(
-                                        seriesSlug = s.id,
-                                        seriesTitle = s.title,
-                                        season = 1,
-                                        episode = 1,
-                                        coverUrl = s.coverUrl
-                                    )
-                                }
-                            )
-                        } else {
-                            RepoResult.Success(emptyList())
-                        }
-                    }
-                }
-            }
+            val result = ScrapeLimiter.withPermit { loadLatestEpisodesForProvider(p) }
             if (result is RepoResult.Success) {
                 putCached(cacheKey, pid, CatalogCacheEntry.TYPE_LATEST, result.data, TTL_CATALOG_MS)
             }
             result
+        }
+    }
+
+    private suspend fun loadLatestEpisodesForProvider(p: StreamingProvider): RepoResult<List<LatestEpisode>> {
+        if (p.capabilities().supportsLatestEpisodes) {
+            when (p) {
+                is SerienStreamProvider -> return p.loadLatestEpisodes().toRepoResult()
+                is AniWorldProvider -> return p.loadLatestEpisodes().toRepoResult()
+                is MegaKinoProvider -> return p.loadLatestEpisodes().toRepoResult()
+                is StreamKisteProvider -> return p.loadLatestEpisodes().toRepoResult()
+                is FreeCatalogProvider -> return loadFreeCatalogLatest(p)
+                else -> { /* fall through to generic newest */ }
+            }
+        }
+        val newest = p.loadNewest().getOrNull().orEmpty()
+        return if (newest.isNotEmpty()) {
+            RepoResult.Success(seriesToLatestEpisodes(newest))
+        } else {
+            RepoResult.Success(emptyList())
+        }
+    }
+
+    private suspend fun loadFreeCatalogLatest(p: FreeCatalogProvider): RepoResult<List<LatestEpisode>> {
+        val region = ContentRegionResolver.tvmazeRegionFor(resolvedContentLanguage(p.id))
+        return runCatching {
+            FreeMetaService.schedule(region).map { show ->
+                LatestEpisode(
+                    seriesSlug = show.id,
+                    seriesTitle = show.title,
+                    season = 1,
+                    episode = 1,
+                    coverUrl = show.posterUrl
+                )
+            }.take(24)
+        }.fold(
+            onSuccess = { RepoResult.Success(it) },
+            onFailure = {
+                val fallback = p.loadNewest().getOrNull().orEmpty()
+                if (fallback.isNotEmpty()) {
+                    RepoResult.Success(seriesToLatestEpisodes(fallback))
+                } else {
+                    RepoResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it)
+                }
+            }
+        )
+    }
+
+    private fun seriesToLatestEpisodes(series: List<Series>): List<LatestEpisode> =
+        series.take(24).map { s ->
+            LatestEpisode(
+                seriesSlug = s.id,
+                seriesTitle = s.title,
+                season = 1,
+                episode = 1,
+                coverUrl = s.coverUrl
+            )
+        }
+
+    private suspend fun resolvedContentLanguage(providerId: String): ContentLanguage {
+        val fromSettings = ContentLanguage.fromTag(
+            appSettings?.contentLanguage?.first()
+        )
+        return if (fromSettings != ContentLanguage.MULTI) {
+            fromSettings
+        } else {
+            ProviderRegistry.contentLanguageOf(providerId)
         }
     }
 

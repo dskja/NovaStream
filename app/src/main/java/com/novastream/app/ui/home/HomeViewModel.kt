@@ -9,6 +9,8 @@ import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
+import com.novastream.app.data.provider.ContentLanguageGenres
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 data class HomeUiState(
     val loading: Boolean = false,
@@ -277,7 +280,8 @@ class HomeViewModel @Inject constructor(
         genreJob?.cancel()
         genreJob = viewModelScope.launch {
             try {
-                val genres = provider.availableGenres.take(2)
+                val contentLang = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val genres = ContentLanguageGenres.resolveForProvider(provider, contentLang).take(2)
                 if (genres.isEmpty()) return@launch
                 val genreRows = coroutineScope {
                     genres.map { genre ->

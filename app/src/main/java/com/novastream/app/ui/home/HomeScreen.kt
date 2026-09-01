@@ -14,7 +14,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +25,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
@@ -31,6 +36,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,7 +73,8 @@ fun HomeScreen(
     onContinueWatchingClick: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit,
     onBrowseSection: (section: String, genre: String?) -> Unit = { _, _ -> },
     onSeeAllWatchlist: () -> Unit = {},
-    onSeeAllContinueWatching: () -> Unit = {}
+    onSeeAllContinueWatching: () -> Unit = {},
+    onLiveTvClick: () -> Unit = {}
 ) {
     val vm: HomeViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -98,6 +106,9 @@ fun HomeScreen(
 
     val showShimmer = state.loading && !state.reduceMotion
     val shimmerAnimate = !state.reduceMotion
+    val iptvEnabled by remember {
+        com.novastream.app.data.prefs.AppSettings(context).iptvEnabled
+    }.collectAsStateWithLifecycle(initialValue = false)
 
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
@@ -139,19 +150,21 @@ fun HomeScreen(
                     fontSize = 12.sp
                 )
                 Spacer(Modifier.width(8.dp))
+                val catalogCount = state.uniqueTitleCount.takeIf { it > 0 }
+                    ?: (state.popular + state.newest + state.trending + state.movies)
+                        .distinctBy { it.id }.size
+                val catalogHint = state.catalogHint
                 Text(
-                    buildString {
-                        val count = state.uniqueTitleCount.takeIf { it > 0 }
-                            ?: (state.popular + state.newest + state.trending + state.movies)
-                                .distinctBy { it.id }.size
-                        val hint = state.catalogHint
-                        when {
-                            !hint.isNullOrBlank() && count > 0 -> append("$count geladen · $hint")
-                            !hint.isNullOrBlank() -> append(hint)
-                            state.supportsMovies && state.supportsSeries -> append("$count Titel verfügbar")
-                            state.supportsMovies -> append("$count Filme verfügbar")
-                            else -> append("$count Serien verfügbar")
-                        }
+                    when {
+                        !catalogHint.isNullOrBlank() && catalogCount > 0 ->
+                            stringResource(R.string.home_catalog_loaded_fmt, catalogCount, catalogHint)
+                        !catalogHint.isNullOrBlank() -> catalogHint
+                        state.supportsMovies && state.supportsSeries ->
+                            stringResource(R.string.home_titles_available_fmt, catalogCount)
+                        state.supportsMovies ->
+                            stringResource(R.string.home_movies_available_fmt, catalogCount)
+                        else ->
+                            stringResource(R.string.home_series_available_fmt, catalogCount)
                     },
                     color = TextTertiary,
                     fontSize = 11.sp
@@ -199,7 +212,7 @@ fun HomeScreen(
             if (state.continueWatching.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(8.dp))
-                    SectionHeader("Weitersehen", onSeeAll = onSeeAllContinueWatching)
+                    SectionHeader(stringResource(R.string.settings_continue_watching), onSeeAll = onSeeAllContinueWatching)
                 }
                 item {
                     LazyRow(
@@ -228,11 +241,33 @@ fun HomeScreen(
                 }
             }
 
+            // Live TV entry (v14, when IPTV enabled)
+            if (iptvEnabled) {
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    SectionHeader(stringResource(R.string.live_tv_title), onSeeAll = onLiveTvClick)
+                }
+                item {
+                    Card(
+                        onClick = onLiveTvClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LiveTv, contentDescription = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(stringResource(R.string.live_tv_browse_hint))
+                        }
+                    }
+                }
+            }
+
             // Watchlist Preview Section
             if (state.watchlist.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Meine Liste", onSeeAll = onSeeAllWatchlist)
+                    SectionHeader(stringResource(R.string.home_my_list), onSeeAll = onSeeAllWatchlist)
                 }
                 item {
                     LazyRow(
@@ -254,13 +289,13 @@ fun HomeScreen(
             if (showShimmer && state.popular.isEmpty()) {
                 item {
                     Spacer(Modifier.height(24.dp))
-                    SectionHeader("Beliebt")
+                    SectionHeader(stringResource(R.string.home_popular))
                     ShimmerRow(animate = shimmerAnimate)
                     Spacer(Modifier.height(24.dp))
-                    SectionHeader("Neu hinzugefügt")
+                    SectionHeader(stringResource(R.string.home_newest))
                     ShimmerRow(animate = shimmerAnimate)
                     Spacer(Modifier.height(24.dp))
-                    SectionHeader("Angesagt")
+                    SectionHeader(stringResource(R.string.home_trending))
                     ShimmerRow(animate = shimmerAnimate)
                 }
             }
@@ -269,7 +304,7 @@ fun HomeScreen(
             if (state.error != null && state.popular.isEmpty()) {
                 item {
                     PremiumError(
-                        message = state.error ?: "Unbekannter Fehler",
+                        message = state.error ?: stringResource(R.string.error_unknown),
                         onRetry = vm::load,
                         modifier = Modifier.fillParentMaxSize()
                     )
@@ -280,7 +315,7 @@ fun HomeScreen(
             if (catalogEmpty) {
                 item {
                     PremiumEmpty(
-                        text = "Kein Katalog verfügbar.\nZiehe nach unten zum Aktualisieren oder wechsle den Provider in den Einstellungen.",
+                        text = stringResource(R.string.home_catalog_empty),
                         modifier = Modifier
                             .fillParentMaxWidth()
                             .height(280.dp)
@@ -292,7 +327,7 @@ fun HomeScreen(
             if (state.popular.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(8.dp))
-                    SectionHeader("Beliebt", onSeeAll = { onBrowseSection("popular", null) })
+                    SectionHeader(stringResource(R.string.home_popular), onSeeAll = { onBrowseSection("popular", null) })
                 }
                 item {
                     SeriesRow(state.popular, onSeriesClick, initialFocusRequester = if (state.hero.isEmpty()) initialFocus else null)
@@ -303,7 +338,7 @@ fun HomeScreen(
             if (state.newest.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Neu hinzugefügt", onSeeAll = { onBrowseSection("newest", null) })
+                    SectionHeader(stringResource(R.string.home_newest), onSeeAll = { onBrowseSection("newest", null) })
                 }
                 item {
                     SeriesRow(state.newest, onSeriesClick)
@@ -314,7 +349,7 @@ fun HomeScreen(
             if (state.trending.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Angesagt", onSeeAll = { onBrowseSection("trending", null) })
+                    SectionHeader(stringResource(R.string.home_trending), onSeeAll = { onBrowseSection("trending", null) })
                 }
                 item {
                     SeriesRow(state.trending, onSeriesClick)
@@ -325,7 +360,7 @@ fun HomeScreen(
             if (state.movies.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Filme", onSeeAll = { onBrowseSection("movies", null) })
+                    SectionHeader(stringResource(R.string.home_movies_section), onSeeAll = { onBrowseSection("movies", null) })
                 }
                 item {
                     SeriesRow(state.movies, onSeriesClick)
@@ -336,7 +371,7 @@ fun HomeScreen(
             if (state.latestEpisodes.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(28.dp))
-                    SectionHeader("Neue Episoden")
+                    SectionHeader(stringResource(R.string.home_latest_episodes))
                 }
                 item {
                     LazyRow(
@@ -393,7 +428,7 @@ fun HomeScreen(
                 if (state.action.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        SectionHeader("Action")
+                        SectionHeader(stringResource(R.string.home_genre_action))
                     }
                     item {
                         SeriesRow(state.action, onSeriesClick)
@@ -402,7 +437,7 @@ fun HomeScreen(
                 if (state.drama.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        SectionHeader("Drama")
+                        SectionHeader(stringResource(R.string.home_genre_drama))
                     }
                     item {
                         SeriesRow(state.drama, onSeriesClick)
@@ -411,7 +446,7 @@ fun HomeScreen(
                 if (state.scifi.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        SectionHeader("Sci-Fi & Fantasy")
+                        SectionHeader(stringResource(R.string.home_genre_scifi))
                     }
                     item {
                         SeriesRow(state.scifi, onSeriesClick)
@@ -420,7 +455,7 @@ fun HomeScreen(
                 if (state.comedy.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        SectionHeader("Comedy")
+                        SectionHeader(stringResource(R.string.home_genre_comedy))
                     }
                     item {
                         SeriesRow(state.comedy, onSeriesClick)
@@ -434,9 +469,9 @@ fun HomeScreen(
                     Spacer(Modifier.height(28.dp))
                     SectionHeader(
                         when {
-                            state.supportsMovies && state.supportsSeries -> "Alle Titel"
-                            state.supportsMovies -> "Alle Filme"
-                            else -> "Alle Serien"
+                            state.supportsMovies && state.supportsSeries -> stringResource(R.string.home_all_titles)
+                            state.supportsMovies -> stringResource(R.string.home_all_movies)
+                            else -> stringResource(R.string.home_all_series)
                         },
                         onSeeAll = { onBrowseSection("all", null) }
                     )
@@ -628,14 +663,14 @@ private fun HeroCarousel(
                         ) {
                             Icon(
                                 Icons.Default.PlayArrow,
-                                contentDescription = "Ansehen",
+                                contentDescription = stringResource(R.string.cd_watch),
                                 tint = Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Ansehen",
+                            stringResource(R.string.home_watch),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp

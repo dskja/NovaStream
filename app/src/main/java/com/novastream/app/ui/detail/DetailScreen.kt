@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,7 +71,7 @@ fun DetailScreen(
     Box(Modifier.fillMaxSize().background(BgPure)) {
         when {
             state.loading -> DetailSkeleton()
-            state.error != null -> PremiumError(state.error ?: "Unbekannter Fehler", onRetry = vm::retry)
+            state.error != null -> PremiumError(state.error ?: stringResource(R.string.error_unknown), onRetry = vm::retry)
             series != null -> DetailContent(
                 state = state,
                 slug = series.id,
@@ -128,7 +130,7 @@ private fun DetailContent(
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Text(
-                        "Provider gewechselt – Inhalte werden neu geladen…",
+                        stringResource(R.string.detail_provider_reloading),
                         color = Primary,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold
@@ -194,7 +196,7 @@ private fun DetailContent(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        "Zurück zur Übersicht",
+                        stringResource(R.string.cd_back_to_overview),
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
@@ -242,7 +244,7 @@ private fun DetailContent(
                             )
                             Spacer(Modifier.width(12.dp))
                             Text(
-                                if (series.isMovie) "Film abspielen" else "Erste Episode ansehen",
+                                if (series.isMovie) stringResource(R.string.detail_play_movie) else stringResource(R.string.detail_play_first_episode),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.titleMedium
@@ -283,7 +285,7 @@ private fun DetailContent(
                     ) {
                         Icon(
                             if (state.inWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkAdd,
-                            contentDescription = if (state.inWatchlist) "Aus Watchlist entfernen" else "Zur Watchlist hinzufügen",
+                            contentDescription = if (state.inWatchlist) stringResource(R.string.detail_remove_from_watchlist) else stringResource(R.string.detail_add_to_watchlist),
                             tint = if (state.inWatchlist) Primary else TextSecondary,
                             modifier = Modifier.size(24.dp)
                         )
@@ -298,16 +300,16 @@ private fun DetailContent(
                                 val deepLink = "novastream://detail/$slug"
                                 val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(android.content.Intent.EXTRA_TEXT, "Schau dir ${series.title} auf NovaStream an: $deepLink")
+                                    putExtra(android.content.Intent.EXTRA_TEXT, context.getString(R.string.detail_share_message_fmt, series.title, deepLink))
                                 }
-                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Teilen"))
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, context.getString(R.string.detail_share_chooser)))
                             }
                             .focusable(),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.Share,
-                            contentDescription = "Teilen",
+                            contentDescription = stringResource(R.string.cd_share),
                             tint = TextSecondary,
                             modifier = Modifier.size(22.dp)
                         )
@@ -337,7 +339,7 @@ private fun DetailContent(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Trailer ansehen",
+                                stringResource(R.string.detail_watch_trailer),
                                 color = TextPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 style = MaterialTheme.typography.labelLarge
@@ -357,7 +359,7 @@ private fun DetailContent(
                     )
                     if (desc.length > 200) {
                         Text(
-                            if (expanded) "Weniger anzeigen" else "Mehr anzeigen",
+                            if (expanded) stringResource(R.string.detail_show_less) else stringResource(R.string.detail_show_more),
                             color = Primary,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -390,7 +392,7 @@ private fun DetailContent(
                 }
                 if (state.metaCast.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))
-                    Text("Cast", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(stringResource(R.string.detail_cast), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Spacer(Modifier.height(6.dp))
                     Text(
                         state.metaCast.take(8).joinToString(" · ") {
@@ -399,6 +401,18 @@ private fun DetailContent(
                         color = TextSecondary,
                         fontSize = 12.sp,
                         maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (state.alsoOnProviders.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(stringResource(R.string.detail_also_on), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        state.alsoOnProviders.joinToString(" · "),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -414,18 +428,18 @@ private fun DetailContent(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        StatPill("${state.seasons.size} Staffeln")
+                        StatPill(stringResource(R.string.detail_seasons_count_fmt, state.seasons.size))
                         if (totalEpisodes > 0) {
-                            StatPill("$totalEpisodes Episoden")
+                            StatPill(stringResource(R.string.detail_episodes_count_fmt, totalEpisodes))
                         }
                         if (watchedEpisodes > 0 && totalEpisodes > 0) {
                             val percent = (watchedEpisodes * 100 / totalEpisodes).coerceIn(0, 100)
-                            StatPill("$watchedEpisodes gesehen ($percent%)")
+                            StatPill(stringResource(R.string.detail_watched_count_fmt, watchedEpisodes, percent))
                         }
                     }
                 } else if (series.isMovie) {
                     Spacer(Modifier.height(12.dp))
-                    StatPill("Film")
+                    StatPill(stringResource(R.string.movie_badge))
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -433,7 +447,7 @@ private fun DetailContent(
 
         // Seasons & Episodes (series only)
         if (!series.isMovie) {
-        item { SectionHeader("Staffeln") }
+        item { SectionHeader(stringResource(R.string.detail_seasons_header)) }
         item {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp),
@@ -451,7 +465,7 @@ private fun DetailContent(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Staffel ${season.number}",
+                                stringResource(R.string.detail_season_label_fmt, season.number),
                                 color = if (selected) Color.White else TextSecondary,
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                 style = MaterialTheme.typography.labelLarge
@@ -497,13 +511,13 @@ private fun DetailContent(
                 }
             }
 
-            item { SectionHeader("Episoden", trailing = {
+            item { SectionHeader(stringResource(R.string.detail_episodes_header), trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val watchedCount = state.selectedSeasonWatchedCount
                     val totalCount = season.episodes.size
                     if (watchedCount > 0) {
                         Text(
-                            "$watchedCount/$totalCount gesehen",
+                            stringResource(R.string.detail_watched_progress_fmt, watchedCount, totalCount),
                             color = Accent,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Medium
@@ -511,7 +525,7 @@ private fun DetailContent(
                         Spacer(Modifier.width(12.dp))
                     }
                     Text(
-                        "${season.episodes.size} Folgen",
+                        stringResource(R.string.detail_episodes_count_short_fmt, season.episodes.size),
                         color = TextTertiary,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium
@@ -530,7 +544,7 @@ private fun DetailContent(
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            if (allWatched) "Alle zurücksetzen" else "Alle gesehen",
+                            if (allWatched) stringResource(R.string.detail_mark_all_unwatched) else stringResource(R.string.detail_mark_all_watched),
                             color = if (allWatched) Color(0xFFFF6666) else Primary,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold
@@ -545,13 +559,13 @@ private fun DetailContent(
                     OutlinedTextField(
                         value = episodeFilter,
                         onValueChange = { episodeFilter = it },
-                        placeholder = { Text("Episoden filtern...", color = TextTertiary, style = MaterialTheme.typography.bodySmall) },
+                        placeholder = { Text(stringResource(R.string.detail_filter_episodes_placeholder), color = TextTertiary, style = MaterialTheme.typography.bodySmall) },
                         leadingIcon = { Icon(Icons.Default.Search, null, tint = TextTertiary, modifier = Modifier.size(18.dp)) },
                         trailingIcon = {
                             if (episodeFilter.isNotEmpty()) {
                                 Icon(
                                     Icons.Default.Close,
-                                    "Löschen",
+                                    stringResource(R.string.cd_clear),
                                     tint = TextTertiary,
                                     modifier = Modifier
                                         .size(18.dp)
@@ -593,7 +607,7 @@ private fun DetailContent(
                         Modifier.fillMaxWidth().padding(40.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Keine Episoden gefunden für '$episodeFilter'", color = TextTertiary, style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.detail_no_episodes_for_filter_fmt, episodeFilter), color = TextTertiary, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -603,7 +617,7 @@ private fun DetailContent(
                     Modifier.fillMaxWidth().padding(40.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Keine Episoden gefunden", color = TextTertiary, style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.detail_no_episodes), color = TextTertiary, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -612,7 +626,7 @@ private fun DetailContent(
         } // end !series.isMovie
 
         if (state.relatedTitles.isNotEmpty()) {
-            item { SectionHeader("Ähnliche Titel") }
+            item { SectionHeader(stringResource(R.string.detail_related_titles)) }
             item {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 12.dp),
@@ -670,7 +684,7 @@ private fun ContinueWatchingBanner(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "WEITERSEHEN",
+                    stringResource(R.string.detail_continue_watching_header),
                     color = Primary,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Black,
@@ -688,7 +702,7 @@ private fun ContinueWatchingBanner(
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Entfernen",
+                        contentDescription = stringResource(R.string.cd_remove),
                         tint = TextTertiary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -728,7 +742,7 @@ private fun ContinueWatchingBanner(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "S${progress.season}E${progress.episode}",
+                            stringResource(R.string.detail_episode_compact_fmt, progress.season, progress.episode),
                                 color = Accent,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -747,7 +761,7 @@ private fun ContinueWatchingBanner(
                     ) {
                         Icon(
                             Icons.Default.PlayArrow,
-                            "Abspielen",
+                            stringResource(R.string.cd_play),
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
@@ -767,7 +781,7 @@ private fun ContinueWatchingBanner(
                 // Info
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "Staffel ${progress.season} · Episode ${progress.episode}",
+                        stringResource(R.string.detail_season_episode_fmt, progress.season, progress.episode),
                         color = TextTertiary,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium
@@ -783,7 +797,7 @@ private fun ContinueWatchingBanner(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "${progress.progressPercent.toInt()}% gesehen · Noch ${formatRemaining(progress)} min",
+                        stringResource(R.string.detail_progress_remaining_fmt, progress.progressPercent.toInt(), formatRemaining(progress)),
                         color = Primary,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold
@@ -841,7 +855,7 @@ private fun PremiumEpisodeRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "E${episode.number}",
+                        stringResource(R.string.detail_episode_fallback_fmt, episode.number),
                         color = Accent,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -860,7 +874,7 @@ private fun PremiumEpisodeRow(
                         Modifier.size(28.dp).clip(CircleShape).background(Primary),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Check, "Gesehen", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Check, stringResource(R.string.cd_watched), tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
             } else {
@@ -871,7 +885,7 @@ private fun PremiumEpisodeRow(
                 ) {
                     Icon(
                         Icons.Default.PlayArrow,
-                        "Abspielen",
+                        stringResource(R.string.cd_play),
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
@@ -929,7 +943,7 @@ private fun PremiumEpisodeRow(
             if (progress != null && !progress.isCompleted && progress.positionMs > 0) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Noch ${formatRemaining(progress)} min",
+                    stringResource(R.string.detail_remaining_min_fmt, formatRemaining(progress)),
                     color = Primary,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium
@@ -937,7 +951,7 @@ private fun PremiumEpisodeRow(
             } else if (progress != null && progress.isCompleted) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Gesehen",
+                    stringResource(R.string.detail_watched),
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium
@@ -955,7 +969,7 @@ private fun PremiumEpisodeRow(
         ) {
             Icon(
                 Icons.Default.PlayArrow,
-                contentDescription = "Abspielen",
+                contentDescription = stringResource(R.string.cd_play),
                 tint = Color.White,
                 modifier = Modifier.size(22.dp)
             )

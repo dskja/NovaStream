@@ -110,4 +110,196 @@
     <string name="press_back_again">Nochmal zurück drücken zum Beenden</string>
     <string name="invalid_playback_params">Ungültige Wiedergabeparameter</string>
     <string name="stale_cache_notice">Offline-Katalog (Provider nicht erreichbar)</string>
+
+    <!-- Home -->
+    <string name="home_catalog_loaded_fmt">%1$d geladen · %2$s</string>
+    <string name="home_titles_available_fmt">%1$d Titel verfügbar</string>
+    <string name="home_movies_available_fmt">%1$d Filme verfügbar</string>
+    <string name="home_series_available_fmt">%1$d Serien verfügbar</string>
+    <string name="home_my_list">Meine Liste</string>
+    <string name="home_popular">Beliebt</string>
+    <string name="home_newest">Neu hinzugefügt</string>
+    <string name="home_trending">Angesagt</string>
+    <string name="home_movies_section">Filme</string>
+    <string name="home_latest_episodes">Neue Episoden</string>
+    <string name="home_genre_action">Action</string>
+    <string name="home_genre_drama">Drama</string>
+    <string name="home_genre_scifi">Sci-Fi &amp; Fantasy</string>
+    <string name="home_genre_comedy">Comedy</string>
+    <string name="home_all_titles">Alle Titel</string>
+    <string name="home_all_movies">Alle Filme</string>
+    <string name="home_all_series">Alle Serien</string>
+    <string name="home_catalog_empty">Kein Katalog verfügbar.\nZiehe nach unten zum Aktualisieren oder wechsle den Provider in den Einstellungen.</string>
+    <string name="home_watch">Ansehen</string>
+    <string name="cd_watch">Ansehen</string>
+    <string name="error_unknown">Unbekannter Fehler</string>
+
+    <!-- Browse -->
+    <string name="browse_loading_catalog">Katalog laden…</string>
+    <string name="browse_header_subtitle_fmt">%1$s · %2$d Titel</string>
+    <string name="browse_empty_filter">Keine Titel für diesen Filter gefunden.</string>
+    <string name="browse_sort_title_asc">A-Z</string>
+    <string name="browse_sort_newest">Neueste</string>
+    <string name="browse_sort_popular">Beliebt</string>
+
+    <!-- Detail -->
+    <string name="detail_provider_reloading">Provider gewechselt – Inhalte werden neu geladen…</string>
+    <string name="cd_back_to_overview">Zurück zur Übersicht</string>
+    <string name="detail_play_movie">Film abspielen</string>
+    <string name="detail_play_first_episode">Erste Episode ansehen</string>
+    <string name="detail_remove_from_watchlist">Aus Watchlist entfernen</string>
+    <string name="detail_add_to_watchlist">Zur Watchlist hinzufügen</string>
+    <string name="cd_share">Teilen</string>
+    <string name="detail_share_message_fmt">Schau dir %1$s auf NovaStream an: %2$s</string>
+    <string name="detail_share_chooser">Teilen</string>
+    <string name="detail_watch_trailer">Trailer ansehen</string>
+    <string name="detail_show_less">Weniger anzeigen</string>
+    <string name="detail_show_more">Mehr anzeigen</string>
+    <string name="detail_cast">Cast</string>
+    <string name="detail_seasons_count_fmt">%1$d Staffeln</string>
+    <string name="detail_episodes_count_fmt">%1$d Episoden</string>
+    <string name="detail_watched_count_fmt">%1$d gesehen (%2$d%%)</string>
+    <string name="detail_season_label_fmt">Staffel %1$d</string>
+    <string name="detail_seasons_header">Staffeln</string>
+    <string name="detail_episodes_header">Episoden</string>
+    <string name="detail_watched_progress_fmt">%1$d/%2$d gesehen</string>
+    <string name="detail_episodes_count_short_fmt">%1$d Folgen</string>
+    <string name="detail_mark_all_unwatched">Alle zurücksetzen</string>
+    <string name="detail_mark_all_watched">Alle gesehen</string>
+    <string name="detail_filter_episodes_placeholder">Episoden filtern…</string>
+    <string name="cd_clear">Löschen</string>
+    <string name="detail_no_episodes_for_filter_fmt">Keine Episoden gefunden für \'%1$s\'</string>
+    <string name="detail_no_episodes">Keine Episoden gefunden</string>
+    <string name="detail_related_titles">Ähnliche Titel</string>
+    <string name="detail_also_on">Auch auf</string>
+    <string name="detail_continue_watching_header">WEITERSEHEN</string>
+    <string name="cd_remove">Entfernen</string>
+    <string name="cd_play">Abspielen</string>
+    <string name="detail_season_episode_fmt">Staffel %1$d · Episode %2$d</string>
+    <string name="detail_progress_remaining_fmt">%1$d%% gesehen · Noch %2$d min</string>
+    <string name="detail_remaining_min_fmt">Noch %1$d min</string>
+    <string name="detail_watched">Gesehen</string>
+    <string name="cd_watched">Gesehen</string>
+    <string name="detail_episode_compact_fmt">S%1$dE%2$d</string>
+    <string name="detail_episode_fallback_fmt">E%1$d</string>
+
+    <!-- Player -->
+    <string name="player_resolving_stream">Stream wird aufgelöst…</string>
+    <string name="player_skip_intro">Intro überspringen</string>
+    <string name="cd_back">Zurück</string>
+    <string name="player_quality">Qualität</string>
+    <string name="player_hoster">Hoster</string>
+    <string name="player_resolving_hoster">Hoster wird aufgelöst…</string>
+    <string name="player_next_episode">Nächste Folge</string>
+    <string name="player_episode_code_fmt">S%1$d E%2$d</string>
+    <string name="cd_next">Nächste</string>
+    <string name="player_continue">Weiter</string>
+    <string name="player_tap_to_cancel">Tippen um abzubrechen</string>
+    <string name="player_try_alternate_hoster">Anderen Hoster versuchen</string>
+    <string name="player_no_hosters_found">Keine Hoster gefunden</string>
+    <string name="player_no_more_hosters">Keine weiteren Hoster verfügbar</string>
+    <string name="player_hoster_failed_fmt">%1$s fehlgeschlagen — versuche %2$s</string>
+    <string name="player_hoster_failed_next">Hoster fehlgeschlagen — versuche nächsten</string>
+    <string name="player_resolve_failed">Kein Hoster konnte aufgelöst werden. Versuche es später erneut oder wähle einen anderen Hoster.</string>
+    <string name="player_episode_fallback_fmt">Episode %1$d</string>
+    <string name="player_season_episode_title_fmt">Staffel %1$d Episode %2$d</string>
+
+    <!-- Watchlist -->
+    <string name="watchlist_filter_current">Aktuell</string>
+    <string name="watchlist_sort_added_desc">Zuletzt hinzugefügt</string>
+    <string name="watchlist_sort_added_asc">Älteste zuerst</string>
+    <string name="watchlist_sort_title_asc">Titel A-Z</string>
+    <string name="watchlist_sort_title_desc">Titel Z-A</string>
+    <string name="watchlist_remove_title">Entfernen?</string>
+    <string name="watchlist_remove_message_fmt">Möchtest du \'%1$s\' aus deiner Watchlist entfernen?</string>
+    <string name="watchlist_remove_confirm">Entfernen</string>
+    <string name="watchlist_unknown_provider_title">Unbekannter Provider</string>
+    <string name="watchlist_unknown_provider_message">Für diesen Eintrag ist kein Provider mehr verfügbar. Du kannst ihn entfernen oder in der Listenansicht „Alle“ anzeigen.</string>
+    <string name="watchlist_ok">OK</string>
+    <string name="watchlist_error_loading">Fehler beim Laden der Watchlist</string>
+    <string name="watchlist_empty">Deine Watchlist ist leer.\nFüge Filme &amp; Serien hinzu die du schauen möchtest.</string>
+    <string name="watchlist_watching_badge">Läuft</string>
+    <string name="watchlist_provider_unknown">Unbekannt</string>
+
+    <!-- Continue watching -->
+    <string name="continue_watching_back">Zurück</string>
+    <string name="continue_watching_nothing">Nichts zum Weitersehen.</string>
+    <string name="cw_remove_title">Entfernen?</string>
+    <string name="cw_remove_message_fmt">Möchtest du \'%1$s - %2$s\' aus Weitersehen entfernen?</string>
+
+    <!-- Playback notification -->
+    <string name="playback_channel_name">Wiedergabe</string>
+    <string name="playback_channel_description">Hintergrund-Wiedergabe</string>
+    <string name="playback_notification_text">Wiedergabe läuft</string>
+    <string name="playback_stop">Stoppen</string>
+
+    <!-- Search (remaining) -->
+    <string name="cd_search">Suche</string>
+    <string name="cd_clear_search">Löschen</string>
+
+    <!-- Errors -->
+    <string name="error_timeout">Zeitüberschreitung beim Laden. Bitte überprüfe deine Internetverbindung.</string>
+    <string name="error_unknown_host">Server nicht erreichbar. Überprüfe deine Internetverbindung oder versuche es später erneut.</string>
+    <string name="error_ssl_handshake">Sichere Verbindung fehlgeschlagen. Möglicherweise ist das Gerät-Datum falsch.</string>
+    <string name="error_ssl">Sichere Verbindung konnte nicht hergestellt werden. Versuche es erneut.</string>
+    <string name="error_connect">Verbindung zum Server abgelehnt. Versuche es später erneut.</string>
+    <string name="error_io">Netzwerkfehler: %1$s</string>
+    <string name="error_io_unknown">Unbekannter Verbindungsfehler</string>
+    <string name="error_site_structure">Die Website-Struktur hat sich geändert. Ein Update könnte helfen.</string>
+    <string name="error_invalid_request">Ungültige Anfrage: %1$s</string>
+    <string name="error_internal">Ein interner Fehler ist aufgetreten. Versuche es erneut.</string>
+    <string name="error_data_processing">Daten konnten nicht verarbeitet werden. Versuche es erneut.</string>
+    <string name="error_security">Zugriff verweigert. Überprüfe deine Berechtigungen.</string>
+    <string name="error_coroutine_timeout">Zeitüberschreitung. Der Server braucht zu lange zum Antworten.</string>
+    <string name="error_cancelled">Vorgang abgebrochen.</string>
+    <string name="error_http_403">Zugriff verweigert (403). Die Website blockiert möglicherweise die App.</string>
+    <string name="error_http_404">Seite nicht gefunden (404). Der Inhalt wurde möglicherweise entfernt.</string>
+    <string name="error_http_429">Zu viele Anfragen (429). Bitte warte einen Moment und versuche es erneut.</string>
+    <string name="error_http_server">Server-Fehler (%1$d). Versuche es später erneut.</string>
+    <string name="error_http_generic">HTTP-Fehler %1$d: %2$s</string>
+    <string name="error_json">Daten konnten nicht gelesen werden. Versuche es erneut.</string>
+    <string name="error_jsoup_http">HTTP-Fehler %1$d: %2$s</string>
+    <string name="error_mime">Nicht unterstützter Inhaltstyp. Versuche es erneut.</string>
+    <string name="error_with_message">Fehler: %1$s</string>
+    <string name="error_empty_search">Leere Suche</string>
+
+    <!-- v12–v15 Ultra -->
+    <string name="settings_ultra_playback">Playback Ultra</string>
+    <string name="settings_play_telemetry_title">Play-Rate-Telemetrie</string>
+    <string name="settings_play_telemetry_subtitle">Lokale Erfolgsrate pro Hoster (opt-in, kein Upload)</string>
+    <string name="settings_cast_title">Google Cast</string>
+    <string name="settings_cast_subtitle">Chromecast-Wiedergabe aktivieren</string>
+    <string name="settings_offline_downloads">Offline Downloads</string>
+    <string name="settings_downloads_init">Download-Manager</string>
+    <string name="settings_downloads_init_sub">Media3 Offline-Queue initialisieren</string>
+    <string name="settings_downloads_ready">Download-Manager bereit</string>
+    <string name="download_channel_name">Downloads</string>
+    <string name="download_notification_title">NovaStream Downloads</string>
+    <string name="download_in_progress_fmt">%1$d Download(s) aktiv</string>
+    <string name="download_waiting_network">Warte auf Netzwerk…</string>
+    <string name="download_queue_idle">Download-Warteschlange bereit</string>
+    <string name="settings_iptv">Live TV / IPTV</string>
+    <string name="settings_iptv_enable">IPTV aktivieren</string>
+    <string name="settings_iptv_enable_sub">Pluto TV + eigene M3U-Playlist</string>
+    <string name="settings_m3u_url">M3U Playlist URL</string>
+    <string name="settings_m3u_save">M3U speichern</string>
+    <string name="settings_m3u_saved">M3U URL gespeichert</string>
+    <string name="settings_sync_backup">Sync &amp; Backup</string>
+    <string name="settings_export_backup">Backup exportieren (JSON)</string>
+    <string name="settings_export_done">Backup gespeichert: %1$s</string>
+    <string name="settings_sync_url">Sync URL (WebDAV/REST)</string>
+    <string name="settings_sync_key">Geräte-Key (optional)</string>
+    <string name="settings_sync_push">Hochladen</string>
+    <string name="settings_sync_pull">Herunterladen</string>
+    <string name="settings_profiles">Profile</string>
+    <string name="settings_profile_create">Neues Profil</string>
+    <string name="settings_profile_created">Profil erstellt</string>
+    <string name="settings_provider_import">Provider Import</string>
+    <string name="settings_site_profile_json">SiteProfile JSON</string>
+    <string name="settings_import_site_profile">SiteProfile importieren</string>
+    <string name="settings_import_success">%1$d Provider importiert</string>
+    <string name="live_tv_title">Live TV</string>
+    <string name="live_tv_search_hint">Kanäle suchen…</string>
+    <string name="live_tv_browse_hint">Live-Kanäle durchsuchen (Pluto TV, M3U)</string>
+    <string name="iptv_disabled_hint">IPTV in Einstellungen aktivieren</string>
 </resources>

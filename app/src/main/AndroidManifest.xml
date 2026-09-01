@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <!-- Android TV / Fire TV: Touchscreen nicht erforderlich -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <!-- Android TV: Leanback Feature (required=false damit App auch auf Handys läuft) -->
@@ -68,6 +70,15 @@
             android:name=".ui.player.PlaybackForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <service
+            android:name=".download.DownloadForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.novastream.app.cast.NovaCastOptionsProvider" />
     </application>
 
 </manifest>

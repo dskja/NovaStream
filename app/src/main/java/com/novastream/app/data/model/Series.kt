@@ -16,7 +16,15 @@ data class Series(
     val seasonCount: Int? = null,
     val isMovie: Boolean = false,
     /** Provider der diesen Eintrag geliefert hat – verhindert Cross-Provider-Leaks. */
-    val providerId: String? = null
+    val providerId: String? = null,
+    /** External IDs for cross-provider dedup (free sources only). */
+    val imdbId: String? = null,
+    val tvmazeId: String? = null,
+    val anilistId: Int? = null,
+    /** Primary dedup key, e.g. imdb:tt0903747 or tvmaze:169. */
+    val canonicalKey: String? = null,
+    /** TMDB ID from Wikidata cross-refs only — not from TMDB API. */
+    val tmdbId: Int? = null
 ) {
     val absoluteDetailUrl: String
         get() {

@@ -75,6 +75,12 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist")
     suspend fun clear()
 
+    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    suspend fun getAllOnce(): List<WatchlistItem>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: WatchlistItem)
+
     @Query("SELECT COUNT(*) FROM watchlist WHERE providerId = 'unknown'")
     suspend fun countUnknownProvider(): Int
 

@@ -1,8 +1,40 @@
 # NovaStream
 
 <p align="center">
-  <strong>High-End Android Streaming Client · Multi-Provider · Hilt DI · i18n · v8.0</strong>
+  <strong>High-End Android Streaming Client · 51 Providers · Global Edition · v10.0</strong>
 </p>
+
+---
+
+## Highlights (v10.0)
+
+| Feature | v9 | v10 |
+|---------|:--:|:---:|
+| Hilt factory for dynamic-URL providers (Wiflix, FrenchStream, Cuevana3) | — | ✓ |
+| ProviderDomainManager alternate domains (28 unstable sites) | partial | ✓ |
+| Provider Marketplace logos + region labels | — | ✓ |
+| Content-language-aware latest episodes (TVMaze region) | — | ✓ |
+| Genre hubs per ContentLanguage on Home/Browse | — | ✓ |
+| Nightly CI smoke for all 51 providers × language tag | — | ✓ |
+
+### v10 provider hardening
+
+- **Hilt `@ApplicationContext`** — `ProviderRegistry.initialize()` from `ProviderModule` so dynamic-URL providers resolve domains via DataStore.
+- **Domain mirrors** — `ProviderDomainManager` tracks alternate base URLs for Wiflix, FrenchStream, Cuevana3, SFlix, DramaCool, and 20+ other unstable international sites.
+- **Marketplace polish** — every provider has `regionLabel` + favicon `logoUrl`; Coil renders logos in Provider Marketplace.
+- **Global Home** — latest-episode row uses `loadNewest()` for all providers; Free Catalog respects `AppSettings.contentLanguage` TVMaze region; genre chips fall back to per-language defaults when a scraper has no native genres.
+- **CI** — `scripts/provider-smoke.ps1` covers all 51 providers; `.github/workflows/provider-smoke-nightly.yml` runs daily at 03:00 UTC.
+
+## Highlights (v9.0)
+
+| Feature | v8 | v9 |
+|---------|:--:|:--:|
+| 51 streaming providers (DE/EN/FR/ES/IT/PL) | 17 | ✓ |
+| Provider Marketplace + language filters | — | ✓ |
+| Global Search across providers | — | ✓ |
+| Universal HTML scraper + international SiteProfiles | partial | ✓ |
+| Content language setting + provider grouping | — | ✓ |
+| Provider health monitor + cooldown | partial | ✓ |
 
 ---
 
@@ -98,11 +130,18 @@ See **Settings → Provider-Fähigkeiten** for the live matrix in the app (inclu
 Push to `main`, pull requests, and manual **Actions → Build APK** runs CI.
 
 - Artifacts: `NovaStream-debug-apk`, `NovaStream-release-apk`
-- Tag `v8.0.0` creates a GitHub Release with APKs
+- Tag `v10.0.0` creates a GitHub Release with APKs
+- Nightly **Provider Smoke** workflow tests live reachability for all 51 providers
 
 ```bash
-git tag v8.0.0
-git push origin v8.0.0
+git tag v10.0.0
+git push origin v10.0.0
+```
+
+### Provider smoke (local)
+
+```powershell
+./scripts/provider-smoke.ps1
 ```
 
 ## Tests (v8)
