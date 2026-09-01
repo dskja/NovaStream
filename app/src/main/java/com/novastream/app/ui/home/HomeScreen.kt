@@ -198,9 +198,9 @@ fun HomeScreen(
                     )
                 } else if (state.hero.isNotEmpty()) {
                     HeroCarousel(
-                        series = state.hero.take(8),
+                        series = state.hero.take(if (state.performanceMode) 3 else 8),
                         onClick = onSeriesClick,
-                        autoScrollEnabled = !state.reduceMotion,
+                        autoScrollEnabled = !state.reduceMotion && !state.performanceMode,
                         focusRequester = initialFocus
                     )
                 }
@@ -551,6 +551,7 @@ private fun HeroCarousel(
             val s = series[page]
             var isLoading by remember(s.id) { mutableStateOf(true) }
             var isError by remember(s.id) { mutableStateOf(false) }
+            val shouldLoadImage = kotlin.math.abs(page - pagerState.currentPage) <= 1
 
             Box(
                 Modifier
@@ -564,11 +565,12 @@ private fun HeroCarousel(
                     )
                     .clickable { onClick(s.id) }
             ) {
-                if (!s.coverUrl.isNullOrBlank() && !isError) {
+                if (!s.coverUrl.isNullOrBlank() && !isError && shouldLoadImage) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(s.coverUrl)
                             .crossfade(true)
+                            .size(1280, 720)
                             .addHeader(
                                 "Referer",
                                 com.novastream.app.util.MediaUrls.refererFor(s.coverUrl)

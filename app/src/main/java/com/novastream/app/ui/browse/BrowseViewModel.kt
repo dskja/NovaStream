@@ -16,6 +16,7 @@ import androidx.annotation.StringRes
 import com.novastream.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 enum class BrowseContentFilter { ALL, SERIES, MOVIES }
 
@@ -69,14 +71,15 @@ class BrowseViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            var isFirstEmission = true
             providerController.activeProviderId.collect { providerId ->
-                if (activeProviderId != providerId) {
+                if (isFirstEmission || activeProviderId != providerId) {
+                    isFirstEmission = false
                     activeProviderId = providerId
                     resetAndLoad()
                 }
             }
         }
-        viewModelScope.launch { resetAndLoad() }
     }
 
     fun refresh() = viewModelScope.launch { resetAndLoad() }
@@ -114,7 +117,12 @@ class BrowseViewModel @Inject constructor(
 
     fun setSort(sort: BrowseSort) {
         if (_state.value.sort == sort) return
-        _state.update { it.copy(sort = sort, items = applySort(applyContentFilter(allItems))) }
+        viewModelScope.launch {
+            val sorted = withContext(Dispatchers.Default) {
+                applySort(applyContentFilter(allItems), sort)
+            }
+            _state.update { it.copy(sort = sort, items = sorted) }
+        }
     }
 
     fun loadMore() {
@@ -289,13 +297,17 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    private fun publishItems(reset: Boolean, page: Int, hasMore: Boolean) {
-        val filtered = applyContentFilter(allItems)
+    private suspend fun publishItems(reset: Boolean, page: Int, hasMore: Boolean) {
+        val filter = _state.value.contentFilter
+        val sort = _state.value.sort
+        val items = withContext(Dispatchers.Default) {
+            applySort(applyContentFilter(allItems, filter), sort)
+        }
         _state.update { current ->
             current.copy(
                 loading = false,
                 loadingMore = false,
-                items = applySort(filtered),
+                items = items,
                 page = page,
                 hasMore = hasMore,
                 error = null

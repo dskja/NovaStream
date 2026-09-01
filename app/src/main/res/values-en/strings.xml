@@ -318,6 +318,7 @@
     <string name="download_channel_name">Downloads</string>
     <string name="download_notification_title">NovaStream downloads</string>
     <string name="download_in_progress_fmt">%1$d download(s) active</string>
+    <string name="download_progress_fmt">Download: %1$d%%</string>
     <string name="download_waiting_network">Waiting for network…</string>
     <string name="download_queue_idle">Download queue idle</string>
     <string name="settings_iptv">Live TV / IPTV</string>
