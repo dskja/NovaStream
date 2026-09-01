@@ -10,6 +10,7 @@ import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.util.VoeWebViewResolver
+import com.novastream.app.util.CaptchaWebViewFetcher
 import com.novastream.app.data.repository.NovaStreamRepository
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -30,6 +31,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         super.onCreate()
         // Set VoeWebViewResolver context for VOE hoster resolution
         VoeWebViewResolver.setContext(this)
+        CaptchaWebViewFetcher.setContext(this)
         // Load saved provider preference on app start
         appScope.launch {
             try {

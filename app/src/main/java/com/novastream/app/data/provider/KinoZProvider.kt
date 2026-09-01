@@ -133,6 +133,27 @@ class KinoZProvider(
 
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val path = when {
+            page <= 0 -> ""
+            else -> "?page=${page + 1}"
+        }
+        parseKinoZSeriesList(fetchUrl(baseUrl + path))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val name = genre.trim().ifBlank { return@runCatching emptyList() }
+        val encoded = name.replace(" ", "%20")
+        val path = if (page <= 0) "/Genre/$encoded" else "/Genre/$encoded?page=${page + 1}"
+        parseKinoZSeriesList(fetchUrl(baseUrl + path))
+    }.fold(
+        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
+        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
+    )
+
     // ─── Networking ─────────────────────────────────────────────────────────
 
     private suspend fun fetchUrl(url: String): String = withContext(Dispatchers.IO) {

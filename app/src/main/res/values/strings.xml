@@ -52,7 +52,7 @@
     <string name="settings_clear_continue_title">Weitersehen leeren</string>
     <string name="settings_clear_continue_subtitle">Entfernt alle gespeicherten Wiedergabefortschritte</string>
     <string name="settings_clear_completed_title">Abgeschlossene Episoden entfernen</string>
-    <string name="settings_clear_completed_subtitle">Löscht Episoden die zu &gt;90% geschaut wurden</string>
+    <string name="settings_clear_completed_subtitle">Löscht Episoden die zu über 90%% geschaut wurden</string>
     <string name="settings_clear_watchlist_title">Watchlist leeren</string>
     <string name="settings_clear_watchlist_subtitle">Entfernt alle Serien aus deiner Watchlist</string>
     <string name="settings_confirm_irreversible">Diese Aktion kann nicht rückgängig gemacht werden.</string>

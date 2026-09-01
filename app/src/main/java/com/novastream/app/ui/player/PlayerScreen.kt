@@ -52,7 +52,6 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
@@ -172,15 +171,7 @@ fun PlayerScreen(
         }
         exoPlayer = null
 
-        val trackSelector = DefaultTrackSelector(context).apply {
-            if (state.dataSaverMode) {
-                setParameters(
-                    buildUponParameters()
-                        .setMaxVideoSize(1280, 720)
-                        .setMaxVideoBitrate(1_500_000)
-                )
-            }
-        }
+        val trackSelector = createPlayerTrackSelector(context, state.dataSaverMode)
 
         val mediaItemBuilder = MediaItem.Builder()
             .setUri(url)

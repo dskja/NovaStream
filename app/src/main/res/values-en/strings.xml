@@ -52,7 +52,7 @@
     <string name="settings_clear_continue_title">Clear continue watching</string>
     <string name="settings_clear_continue_subtitle">Removes all saved playback progress</string>
     <string name="settings_clear_completed_title">Remove completed episodes</string>
-    <string name="settings_clear_completed_subtitle">Deletes episodes watched beyond 90%</string>
+    <string name="settings_clear_completed_subtitle">Deletes episodes watched beyond 90%%</string>
     <string name="settings_clear_watchlist_title">Clear watchlist</string>
     <string name="settings_clear_watchlist_subtitle">Removes all series from your watchlist</string>
     <string name="settings_confirm_irreversible">This action cannot be undone.</string>
