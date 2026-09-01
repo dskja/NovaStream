@@ -16,7 +16,8 @@ import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.repository.RepoResult
+import com.novastream.app.data.repository.NovaStreamRepository
+import com.novastream.app.data.repository.NovaStreamRepository.RepoResult
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderRegistry

@@ -1,6 +1,7 @@
 package com.novastream.app.data.provider
 
 import android.content.Context
+import com.novastream.app.provider.SiteProfileImporter
 
 /**
  * Central registry for all streaming providers with language tags and capability metadata.
