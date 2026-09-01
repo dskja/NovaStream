@@ -2,6 +2,8 @@ package com.novastream.app.ui.browse
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -15,7 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.SeriesPosterCard
@@ -44,6 +49,7 @@ fun BrowseScreen(
     val isTv = remember { TvUtils.isTvDevice(context) }
     val minPoster = if (isTv) 160.dp else 120.dp
     val initialFocus = rememberInitialFocusRequester()
+    var showSortMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.loading, state.items) {
         if (!state.loading && state.items.isNotEmpty()) {
@@ -75,6 +81,10 @@ fun BrowseScreen(
         when {
             state.loading && state.items.isEmpty() -> PremiumLoading(label = "Katalog laden…")
             state.error != null && state.items.isEmpty() -> PremiumError(state.error ?: "Fehler", onRetry = vm::refresh)
+            !state.loading && state.items.isEmpty() -> PremiumEmpty(
+                text = "Keine Titel für diesen Filter gefunden.",
+                modifier = Modifier.fillMaxSize()
+            )
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minPoster),
                 state = gridState,
@@ -84,18 +94,63 @@ fun BrowseScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
-                        Text(
-                            "Entdecken",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            "${state.providerName} · ${state.items.size} Titel geladen",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = TextTertiary
-                        )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Entdecken",
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                "${state.providerName} · ${state.items.size} Titel",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextTertiary
+                            )
+                        }
+                        Box {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(BgSurfaceElevated)
+                                    .clickable { showSortMenu = true }
+                                    .then(if (isTv) Modifier.tvFocusable().tvFocusRing(cornerRadius = 12.dp) else Modifier)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    state.sort.label,
+                                    color = TextSecondary,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                                modifier = Modifier.background(BgSurface)
+                            ) {
+                                BrowseSort.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                option.label,
+                                                color = if (state.sort == option) Primary else TextPrimary
+                                            )
+                                        },
+                                        onClick = {
+                                            vm.setSort(option)
+                                            showSortMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -126,7 +181,9 @@ fun BrowseScreen(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(vertical = 4.dp)
+                            modifier = Modifier
+                                .padding(vertical = 4.dp)
+                                .horizontalScroll(rememberScrollState())
                         ) {
                             BrowseFilterChip(
                                 label = "Alle",
@@ -134,7 +191,7 @@ fun BrowseScreen(
                                 onClick = { vm.selectGenre(null) },
                                 isTv = isTv
                             )
-                            state.genres.take(8).forEach { genre ->
+                            state.genres.forEach { genre ->
                                 BrowseFilterChip(
                                     label = genre.name,
                                     selected = state.selectedGenre == genre.slug,

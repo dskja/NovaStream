@@ -148,10 +148,12 @@ class BrowseViewModel @Inject constructor(
             _state.value.supportsMovies &&
             _state.value.selectedGenre.isNullOrBlank()
 
-    private fun usesSectionCatalog(): Boolean =
-        !_state.value.section.isNullOrBlank() &&
-            _state.value.section !in setOf("all", "catalog") &&
-            _state.value.selectedGenre.isNullOrBlank()
+    private fun usesSectionCatalog(): Boolean {
+        val section = _state.value.section?.takeIf { it.isNotBlank() } ?: return false
+        if (section in setOf("all", "catalog")) return false
+        if (section == "genre") return !_state.value.selectedGenre.isNullOrBlank()
+        return _state.value.selectedGenre.isNullOrBlank()
+    }
 
     private fun reloadForFilter(reset: Boolean) {
         when {

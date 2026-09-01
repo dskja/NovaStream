@@ -36,6 +36,7 @@ import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.ui.components.PremiumEmpty
+import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.TvUtils
@@ -345,6 +346,10 @@ fun WatchlistScreen(
 
         Box(Modifier.fillMaxSize()) {
             when {
+                state.error != null -> PremiumError(
+                    state.error ?: "Fehler beim Laden der Watchlist",
+                    modifier = Modifier.fillMaxSize()
+                )
                 state.items.isEmpty() && state.loading -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = minPoster),
