@@ -41,7 +41,9 @@ class FreeCatalogBrowseProvider(
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
             metaGraph.search(query.trim(), preferAnime = false)
                 .map { metaGraph.toSeries(it, id) }

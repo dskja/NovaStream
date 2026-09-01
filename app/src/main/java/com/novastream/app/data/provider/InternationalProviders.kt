@@ -4,48 +4,124 @@ import android.content.Context
 import com.novastream.app.data.scraper.InternationalSiteProfiles
 
 class SflixProvider(appContext: Context? = null) :
-    DynamicUrlSiteProvider(InternationalSiteProfiles.sflix, appContext, "/tv-show/")
+    ConfigurableSiteProvider(InternationalSiteProfiles.sflix, appContext)
 
-class RidomoviesProvider : ConfigurableSiteProvider(InternationalSiteProfiles.ridomovies)
-class AnikotoProvider : ConfigurableSiteProvider(InternationalSiteProfiles.anikoto)
+class RidomoviesProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.ridomovies, appContext)
+
+class AnikotoProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.anikoto, appContext)
 
 class HdFilmeProvider(appContext: Context? = null) :
-    DynamicUrlSiteProvider(InternationalSiteProfiles.hdfilme, appContext, "stream")
-class EinschaltenProvider : ConfigurableSiteProvider(InternationalSiteProfiles.einschalten)
-class FrenchAnimeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.frenchAnime)
-class FrembedProvider : ConfigurableSiteProvider(InternationalSiteProfiles.frembed)
-class FanpelisProvider : ConfigurableSiteProvider(InternationalSiteProfiles.fanpelis)
-class AnimeFlvProvider : ConfigurableSiteProvider(InternationalSiteProfiles.animeFlv)
-class JkAnimeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.jkAnime)
-class PelisplustoProvider : ConfigurableSiteProvider(InternationalSiteProfiles.pelisplusto)
-class DoramasflixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.doramasflix)
-class GuardaSerieProvider : ConfigurableSiteProvider(InternationalSiteProfiles.guardaSerie)
-class Cb01Provider : ConfigurableSiteProvider(InternationalSiteProfiles.cb01)
-class Altadefinizione01Provider : ConfigurableSiteProvider(InternationalSiteProfiles.altadefinizione01)
-class AnimeUnityProvider : ConfigurableSiteProvider(InternationalSiteProfiles.animeUnity)
-class StreamingCommunityItProvider : ConfigurableSiteProvider(InternationalSiteProfiles.streamingCommunityIt)
-class StreamingCommunityEnProvider : ConfigurableSiteProvider(InternationalSiteProfiles.streamingCommunityEn)
-class FilmyOnlineProvider : ConfigurableSiteProvider(InternationalSiteProfiles.filmyOnline)
-class ZaluknijProvider : ConfigurableSiteProvider(InternationalSiteProfiles.zaluknij)
-class MkissaProvider : ConfigurableSiteProvider(InternationalSiteProfiles.mkissa)
+    ConfigurableSiteProvider(InternationalSiteProfiles.hdfilme, appContext)
+
+class EinschaltenProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.einschalten, appContext)
+
+class FrenchAnimeProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.frenchAnime, appContext)
+
+class FrembedProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.frembed, appContext)
+
+class FanpelisProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.fanpelis, appContext)
+
+class AnimeFlvProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.animeFlv, appContext)
+
+class JkAnimeProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.jkAnime, appContext)
+
+class PelisplustoProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.pelisplusto, appContext)
+
+class DoramasflixProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.doramasflix, appContext)
+
+class GuardaSerieProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.guardaSerie, appContext)
+
+class Cb01Provider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.cb01, appContext)
+
+class Altadefinizione01Provider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.altadefinizione01, appContext)
+
+class AnimeUnityProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.animeUnity, appContext)
+
+class StreamingCommunityItProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.streamingCommunityIt, appContext)
+
+class StreamingCommunityEnProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.streamingCommunityEn, appContext)
+
+class FilmyOnlineProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.filmyOnline, appContext)
+
+class ZaluknijProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.zaluknij, appContext)
+
+class MkissaProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.mkissa, appContext)
+
 class MoflixProvider(appContext: Context? = null) :
-    DynamicUrlSiteProvider(InternationalSiteProfiles.moflix, appContext, "stream/")
-class AnimeworldProvider : ConfigurableSiteProvider(InternationalSiteProfiles.animeworld)
-class Lookmovie2Provider : ConfigurableSiteProvider(InternationalSiteProfiles.lookmovie2)
-class PelisflixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.pelisflix)
-class FilmpertuttiProvider : ConfigurableSiteProvider(InternationalSiteProfiles.filmpertutti)
-class Cineblog01Provider : ConfigurableSiteProvider(InternationalSiteProfiles.cineblog01)
-class VoirfilmsProvider : ConfigurableSiteProvider(InternationalSiteProfiles.voirfilms)
-class NekoSamaProvider : ConfigurableSiteProvider(InternationalSiteProfiles.nekoSama)
-class Soap2dayProvider : ConfigurableSiteProvider(InternationalSiteProfiles.soap2day)
-class MkvMoviesProvider : ConfigurableSiteProvider(InternationalSiteProfiles.mkvMovies)
-class HiAnimeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.hianime)
-class AnimeFenixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.animefenix)
-class TioAnimeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.tioanime)
-class SeriesFlixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.seriesflix)
-class AnyMovieProvider : ConfigurableSiteProvider(InternationalSiteProfiles.anymovie)
-class FlixLatamProvider : ConfigurableSiteProvider(InternationalSiteProfiles.flixlatam)
-class OtakuFrProvider : ConfigurableSiteProvider(InternationalSiteProfiles.otakufr)
-class LatAnimeProvider : ConfigurableSiteProvider(InternationalSiteProfiles.latanime)
-class GuardaFlixProvider : ConfigurableSiteProvider(InternationalSiteProfiles.guardaflix)
-class CineCalidadProvider : ConfigurableSiteProvider(InternationalSiteProfiles.cinecalidad)
+    ConfigurableSiteProvider(InternationalSiteProfiles.moflix, appContext)
+
+class AnimeworldProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.animeworld, appContext)
+
+class Lookmovie2Provider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.lookmovie2, appContext)
+
+class PelisflixProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.pelisflix, appContext)
+
+class FilmpertuttiProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.filmpertutti, appContext)
+
+class Cineblog01Provider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.cineblog01, appContext)
+
+class VoirfilmsProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.voirfilms, appContext)
+
+class NekoSamaProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.nekoSama, appContext)
+
+class Soap2dayProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.soap2day, appContext)
+
+class MkvMoviesProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.mkvMovies, appContext)
+
+class HiAnimeProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.hianime, appContext)
+
+class AnimeFenixProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.animefenix, appContext)
+
+class TioAnimeProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.tioanime, appContext)
+
+class SeriesFlixProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.seriesflix, appContext)
+
+class AnyMovieProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.anymovie, appContext)
+
+class FlixLatamProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.flixlatam, appContext)
+
+class OtakuFrProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.otakufr, appContext)
+
+class LatAnimeProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.latanime, appContext)
+
+class GuardaFlixProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.guardaflix, appContext)
+
+class CineCalidadProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(InternationalSiteProfiles.cinecalidad, appContext)

@@ -237,7 +237,9 @@ open class SerienStreamProvider(
     suspend fun loadCatalog(): StreamingProvider.ProviderResult<List<Series>> = loadExtendedCatalog()
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
             val q = query.trim()
             val base = activeBaseUrl()

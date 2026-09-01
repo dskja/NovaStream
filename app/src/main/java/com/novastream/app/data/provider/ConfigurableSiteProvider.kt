@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
@@ -21,33 +22,74 @@ import okhttp3.Request
 
 /**
  * Generischer Provider auf Basis von [SiteProfile] + [UniversalHtmlScraper].
- * Ein Profil = ein voll funktionaler Streaming-Provider.
+ * Mit [appContext] und Mirrors in [ProviderDomainManager] wird automatisch
+ * Failover über [ProviderDomainResolver] aktiviert.
  */
 open class ConfigurableSiteProvider(
-    private val profile: SiteProfile
-) : StreamingProvider {
+    private val profile: SiteProfile,
+    private val appContext: Context? = null,
+    mirrorContentNeedle: String? = ProviderMirrorNeedles.needleFor(profile.id, profile)
+) : StreamingProvider, DynamicBaseUrlProvider {
 
     companion object {
         private const val FETCH_CACHE_SIZE = 8
         private const val FETCH_CACHE_TTL_MS = 5L * 60 * 1000
-
-        private val fetchCache = object : LinkedHashMap<String, Pair<Long, String>>(FETCH_CACHE_SIZE, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
-                size > FETCH_CACHE_SIZE
-        }
-        private val fetchCacheMutex = Mutex()
     }
 
     override val id: String get() = profile.id
     override val displayName: String get() = profile.displayName
-    override val baseUrl: String get() = profile.baseUrl
+    override val defaultBaseUrl: String get() = profile.baseUrl.trimEnd('/')
+    override val changeUrlMutex: Mutex = Mutex()
+
+    override val baseUrl: String
+        get() = _resolvedBase ?: profile.baseUrl
+
     override val supportsSeries: Boolean get() = profile.supportsSeries
     override val supportsMovies: Boolean get() = profile.supportsMovies
     override val catalogHint: String?
         get() = null
 
+    @Volatile
+    private var _resolvedBase: String? = null
+
+    private val mirrorNeedle: String? = mirrorContentNeedle?.takeIf {
+        ProviderMirrorNeedles.hasMirrors(profile.id)
+    }
+
+    private val usesMirrors: Boolean
+        get() = appContext != null && mirrorNeedle != null
+
+    private val fetchCache = object : LinkedHashMap<String, Pair<Long, String>>(FETCH_CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
+            size > FETCH_CACHE_SIZE
+    }
+    private val fetchCacheMutex = Mutex()
+
+    init {
+        if (usesMirrors) {
+            ProviderDomainResolver.registerInvalidator(id) {
+                _resolvedBase = null
+                fetchCache.clear()
+            }
+        }
+    }
+
+    override suspend fun resolveBaseUrl(forceRefresh: Boolean): String = changeUrlMutex.withLock {
+        if (!usesMirrors) return defaultBaseUrl
+        if (!forceRefresh && _resolvedBase != null) return _resolvedBase!!
+        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
+            providerId = id,
+            defaultBaseUrl = defaultBaseUrl,
+            contentNeedle = mirrorNeedle.orEmpty(),
+            appContext = appContext,
+            forceRefresh = forceRefresh
+        )
+        _resolvedBase = resolved
+        resolved
+    }
+
     protected open suspend fun activeBaseUrl(): String =
-        if (this is DynamicBaseUrlProvider) resolveBaseUrl() else profile.baseUrl.trimEnd('/')
+        if (usesMirrors) resolveBaseUrl() else defaultBaseUrl
 
     private suspend fun hosterResolver(): HosterResolver =
         HosterResolver(baseUrl = activeBaseUrl())
@@ -118,7 +160,6 @@ open class ConfigurableSiteProvider(
             val hosters = UniversalHtmlScraper.parseHosters(fetch(url), profile)
             if (hosters.isNotEmpty()) hosters
             else {
-                // TMDb-ID aus Slug? → Embed-Fallbacks
                 val tmdb = slugTmdbId(episode.slug)
                 if (tmdb != null) {
                     EmbedStreamResolver.buildHosters(
@@ -236,8 +277,18 @@ open class ConfigurableSiteProvider(
         return html
     }
 
-    private suspend fun fetchNetwork(url: String): String =
-        ProviderHttp.fetch(url, referer = activeBaseUrl() + "/", webViewFallback = true)
+    private suspend fun fetchNetwork(url: String): String {
+        val base = activeBaseUrl()
+        var html = ProviderHttp.fetch(url, referer = "$base/", webViewFallback = true)
+        if (usesMirrors && (html.isBlank() || ProviderHttp.isChallenge(html))) {
+            val refreshedBase = resolveBaseUrl(forceRefresh = true)
+            if (refreshedBase != base) {
+                val refreshedUrl = url.replace(base, refreshedBase)
+                html = ProviderHttp.fetch(refreshedUrl, referer = "$refreshedBase/", webViewFallback = true)
+            }
+        }
+        return html
+    }
 
     private suspend fun postSearch(query: String): String = withContext(Dispatchers.IO) {
         val field = profile.searchPostField ?: return@withContext ""
@@ -254,18 +305,29 @@ open class ConfigurableSiteProvider(
         }
     }
 
-    private fun <T> Result<T>.toResult(): StreamingProvider.ProviderResult<T> = fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    private fun <T> Result<T>.toResult(): StreamingProvider.ProviderResult<T> =
+        ProviderResults.fold(id, this)
 }
 
 // ─── Konkrete FMHY-Provider ─────────────────────────────────────────────────
 
-class HydraHdProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.hydraHd)
-class CinezoProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.cinezo)
-class ShowsStProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.showsSt)
-class PhantomFlixProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.phantomFlix)
-class FlixerProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.flixer)
-class DramaCoolProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.dramaCool)
-class PressPlayProvider : ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.pressPlay)
+class HydraHdProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.hydraHd, appContext)
+
+class CinezoProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.cinezo, appContext)
+
+class ShowsStProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.showsSt, appContext)
+
+class PhantomFlixProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.phantomFlix, appContext)
+
+class FlixerProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.flixer, appContext)
+
+class DramaCoolProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.dramaCool, appContext)
+
+class PressPlayProvider(appContext: Context? = null) :
+    ConfigurableSiteProvider(com.novastream.app.data.scraper.SiteProfiles.pressPlay, appContext)

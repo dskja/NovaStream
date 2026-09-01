@@ -49,7 +49,9 @@ class FreeCatalogProvider(
     )
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
+        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
+            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        )
         return runCatching {
             FreeMetaService.search(query.trim()).map { mapShow(it) }
         }.fold(
