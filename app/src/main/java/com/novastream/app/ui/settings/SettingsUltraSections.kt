@@ -23,7 +23,10 @@ import kotlinx.coroutines.launch
 
 /** v12–v15 advanced settings sections (IPTV, sync, downloads, telemetry, profiles). */
 @Composable
-fun SettingsUltraSections(appSettings: AppSettings) {
+fun SettingsUltraSections(
+    appSettings: AppSettings,
+    onOpenDownloads: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val playTelemetry by appSettings.playTelemetry.collectAsStateWithLifecycle(initialValue = false)
@@ -54,6 +57,10 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     }
 
     SettingsSectionHeader(stringResource(R.string.settings_offline_downloads))
+    SettingsAction(stringResource(R.string.settings_open_downloads),
+        stringResource(R.string.settings_open_downloads_sub)) {
+        onOpenDownloads()
+    }
     SettingsAction(stringResource(R.string.settings_downloads_init),
         stringResource(R.string.settings_downloads_init_sub)) {
         DownloadForegroundService.ensureChannel(context)

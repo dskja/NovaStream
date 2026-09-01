@@ -74,6 +74,7 @@ class DownloadManagerHelper @Inject constructor(
             "Only direct HLS/MP4 supported"
         }
         val id = DownloadEntity.key(providerId, slug, season, episode)
+        val secureUrl = com.novastream.app.util.MediaUrls.secureUrl(source.url)
         val entity = DownloadEntity(
             downloadId = id,
             profileId = profileId,
@@ -84,14 +85,14 @@ class DownloadManagerHelper @Inject constructor(
             season = season,
             episode = episode,
             coverUrl = coverUrl,
-            streamUrl = source.url,
+            streamUrl = secureUrl,
             mimeType = source.mimeType,
             hosterName = source.hoster,
             status = DownloadStatus.QUEUED
         )
         downloadDao.upsert(entity)
 
-        val request = DownloadRequest.Builder(id, android.net.Uri.parse(source.url))
+        val request = DownloadRequest.Builder(id, android.net.Uri.parse(secureUrl))
             .setMimeType(source.mimeType)
             .setCustomCacheKey(id)
             .build()

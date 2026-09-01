@@ -164,9 +164,10 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onQueryChange(q: String) {
-        val trimmed = q.trim().take(100)
-        _state.update { it.copy(query = trimmed, error = null) }
+        val limited = q.take(100)
+        _state.update { it.copy(query = limited, error = null) }
         searchJob?.cancel()
+        val trimmed = limited.trim()
         if (trimmed.isBlank()) {
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
@@ -180,7 +181,7 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
             currentCoroutineContext().ensureActive()
-            if (_state.value.query != trimmed) return@launch
+            if (_state.value.query.trim() != trimmed) return@launch
             if (ActiveProvider.id != expectedProvider) return@launch
             when (val res = repo.search(trimmed)) {
                 is NovaStreamRepository.RepoResult.Success -> {
@@ -279,7 +280,7 @@ fun SearchScreen(
                 onClick = {
                     globalVm.setContentLanguage(contentLanguage)
                     globalVm.setScope(GlobalSearchScope.CONTENT_LANGUAGE)
-                    globalVm.search(state.query)
+                    globalVm.onQueryChange(state.query)
                 },
                 label = {
                     Text(stringResource(com.novastream.app.R.string.search_scope_global, contentLanguage.tag.uppercase()))
@@ -312,7 +313,7 @@ fun SearchScreen(
                 value = state.query,
                 onValueChange = {
                     vm.onQueryChange(it)
-                    if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) globalVm.search(it)
+                    if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) globalVm.onQueryChange(it)
                 },
                 placeholder = { Text(stringResource(com.novastream.app.R.string.search_placeholder), color = TextTertiary) },
                 singleLine = true,

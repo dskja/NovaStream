@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.DataSaverOn
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
@@ -122,7 +123,7 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
-    private val providerController: ProviderController
+    val providerController: ProviderController
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -370,10 +371,13 @@ class SettingsViewModel @Inject constructor(
 
 @Composable
 fun SettingsScreen(
-    onOpenMarketplace: () -> Unit = {}
+    onOpenMarketplace: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {}
 ) {
     val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val providerController = remember { vm.providerController }
+    val isSwitchingProvider by providerController.isSwitching.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -834,7 +838,20 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            SettingsUltraSections(appSettings = remember { AppSettings(context) })
+            // Quick actions
+            SettingsItem(
+                icon = Icons.Default.Download,
+                title = stringResource(R.string.settings_open_downloads),
+                subtitle = stringResource(R.string.settings_open_downloads_sub),
+                onClick = onOpenDownloads
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            SettingsUltraSections(
+                appSettings = remember { AppSettings(context) },
+                onOpenDownloads = onOpenDownloads
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -1187,6 +1204,25 @@ fun SettingsScreen(
             titleContentColor = TextPrimary,
             textContentColor = TextSecondary
         )
+    }
+
+    if (isSwitchingProvider) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.45f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = Primary)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.settings_provider_switching),
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
     }
 
     // Confirmation Dialog for destructive actions

@@ -28,8 +28,12 @@ class MediaUrlsTest {
     }
 
     @Test
-    fun refererFor_fallsBackToBase() {
-        val referer = MediaUrls.refererFor(null, "https://fallback.com")
-        assertTrue(referer.startsWith("https://fallback.com"))
+    fun sanitizeTitle_stripsHtmlTags() {
+        assertEquals("Solo Leveling", MediaUrls.sanitizeTitle("<em>Solo Leveling</em>"))
+    }
+
+    @Test
+    fun secureUrl_upgradesHttpToHttps() {
+        assertEquals("https://kinoger.to/stream", MediaUrls.secureUrl("http://kinoger.to/stream"))
     }
 }

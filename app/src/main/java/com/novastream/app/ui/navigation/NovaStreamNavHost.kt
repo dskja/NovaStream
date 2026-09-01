@@ -59,6 +59,7 @@ object Routes {
     const val BROWSE = "browse?section={section}&genre={genre}&filter={filter}"
     const val CONTINUE_WATCHING = "continue_watching"
     const val MARKETPLACE = "marketplace"
+    const val DOWNLOADS = "downloads"
     const val DETAIL = "detail/{slug}"
     const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}"
 
@@ -170,7 +171,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             if (showNavBars && isTvDevice) {
                 // TV: Top Tab Bar statt Bottom Bar (Amazon/Google TV Guidelines)
                 PremiumTopTabBar(
-                    currentRoute = currentRoute ?: Routes.HOME,
+                    currentRoute = currentRoute,
                     onNavigate = { route ->
                         if (route != currentRoute) {
                             nav.navigate(route) {
@@ -187,7 +188,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             if (showNavBars && !isTvDevice) {
                 // Phone/Tablet: Bottom Bar
                 PremiumBottomBar(
-                    currentRoute = currentRoute ?: Routes.HOME,
+                    currentRoute = currentRoute,
                     watchlistCount = watchlistCount,
                     onNavigate = { route ->
                         val target = if (route == "browse") Routes.browse() else route
@@ -286,8 +287,15 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                 SettingsScreen(
                     onOpenMarketplace = {
                         nav.navigate(Routes.MARKETPLACE) { launchSingleTop = true }
+                    },
+                    onOpenDownloads = {
+                        nav.navigate(Routes.DOWNLOADS) { launchSingleTop = true }
                     }
                 )
+            }
+
+            composable(Routes.DOWNLOADS) {
+                com.novastream.app.ui.downloads.DownloadsScreen(onBack = { nav.popBackStack() })
             }
 
             composable(Routes.MARKETPLACE) {

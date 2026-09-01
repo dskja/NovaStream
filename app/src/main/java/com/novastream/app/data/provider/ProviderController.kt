@@ -6,14 +6,16 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * Zentraler Provider-Wechsel: hält [activeProviderId] als StateFlow,
- * delegiert an [ActiveProvider] und invalidiert den Katalog-Cache beim Wechsel.
+ * Central provider switching: holds [activeProviderId] as StateFlow,
+ * delegates to [ActiveProvider] and invalidates catalog cache on switch.
  */
 @Singleton
 class ProviderController @Inject constructor(
@@ -22,6 +24,9 @@ class ProviderController @Inject constructor(
 ) {
     private val _activeProviderId = MutableStateFlow(ProviderManager.defaultProviderId)
     val activeProviderId: StateFlow<String> = _activeProviderId.asStateFlow()
+
+    private val _isSwitching = MutableStateFlow(false)
+    val isSwitching: StateFlow<Boolean> = _isSwitching.asStateFlow()
 
     fun startObserving(scope: CoroutineScope) {
         scope.launch {
@@ -45,12 +50,20 @@ class ProviderController @Inject constructor(
 
     suspend fun setActiveProvider(providerId: String) {
         val resolved = ProviderManager.getProviderOrNull(providerId) ?: return
-        val previousId = _activeProviderId.value
-        if (previousId != resolved.id) {
-            catalogCacheDao.deleteForProvider(previousId)
+        if (_activeProviderId.value == resolved.id && !_isSwitching.value) return
+        _isSwitching.value = true
+        try {
+            withContext(Dispatchers.IO) {
+                val previousId = _activeProviderId.value
+                if (previousId != resolved.id) {
+                    catalogCacheDao.deleteForProvider(previousId)
+                }
+                ProviderManager.setActiveProvider(context, resolved.id)
+            }
+            ActiveProvider.setById(resolved.id)
+            _activeProviderId.value = resolved.id
+        } finally {
+            _isSwitching.value = false
         }
-        ProviderManager.setActiveProvider(context, resolved.id)
-        ActiveProvider.setById(resolved.id)
-        _activeProviderId.value = resolved.id
     }
 }

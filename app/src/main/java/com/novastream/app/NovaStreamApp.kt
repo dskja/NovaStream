@@ -49,6 +49,8 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         AppContext.init(this)
         com.novastream.app.telemetry.PlaySuccessTracker.init(this)
         com.novastream.app.download.DownloadForegroundService.ensureChannel(this)
+        // Warm up Cast SDK early so Player/Detail can connect without delay
+        runCatching { com.novastream.app.cast.CastHelper.get(this) }
         // Set VoeWebViewResolver context for VOE hoster resolution
         VoeWebViewResolver.setContext(this)
         CaptchaWebViewFetcher.setContext(this)

@@ -26,7 +26,9 @@ fun ProfilePickerSection(onStatus: (String) -> Unit) {
     val profileManager = remember { ProfileManager(context, NovaStreamDatabase.get(context)) }
     val profiles by profileManager.observeProfiles().collectAsStateWithLifecycle(initialValue = emptyList())
     var newName by remember { mutableStateOf("") }
-    var pin by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var pinDialogProfile by remember { mutableStateOf<ProfileEntity?>(null) }
+    var pinInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         profileManager.ensureDefaultProfile()
@@ -37,12 +39,18 @@ fun ProfilePickerSection(onStatus: (String) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .clickable {
-                    scope.launch {
-                        val ok = profileManager.switchProfile(profile.profileId, pin.takeIf { profile.requiresPin })
-                        onStatus(
-                            if (ok) context.getString(R.string.settings_profile_switched, profile.displayName)
-                            else context.getString(R.string.settings_profile_pin_wrong)
-                        )
+                    if (profile.isActive) return@clickable
+                    if (profile.requiresPin) {
+                        pinDialogProfile = profile
+                        pinInput = ""
+                    } else {
+                        scope.launch {
+                            val ok = profileManager.switchProfile(profile.profileId, null)
+                            onStatus(
+                                if (ok) context.getString(R.string.settings_profile_switched, profile.displayName)
+                                else context.getString(R.string.settings_profile_switch_failed)
+                            )
+                        }
                     }
                 }
                 .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -54,6 +62,9 @@ fun ProfilePickerSection(onStatus: (String) -> Unit) {
                 Text(profile.displayName, style = MaterialTheme.typography.titleMedium)
                 if (profile.isKids) {
                     Text(stringResource(R.string.settings_profile_kids), style = MaterialTheme.typography.bodySmall)
+                }
+                if (profile.requiresPin) {
+                    Text(stringResource(R.string.settings_profile_pin_protected), style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (profile.isActive) {
@@ -70,26 +81,58 @@ fun ProfilePickerSection(onStatus: (String) -> Unit) {
         singleLine = true
     )
     OutlinedTextField(
-        value = pin,
-        onValueChange = { pin = it },
+        value = newPin,
+        onValueChange = { newPin = it },
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         label = { Text(stringResource(R.string.settings_profile_pin_optional)) },
         singleLine = true
     )
     TextButton(
         onClick = {
+            if (newName.isBlank()) return@TextButton
             scope.launch {
-                val name = newName.trim().ifBlank { "Profile ${profiles.size + 1}" }
-                profileManager.createProfile(name, pin.takeIf { it.isNotBlank() })
+                profileManager.createProfile(newName.trim(), newPin.takeIf { it.isNotBlank() })
                 newName = ""
-                pin = ""
+                newPin = ""
                 onStatus(context.getString(R.string.settings_profile_created))
             }
         },
         modifier = Modifier.padding(horizontal = 12.dp)
     ) {
         Icon(Icons.Default.Add, contentDescription = null)
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(4.dp))
         Text(stringResource(R.string.settings_profile_create))
+    }
+
+    pinDialogProfile?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { pinDialogProfile = null },
+            title = { Text(stringResource(R.string.settings_profile_enter_pin, profile.displayName)) },
+            text = {
+                OutlinedTextField(
+                    value = pinInput,
+                    onValueChange = { pinInput = it },
+                    label = { Text(stringResource(R.string.settings_profile_pin)) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val ok = profileManager.switchProfile(profile.profileId, pinInput)
+                        pinDialogProfile = null
+                        onStatus(
+                            if (ok) context.getString(R.string.settings_profile_switched, profile.displayName)
+                            else context.getString(R.string.settings_profile_pin_wrong)
+                        )
+                    }
+                }) { Text(stringResource(R.string.confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pinDialogProfile = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }

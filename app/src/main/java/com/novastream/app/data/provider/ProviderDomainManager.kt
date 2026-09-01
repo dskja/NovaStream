@@ -12,6 +12,14 @@ private val Context.domainDataStore by preferencesDataStore("provider_domains")
 object ProviderDomainManager {
 
     private val domainPatterns: Map<String, List<String>> = mapOf(
+        "serienstream" to listOf(
+            "https://serienstream.to",
+            "https://serienstream.cx"
+        ),
+        "serienstream_cx" to listOf(
+            "https://serienstream.cx",
+            "https://serienstream.to"
+        ),
         "wiflix" to listOf(
             "https://flemmix.team/",
             "https://ww1.wiflix-adresses.fun/",

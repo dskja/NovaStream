@@ -24,6 +24,19 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object NetworkModule {
 
+    /** Upgrade http:// to https:// for provider and hoster domains. */
+    private val httpsUpgradeInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url
+        if (url.scheme == "http") {
+            val upgraded = request.newBuilder()
+                .url(url.newBuilder().scheme("https").build())
+                .build()
+            return@Interceptor chain.proceed(upgraded)
+        }
+        chain.proceed(request)
+    }
+
     private val userAgentInterceptor = Interceptor { chain ->
         val original = chain.request()
         val builder = original.newBuilder()
@@ -87,6 +100,7 @@ object NetworkModule {
             .dns(dohDns)
             .cookieJar(cookieJar)
             .dispatcher(buildDispatcher())
+            .addInterceptor(httpsUpgradeInterceptor)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(retryInterceptor)
             .addInterceptor(loggingInterceptor)

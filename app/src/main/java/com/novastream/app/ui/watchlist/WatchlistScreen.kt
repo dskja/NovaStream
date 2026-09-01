@@ -377,7 +377,7 @@ fun WatchlistScreen(
             }
         }
 
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.error != null -> PremiumError(
                     state.error ?: stringResource(R.string.watchlist_error_loading),

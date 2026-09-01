@@ -2,10 +2,11 @@ package com.novastream.app.util
 
 import com.novastream.app.data.provider.ActiveProvider
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.jsoup.Jsoup
 
 /**
- * Absolute Cover-/Media-URLs und Referer-Header pro Provider.
- * Verhindert, dass Bilder von Provider A mit Base-URL von Provider B gebaut werden.
+ * Absolute Cover-/Media-URLs and Referer-Header per provider.
+ * Prevents images from provider A being built with provider B base URL.
  */
 object MediaUrls {
 
@@ -14,10 +15,18 @@ object MediaUrls {
         val src = pathOrUrl.trim()
         if (src.contains("data:image") || src.endsWith(".svg", ignoreCase = true)) return null
         return when {
-            src.startsWith("http://") || src.startsWith("https://") -> src
-            src.startsWith("//") -> "https:$src"
-            else -> baseUrl.trimEnd('/') + "/" + src.trimStart('/')
+            src.startsWith("http://") || src.startsWith("https://") -> secureUrl(src)
+            src.startsWith("//") -> secureUrl("https:$src")
+            else -> secureUrl(baseUrl.trimEnd('/') + "/" + src.trimStart('/'))
         }
+    }
+
+    /** Prefer HTTPS; many hosters redirect HTTP which Android blocks without cleartext config. */
+    fun secureUrl(url: String): String {
+        if (url.startsWith("http://")) {
+            return "https://" + url.removePrefix("http://")
+        }
+        return url
     }
 
     fun refererFor(imageUrl: String?, fallbackBase: String = ActiveProvider.baseUrl): String {
@@ -27,7 +36,12 @@ object MediaUrls {
 
     fun sanitizeTitle(raw: String?): String {
         if (raw.isNullOrBlank()) return ""
-        return raw
+        val stripped = try {
+            Jsoup.parse(raw).text()
+        } catch (_: Exception) {
+            raw.replace(Regex("<[^>]+>"), "")
+        }
+        return stripped
             .substringBefore(" stream")
             .substringBefore(" Stream")
             .substringBefore(" online")

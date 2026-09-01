@@ -227,7 +227,19 @@ fun SeriesPosterCard(
                 )
             }
 
-            if (!series.coverUrl.isNullOrBlank() && !isError) {
+            if (isError || series.coverUrl.isNullOrBlank()) {
+                Box(
+                    Modifier.fillMaxSize().background(BgCard),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = series.initials,
+                        color = Accent,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            } else if (!series.coverUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(series.coverUrl)
@@ -250,31 +262,6 @@ fun SeriesPosterCard(
                         }
                     }
                 )
-                // Gradient overlay am unteren Rand
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.6f to Color.Transparent,
-                                1f to CardGradientBottom
-                            )
-                        )
-                )
-            }
-
-            if (isError || series.coverUrl.isNullOrBlank()) {
-                Box(
-                    Modifier.fillMaxSize().background(BgCard),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = series.initials,
-                        color = Accent,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Black
-                    )
-                }
             }
 
             // Movie badge (top-left)
