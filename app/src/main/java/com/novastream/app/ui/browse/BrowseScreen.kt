@@ -42,8 +42,10 @@ fun BrowseScreen(
         }
     }
 
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) vm.loadMore()
+    LaunchedEffect(shouldLoadMore, state.loading, state.loadingMore, state.hasMore, state.items.size) {
+        if (shouldLoadMore && !state.loading && !state.loadingMore && state.hasMore) {
+            vm.loadMore()
+        }
     }
 
     PullToRefreshBox(

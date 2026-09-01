@@ -121,8 +121,12 @@ class PlayerViewModel(
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
             }
 
-            // Build episode URL based on active provider
-            val epUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, episode)
+            // Build episode URL based on active provider (movies use detail path, not /serien/.../episode-...)
+            val epUrl = if (isMovie) {
+                com.novastream.app.data.provider.ActiveProvider.movieDetailUrl(slug)
+            } else {
+                com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, episode)
+            }
             val ep = Episode(
                 number = episode,
                 title = title,

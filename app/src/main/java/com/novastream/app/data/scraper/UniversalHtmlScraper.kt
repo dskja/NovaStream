@@ -4,6 +4,7 @@ import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.provider.ProviderUrls
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -64,7 +65,7 @@ object UniversalHtmlScraper {
         val year = Regex("""\b((?:19|20)\d{2})\b""").find(title + " " + (description ?: ""))?.groupValues?.get(1)
 
         val episodes = parseEpisodes(doc, profile, slug)
-        val seasons = if (episodes.isNotEmpty()) {
+        var seasons = if (episodes.isNotEmpty()) {
             episodes.groupBy { it.season }.toSortedMap().map { (n, eps) ->
                 Season(number = n, episodes = eps.sortedBy { it.number })
             }
@@ -72,19 +73,45 @@ object UniversalHtmlScraper {
             parseSeasonPlaceholders(doc, profile)
         }
 
+        val detailPath = toDetailUrl("", profile, slug)
+        val isMovie = isMovieContent(profile.id, slug, detailPath) ||
+            (profile.isMovieFocused && seasons.size <= 1 && (seasons.firstOrNull()?.episodes?.size ?: 1) <= 1)
+
+        if (isMovie && seasons.all { it.episodes.isEmpty() }) {
+            val movieUrl = ProviderUrls.movieDetailUrl(profile.id, slug)
+            seasons = listOf(
+                Season(
+                    number = 1,
+                    episodes = listOf(
+                        Episode(
+                            number = 1,
+                            title = cleanTitle(title),
+                            slug = slug,
+                            season = 1,
+                            episodeUrl = movieUrl
+                        )
+                    )
+                )
+            )
+        }
+
         val series = Series(
             id = slug,
             title = cleanTitle(title),
             coverUrl = cover,
-            detailUrl = toDetailUrl("", profile, slug),
+            detailUrl = detailPath,
             description = description,
             year = year,
             seasonCount = seasons.size.takeIf { it > 0 },
-            isMovie = seasons.size <= 1 && (seasons.firstOrNull()?.episodes?.size ?: 1) <= 1 &&
-                profile.isMovieFocused
+            isMovie = isMovie
         )
         return series to seasons
     }
+
+    private fun isMovieContent(providerId: String, slug: String, detailPath: String): Boolean =
+        ProviderUrls.isMovieSlug(providerId, slug) ||
+            detailPath.contains("/movie", ignoreCase = true) ||
+            detailPath.contains("/filme", ignoreCase = true)
 
     fun parseEpisodesOnly(html: String, profile: SiteProfile, slug: String, season: Int): List<Episode> {
         if (html.isBlank()) return emptyList()
