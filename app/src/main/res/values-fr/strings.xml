@@ -329,7 +329,7 @@
     <string name="downloads_empty">Aucun téléchargement. Téléchargez des épisodes depuis la page de détail.</string>
     <string name="downloads_storage_fmt">Stockage : %1$s</string>
     <string name="downloads_remove">Supprimer le téléchargement</string>
-    <string name="downloads_status_queued">En file d'attente</string>
+    <string name="downloads_status_queued">En file d\'attente</string>
     <string name="downloads_status_downloading">Téléchargement</string>
     <string name="downloads_status_paused">En pause</string>
     <string name="downloads_status_completed">Terminé</string>
@@ -337,7 +337,7 @@
     <string name="downloads_status_removed">Supprimé</string>
     <string name="onboarding_back">Retour</string>
     <string name="onboarding_welcome_sub">Votre client de streaming tout-en-un avec plus de 50 fournisseurs, téléchargements hors ligne, TV en direct et Chromecast.</string>
-    <string name="onboarding_ui_language_sub">L'interface de l'application sera affichée dans cette langue.</string>
+    <string name="onboarding_ui_language_sub">L\'interface de l\'application sera affichée dans cette langue.</string>
     <string name="onboarding_content_language_sub">Les fournisseurs et la recherche sont filtrés par cette langue.</string>
     <string name="onboarding_features_title">Tout est prêt !</string>
     <string name="onboarding_features_sub">Vérifiez vos choix et lancez NovaStream.</string>

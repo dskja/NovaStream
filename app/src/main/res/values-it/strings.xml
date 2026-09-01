@@ -337,7 +337,7 @@
     <string name="downloads_status_removed">Rimosso</string>
     <string name="onboarding_back">Indietro</string>
     <string name="onboarding_welcome_sub">Il tuo client di streaming tutto-in-uno con oltre 50 provider, download offline, TV live e Chromecast.</string>
-    <string name="onboarding_ui_language_sub">L'interfaccia dell'app sarà mostrata in questa lingua.</string>
+    <string name="onboarding_ui_language_sub">L\'interfaccia dell\'app sarà mostrata in questa lingua.</string>
     <string name="onboarding_content_language_sub">Provider e ricerca sono filtrati per questa lingua.</string>
     <string name="onboarding_features_title">Tutto pronto!</string>
     <string name="onboarding_features_sub">Controlla le tue scelte e avvia NovaStream.</string>
