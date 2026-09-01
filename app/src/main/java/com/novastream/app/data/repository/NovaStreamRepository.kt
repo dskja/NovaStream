@@ -40,8 +40,12 @@ class NovaStreamRepository private constructor(
     companion object {
         private const val TTL_HOME_MS = 60L * 60 * 1000
         private const val TTL_CATALOG_MS = 45L * 60 * 1000
+        private const val TTL_CATALOG_LETTER_MS = 24L * 60 * 60 * 1000
         private const val TTL_DETAIL_MS = 30L * 60 * 1000
         private const val TTL_SEARCH_MS = 15L * 60 * 1000
+        private const val TTL_SEASON_MS = 60L * 60 * 1000
+        private const val TTL_HOSTERS_MS = 24L * 60 * 60 * 1000
+        private const val MAX_CACHE_PAYLOAD_BYTES = 50L * 1024 * 1024
 
         @Volatile
         private var INSTANCE: NovaStreamRepository? = null
@@ -157,13 +161,16 @@ class NovaStreamRepository private constructor(
 
     suspend fun loadCatalogPage(page: Int): RepoResult<List<Series>> = withRetry {
         val pid = provider.id
-        val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_CATALOG, page.toString())
+        val isLetterPage = provider is AniWorldProvider
+        val cacheType = if (isLetterPage) CatalogCacheEntry.TYPE_CATALOG_LETTER else CatalogCacheEntry.TYPE_CATALOG
+        val ttlMs = if (isLetterPage) TTL_CATALOG_LETTER_MS else TTL_CATALOG_MS
+        val cacheKey = CatalogCacheEntry.key(pid, cacheType, page.toString())
         getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
         coalesceNetwork(cacheKey) {
             getCachedList(cacheKey)?.let { return@coalesceNetwork RepoResult.Success(it.tagAll(pid)) }
             val result = ScrapeLimiter.withPermit { provider.loadCatalogPage(page).tag().toRepoResult() }
             if (result is RepoResult.Success) {
-                putCached(cacheKey, pid, CatalogCacheEntry.TYPE_CATALOG, result.data, TTL_CATALOG_MS)
+                putCached(cacheKey, pid, cacheType, result.data, ttlMs)
             }
             result
         }
@@ -283,24 +290,37 @@ class NovaStreamRepository private constructor(
 
     suspend fun loadSeason(slug: String, season: Int): RepoResult<List<Episode>> =
         withRetry {
-            coalesceNetwork(CatalogCacheEntry.key(provider.id, CatalogCacheEntry.TYPE_LIST, "season", slug, season.toString())) {
-                ScrapeLimiter.withPermit { provider.loadSeason(slug, season).toRepoResult() }
+            val pid = provider.id
+            val cacheKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_SEASON, slug, season.toString())
+            getCachedEpisodes(cacheKey)?.let { return@withRetry RepoResult.Success(it) }
+            coalesceNetwork(cacheKey) {
+                getCachedEpisodes(cacheKey)?.let { return@coalesceNetwork RepoResult.Success(it) }
+                val result = ScrapeLimiter.withPermit { provider.loadSeason(slug, season).toRepoResult() }
+                if (result is RepoResult.Success) {
+                    putCached(cacheKey, pid, CatalogCacheEntry.TYPE_SEASON, result.data, TTL_SEASON_MS)
+                }
+                result
             }
         }
 
     suspend fun loadHosters(episode: Episode): RepoResult<List<HosterLink>> =
         withRetry {
-            coalesceNetwork(
-                CatalogCacheEntry.key(
-                    provider.id,
-                    CatalogCacheEntry.TYPE_LIST,
-                    "hosters",
-                    episode.slug,
-                    episode.season.toString(),
-                    episode.number.toString()
-                )
-            ) {
-                ScrapeLimiter.withPermit { provider.loadHosters(episode).toRepoResult() }
+            val pid = provider.id
+            val cacheKey = CatalogCacheEntry.key(
+                pid,
+                CatalogCacheEntry.TYPE_HOSTERS,
+                episode.slug,
+                episode.season.toString(),
+                episode.number.toString()
+            )
+            getCachedHosters(cacheKey)?.let { return@withRetry RepoResult.Success(it) }
+            coalesceNetwork(cacheKey) {
+                getCachedHosters(cacheKey)?.let { return@coalesceNetwork RepoResult.Success(it) }
+                val result = ScrapeLimiter.withPermit { provider.loadHosters(episode).toRepoResult() }
+                if (result is RepoResult.Success) {
+                    putCached(cacheKey, pid, CatalogCacheEntry.TYPE_HOSTERS, result.data, TTL_HOSTERS_MS)
+                }
+                result
             }
         }
 
@@ -312,6 +332,20 @@ class NovaStreamRepository private constructor(
     suspend fun purgeExpiredCache() {
         try {
             cacheDao?.deleteExpired()
+            evictLruIfNeeded()
+        } catch (_: Exception) {}
+    }
+
+    suspend fun evictLruIfNeeded() {
+        val dao = cacheDao ?: return
+        try {
+            var total = dao.totalPayloadBytes()
+            if (total <= MAX_CACHE_PAYLOAD_BYTES) return
+            for (entry in dao.listByOldest()) {
+                if (total <= MAX_CACHE_PAYLOAD_BYTES) break
+                dao.delete(entry.cacheKey)
+                total -= entry.payload.length
+            }
         } catch (_: Exception) {}
     }
 
@@ -361,6 +395,38 @@ class NovaStreamRepository private constructor(
         return try {
             val type = object : TypeToken<List<Series>>() {}.type
             gson.fromJson<List<Series>>(entry.payload, type)
+        } catch (_: Exception) {
+            dao.delete(key)
+            null
+        }
+    }
+
+    private suspend fun getCachedEpisodes(key: String): List<Episode>? {
+        val dao = cacheDao ?: return null
+        val entry = dao.get(key) ?: return null
+        if (entry.isExpired) {
+            dao.delete(key)
+            return null
+        }
+        return try {
+            val type = object : TypeToken<List<Episode>>() {}.type
+            gson.fromJson<List<Episode>>(entry.payload, type)
+        } catch (_: Exception) {
+            dao.delete(key)
+            null
+        }
+    }
+
+    private suspend fun getCachedHosters(key: String): List<HosterLink>? {
+        val dao = cacheDao ?: return null
+        val entry = dao.get(key) ?: return null
+        if (entry.isExpired) {
+            dao.delete(key)
+            return null
+        }
+        return try {
+            val type = object : TypeToken<List<HosterLink>>() {}.type
+            gson.fromJson<List<HosterLink>>(entry.payload, type)
         } catch (_: Exception) {
             dao.delete(key)
             null
@@ -419,6 +485,7 @@ class NovaStreamRepository private constructor(
                     expiresAt = now + ttlMs
                 )
             )
+            evictLruIfNeeded()
         } catch (_: Exception) {}
     }
 

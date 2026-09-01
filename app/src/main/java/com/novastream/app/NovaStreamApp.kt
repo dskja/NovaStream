@@ -10,6 +10,7 @@ import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.util.VoeWebViewResolver
 import com.novastream.app.util.CaptchaWebViewFetcher
+import com.novastream.app.data.repository.CatalogCachePurgeWorker
 import com.novastream.app.data.repository.NovaStreamRepository
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -48,6 +49,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         appScope.launch {
             NovaStreamRepository.get(this@NovaStreamApp).purgeExpiredCache()
         }
+        CatalogCachePurgeWorker.schedule(this)
     }
 
     override fun onTerminate() {

@@ -122,6 +122,12 @@ class PlayerViewModel @Inject constructor(
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    companion object {
+        /** Returns true when a resolve result from [requestGeneration] must be ignored. */
+        internal fun isResolveStale(requestGeneration: Int, currentGeneration: Int): Boolean =
+            requestGeneration != currentGeneration
+    }
+
     private var resolveJob: Job? = null
     private var resolveGeneration = 0
 
@@ -397,7 +403,7 @@ class PlayerViewModel @Inject constructor(
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
         val result = kotlinx.coroutines.withTimeoutOrNull(com.novastream.app.data.model.NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) { repo.resolveHoster(hoster) }
-        if (generation != resolveGeneration) return
+        if (isResolveStale(generation, resolveGeneration)) return
         when (result) {
             is NovaStreamRepository.RepoResult.Success -> {
                 if (result.data.isEmpty()) {
@@ -425,7 +431,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     private fun tryNextHoster(currentIndex: Int, generation: Int) {
-        if (generation != resolveGeneration) return
+        if (isResolveStale(generation, resolveGeneration)) return
         val nextIndex = currentIndex + 1
         if (nextIndex < _state.value.hosters.size) {
             _state.update { it.copy(selectedHosterIndex = nextIndex) }

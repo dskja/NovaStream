@@ -88,6 +88,34 @@ class CatalogCacheEvictionTest {
         assertNotNull(dao.store["ani-b"])
     }
 
+    @Test
+    fun evictLruIfNeeded_removesOldestWhenOverBudget() = runTest {
+        val bigPayload = "x".repeat(30 * 1024 * 1024)
+        dao.upsert(
+            CatalogCacheEntry(
+                cacheKey = "old",
+                providerId = "serienstream",
+                cacheType = CatalogCacheEntry.TYPE_HOME,
+                payload = bigPayload,
+                cachedAt = 1,
+                expiresAt = System.currentTimeMillis() + 60_000
+            )
+        )
+        dao.upsert(
+            CatalogCacheEntry(
+                cacheKey = "new",
+                providerId = "serienstream",
+                cacheType = CatalogCacheEntry.TYPE_HOME,
+                payload = bigPayload,
+                cachedAt = 2,
+                expiresAt = System.currentTimeMillis() + 60_000
+            )
+        )
+        repo.evictLruIfNeeded()
+        assertNull(dao.store["old"])
+        assertNotNull(dao.store["new"])
+    }
+
     private fun gsonSeriesList(items: List<Series>): String = Gson().toJson(items)
 
     private fun expiredEntry(key: String, type: String) = CatalogCacheEntry(
@@ -139,4 +167,10 @@ private class FakeCatalogCacheDao : CatalogCacheDao {
     override suspend fun deleteAll() {
         store.clear()
     }
+
+    override suspend fun totalPayloadBytes(): Long =
+        store.values.sumOf { it.payload.length.toLong() }
+
+    override suspend fun listByOldest(): List<CatalogCacheEntry> =
+        store.values.sortedBy { it.cachedAt }
 }
