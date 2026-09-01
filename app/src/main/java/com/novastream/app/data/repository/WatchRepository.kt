@@ -1,7 +1,6 @@
 package com.novastream.app.data.repository
 
 import com.novastream.app.data.db.NovaStreamDatabase
-import com.novastream.app.data.db.ProfileEntity
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.provider.ActiveProvider

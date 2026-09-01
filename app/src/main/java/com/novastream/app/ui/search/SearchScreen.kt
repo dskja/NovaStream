@@ -400,7 +400,7 @@ fun SearchScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             vm.onQueryChange(search)
-                                            if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) {
+                                            if (search.trim().length >= 2) {
                                                 globalVm.onQueryChange(search)
                                             }
                                         }

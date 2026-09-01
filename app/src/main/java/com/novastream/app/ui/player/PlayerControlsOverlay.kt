@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -27,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.novastream.app.R
@@ -246,14 +248,54 @@ private fun ControlButton(
 internal fun PlayerTapToToggleControls(
     controlsVisible: Boolean,
     onToggle: () -> Unit,
+    onSeekBackward: (() -> Unit)? = null,
+    onSeekForward: (() -> Unit)? = null,
+    isLive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onToggle
+        modifier = modifier.pointerInput(isLive, onSeekBackward, onSeekForward) {
+            detectTapGestures(
+                onTap = { onToggle() },
+                onDoubleTap = { offset ->
+                    if (isLive) return@detectTapGestures
+                    val leftEdge = size.width * 0.4f
+                    val rightEdge = size.width * 0.6f
+                    when {
+                        offset.x < leftEdge -> onSeekBackward?.invoke()
+                        offset.x > rightEdge -> onSeekForward?.invoke()
+                        else -> onToggle()
+                    }
+                }
             )
+        }
     )
+}
+
+@Composable
+internal fun PlayerSeekHint(
+    hint: String?,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = hint != null,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = modifier
+    ) {
+        Box(
+            Modifier
+                .clip(CircleShape)
+                .background(Color(0x99000000))
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                hint.orEmpty(),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        }
+    }
 }

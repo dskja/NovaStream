@@ -48,17 +48,6 @@ data class WatchlistItem(
     val ageInDays: Int
         get() = ((System.currentTimeMillis() - addedAt) / (24L * 60 * 60 * 1000)).toInt().coerceAtLeast(0)
 
-    val addedRelative: String
-        get() = when (ageInDays) {
-            0 -> "Heute hinzugefügt"
-            1 -> "Gestern hinzugefügt"
-            in 2..6 -> "Vor $ageInDays Tagen hinzugefügt"
-            in 7..13 -> "Vor einer Woche hinzugefügt"
-            in 14..29 -> "Vor ${ageInDays / 7} Wochen hinzugefügt"
-            in 30..364 -> "Vor ${ageInDays / 30} Monaten hinzugefügt"
-            else -> "Vor über einem Jahr hinzugefügt"
-        }
-
     companion object {
         fun key(profileId: String, providerId: String, slug: String): String =
             "$profileId|$providerId|$slug"

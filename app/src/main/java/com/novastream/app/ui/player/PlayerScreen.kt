@@ -63,6 +63,7 @@ import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.tvPlayerKeyHandler
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 private const val INTRO_SKIP_POSITION_MS = 90_000L
 
@@ -119,6 +120,15 @@ fun PlayerScreen(
     var pendingForegroundTitle by remember { mutableStateOf<String?>(null) }
     var controlsVisible by remember { mutableStateOf(true) }
     var isCasting by remember { mutableStateOf(false) }
+    var seekHint by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(seekHint) {
+        seekHint ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(750)
+        seekHint = null
+    }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -391,7 +401,34 @@ fun PlayerScreen(
                 PlayerTapToToggleControls(
                     controlsVisible = controlsVisible,
                     onToggle = { controlsVisible = !controlsVisible },
+                    isLive = state.isLive,
+                    onSeekBackward = if (state.isLive) null else {
+                        {
+                            val pos = exoPlayer.currentPosition
+                            exoPlayer.seekTo((pos - 10_000).coerceAtLeast(0))
+                            seekHint = context.getString(R.string.player_seek_back_fmt, 10)
+                            controlsVisible = true
+                        }
+                    },
+                    onSeekForward = if (state.isLive) null else {
+                        {
+                            val dur = exoPlayer.duration
+                            val pos = exoPlayer.currentPosition
+                            if (dur > 0) {
+                                exoPlayer.seekTo((pos + 10_000).coerceAtMost(dur))
+                                seekHint = context.getString(R.string.player_seek_forward_fmt, 10)
+                                controlsVisible = true
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            if (!state.isLive && seekHint != null) {
+                PlayerSeekHint(
+                    hint = seekHint,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
 
@@ -615,6 +652,12 @@ fun PlayerScreen(
                         .clip(CircleShape)
                         .background(GlassMedium)
                         .clickable {
+                            if (!castHelper.isCastSessionActive()) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_no_device))
+                                }
+                                return@clickable
+                            }
                             val url = currentSource?.url ?: return@clickable
                             val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
                             exoPlayer.pause()
@@ -970,6 +1013,13 @@ fun PlayerScreen(
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
     }
 }
 

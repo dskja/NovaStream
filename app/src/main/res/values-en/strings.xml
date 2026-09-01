@@ -110,6 +110,8 @@
     <string name="downloads_progress_fmt">%1$d%%</string>
     <string name="live_tv_search_empty">No channels match this search</string>
     <string name="player_subtitle_track_fmt">Subtitle %1$d</string>
+    <string name="player_seek_back_fmt">−%1$d s</string>
+    <string name="player_seek_forward_fmt">+%1$d s</string>
 
     <!-- Provider v9 -->
     <string name="provider_content_series">Series</string>

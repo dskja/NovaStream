@@ -408,4 +408,6 @@ Solo per scopi educativi. Usa a tuo rischio.</string>
     <string name="downloads_progress_fmt">%1$d%%</string>
     <string name="live_tv_search_empty">Nessun canale corrisponde a questa ricerca</string>
     <string name="player_subtitle_track_fmt">Sottotitolo %1$d</string>
+    <string name="player_seek_back_fmt">−%1$d s</string>
+    <string name="player_seek_forward_fmt">+%1$d s</string>
 </resources>
