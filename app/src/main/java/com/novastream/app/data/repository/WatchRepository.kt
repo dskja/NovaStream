@@ -83,14 +83,17 @@ class WatchRepository @Inject constructor(
     }
 
     suspend fun getProgressBySlug(slug: String): List<WatchProgress> = try {
-        progressDao.getBySlug(slug)
+        val pid = ActiveProvider.id
+        progressDao.getBySlug(slug).filter {
+            it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown"
+        }
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "getProgressBySlug failed", e)
         emptyList()
     }
 
     suspend fun getLatestProgress(slug: String): WatchProgress? = try {
-        progressDao.getLatestForSlug(slug)
+        progressDao.getLatestForSlug(slug, ActiveProvider.id)
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "getLatestProgress failed", e)
         null
@@ -106,7 +109,7 @@ class WatchRepository @Inject constructor(
 
     suspend fun removeProgressBySlug(slug: String) {
         try {
-            progressDao.deleteBySlug(slug)
+            progressDao.deleteBySlug(slug, ActiveProvider.id)
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeProgressBySlug failed", e)
         }
@@ -120,13 +123,15 @@ class WatchRepository @Inject constructor(
         }
     }
 
-    suspend fun clearAllProgress() {
+    suspend fun clearProgressForProvider(providerId: String = ActiveProvider.id) {
         try {
-            progressDao.deleteAll()
+            progressDao.clearForProvider(providerId)
         } catch (e: Exception) {
-            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearAllProgress failed", e)
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearProgressForProvider failed", e)
         }
     }
+
+    suspend fun clearAllProgress() = clearProgressForProvider(ActiveProvider.id)
 
     fun watchlist(): Flow<List<WatchlistItem>> = watchlistDao.getAll()
         .catch { emit(emptyList()) }
@@ -168,7 +173,7 @@ class WatchRepository @Inject constructor(
 
     suspend fun removeAllFromWatchlist(slugs: List<String>) {
         try {
-            watchlistDao.removeAll(slugs)
+            watchlistDao.removeAll(slugs, ActiveProvider.id)
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeAllFromWatchlist failed", e)
         }
@@ -181,13 +186,15 @@ class WatchRepository @Inject constructor(
         false
     }
 
-    suspend fun clearWatchlist() {
+    suspend fun clearWatchlistForProvider(providerId: String = ActiveProvider.id) {
         try {
-            watchlistDao.clear()
+            watchlistDao.clearForProvider(providerId)
         } catch (e: Exception) {
-            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearWatchlist failed", e)
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearWatchlistForProvider failed", e)
         }
     }
+
+    suspend fun clearWatchlist() = clearWatchlistForProvider(ActiveProvider.id)
 
     suspend fun countUnknownProviderRows(): Int = try {
         watchlistDao.countUnknownProvider() + progressDao.countUnknownProvider()

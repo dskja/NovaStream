@@ -1,6 +1,7 @@
 package com.novastream.app.di
 
 import android.content.Context
+import com.novastream.app.data.db.CatalogCacheDao
 import com.novastream.app.data.db.NovaStreamDatabase
 import dagger.Module
 import dagger.Provides
@@ -17,4 +18,7 @@ object DatabaseModule {
     @Singleton
     fun provideNovaStreamDatabase(@ApplicationContext context: Context): NovaStreamDatabase =
         NovaStreamDatabase.get(context)
+
+    @Provides
+    fun provideCatalogCacheDao(db: NovaStreamDatabase): CatalogCacheDao = db.catalogCacheDao()
 }

@@ -1,6 +1,6 @@
 package com.novastream.app.ui.search
 
-import android.app.Application
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -31,13 +31,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.repository.NovaStreamRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
@@ -66,8 +72,12 @@ data class SearchUiState(
     val trending: List<com.novastream.app.data.model.Series> = emptyList()
 )
 
-class SearchViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo = com.novastream.app.data.repository.NovaStreamRepository.get(application)
+@HiltViewModel
+class SearchViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val repo: NovaStreamRepository,
+    private val providerController: ProviderController
+) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
@@ -78,7 +88,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         viewModelScope.launch {
-            getApplication<Application>().dataStore.data.collect { prefs ->
+            context.dataStore.data.collect { prefs ->
                 try {
                     val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
                     val searches = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
@@ -86,7 +96,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 } catch (e: Exception) {
                     if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("SearchVM", "Recent searches parse error, resetting", e)
                     try {
-                        getApplication<Application>().dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
+                        context.dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
                     } catch (_: Exception) {}
                     _state.update { it.copy(recentSearches = emptyList()) }
                 }
@@ -94,8 +104,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
         viewModelScope.launch {
             try {
-                com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
-                    com.novastream.app.data.provider.ActiveProvider.setById(providerId)
+                providerController.activeProviderId.collect { providerId ->
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId
                         searchJob?.cancel()
@@ -108,7 +117,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         }
                         loadTrending()
-                        // Aktuelle Query erneut suchen
                         val q = _state.value.query
                         if (q.length >= 2) onQueryChange(q)
                     }
@@ -122,19 +130,19 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun loadTrending() {
         trendingJob?.cancel()
-        val expected = com.novastream.app.data.provider.ActiveProvider.id
+        val expected = ActiveProvider.id
         trendingJob = viewModelScope.launch {
             try {
                 when (val res = repo.loadPopular()) {
-                    is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
-                        if (com.novastream.app.data.provider.ActiveProvider.id == expected) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        if (ActiveProvider.id == expected) {
                             _state.update { it.copy(trending = res.data.take(20)) }
                         }
                     }
                     else -> {
                         when (val home = repo.loadHome()) {
-                            is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
-                                if (com.novastream.app.data.provider.ActiveProvider.id == expected) {
+                            is NovaStreamRepository.RepoResult.Success -> {
+                                if (ActiveProvider.id == expected) {
                                     _state.update { it.copy(trending = home.data.take(20)) }
                                 }
                             }
@@ -159,15 +167,15 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         _state.update { it.copy(loading = true) }
-        val expectedProvider = com.novastream.app.data.provider.ActiveProvider.id
+        val expectedProvider = ActiveProvider.id
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
             currentCoroutineContext().ensureActive()
             if (_state.value.query != trimmed) return@launch
-            if (com.novastream.app.data.provider.ActiveProvider.id != expectedProvider) return@launch
+            if (ActiveProvider.id != expectedProvider) return@launch
             when (val res = repo.search(trimmed)) {
-                is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Success -> {
-                    if (com.novastream.app.data.provider.ActiveProvider.id != expectedProvider) return@launch
+                is NovaStreamRepository.RepoResult.Success -> {
+                    if (ActiveProvider.id != expectedProvider) return@launch
                     _state.update {
                         it.copy(
                             loading = false,
@@ -178,7 +186,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         )
                     }
                 }
-                is com.novastream.app.data.repository.NovaStreamRepository.RepoResult.Error -> {
+                is NovaStreamRepository.RepoResult.Error -> {
                     _state.update { it.copy(loading = false, error = res.message) }
                 }
             }
@@ -189,10 +197,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         if (query.isBlank()) return
         viewModelScope.launch {
             try {
-                getApplication<Application>().dataStore.edit { prefs ->
+                context.dataStore.edit { prefs ->
                     val raw = prefs[RECENT_SEARCHES_KEY] ?: ""
                     val current = if (raw.isBlank()) emptyList() else raw.split(SEARCH_SEPARATOR)
-                    // Remove duplicate if exists, add to front, keep max 10
                     val updated = (listOf(query) + current.filter { it != query }).take(10)
                     prefs[RECENT_SEARCHES_KEY] = updated.joinToString(SEARCH_SEPARATOR)
                 }
@@ -205,7 +212,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun clearRecentSearches() {
         viewModelScope.launch {
             try {
-                getApplication<Application>().dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
+                context.dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("SearchVM", "clearRecentSearches failed", e)
             }
@@ -218,7 +225,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 fun SearchScreen(
     onSeriesClick: (String) -> Unit
 ) {
-    val vm: SearchViewModel = viewModel()
+    val vm: SearchViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -370,7 +377,7 @@ fun SearchScreen(
                     }
                 }
                 state.results.isEmpty() -> PremiumEmpty(
-                    if (com.novastream.app.data.provider.ActiveProvider.isBurningSeries) {
+                    if (ActiveProvider.isBurningSeries) {
                         "Keine Treffer. Burning Series blockiert oft Bot-Suchen (Captcha) – bitte später erneut versuchen."
                     } else {
                         "Keine Treffer für '${state.query}'"

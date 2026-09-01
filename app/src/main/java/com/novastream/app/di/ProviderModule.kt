@@ -22,4 +22,6 @@ object ProviderModule {
     @Provides
     @Singleton
     fun provideStreamingProviders(): List<StreamingProvider> = ProviderManager.providers
+
+    // ProviderController: @Singleton with @Inject constructor (CatalogCacheDao via DatabaseModule)
 }

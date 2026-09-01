@@ -12,6 +12,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,13 +45,82 @@ import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.tv.tvFocusRing
 import com.novastream.app.ui.tv.tvFocusable
 
+// ─── Provider Health Banner ─────────────────────────────────────────────────
+
+@Composable
+fun ProviderHealthBanner(
+    providerName: String,
+    loadDurationMs: Long?,
+    error: String?,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val showSlow = loadDurationMs != null && loadDurationMs > 5_000L
+    if (error == null && !showSlow) return
+
+    val message = when {
+        error != null -> error
+        loadDurationMs != null -> stringResource(
+            R.string.provider_health_slow,
+            providerName,
+            (loadDurationMs / 1000.0).toInt().coerceAtLeast(1)
+        )
+        else -> stringResource(R.string.provider_health_generic, providerName)
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Primary.copy(alpha = 0.12f))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "⚠",
+            color = Primary,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            message,
+            modifier = Modifier.weight(1f),
+            color = TextPrimary,
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (error != null) {
+            Spacer(Modifier.width(8.dp))
+            TextButton(onClick = onRetry) {
+                Text(
+                    stringResource(R.string.retry),
+                    color = Primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
 // ─── Shimmer Loading ────────────────────────────────────────────────────────
 
 @Composable
 fun ShimmerBox(
     modifier: Modifier = Modifier,
-    cornerRadius: Int = 8
+    cornerRadius: Int = 8,
+    animate: Boolean = true
 ) {
+    if (!animate) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(cornerRadius.dp))
+                .background(ShimmerBase)
+        )
+        return
+    }
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnim by transition.animateFloat(
         initialValue = -2f,
@@ -79,28 +149,30 @@ fun ShimmerBox(
 }
 
 @Composable
-fun ShimmerPoster(modifier: Modifier = Modifier) {
+fun ShimmerPoster(modifier: Modifier = Modifier, animate: Boolean = true) {
     Column(modifier) {
         ShimmerBox(
             modifier = Modifier.fillMaxWidth().height(170.dp),
-            cornerRadius = 12
+            cornerRadius = 12,
+            animate = animate
         )
         Spacer(Modifier.height(8.dp))
         ShimmerBox(
             modifier = Modifier.fillMaxWidth(0.8f).height(14.dp),
-            cornerRadius = 4
+            cornerRadius = 4,
+            animate = animate
         )
     }
 }
 
 @Composable
-fun ShimmerRow() {
+fun ShimmerRow(animate: Boolean = true) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         repeat(3) {
-            ShimmerPoster(Modifier.width(120.dp))
+            ShimmerPoster(Modifier.width(120.dp), animate = animate)
         }
     }
 }

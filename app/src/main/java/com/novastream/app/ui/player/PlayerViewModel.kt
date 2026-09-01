@@ -11,6 +11,7 @@ import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -121,6 +122,9 @@ class PlayerViewModel @Inject constructor(
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    private var resolveJob: Job? = null
+    private var resolveGeneration = 0
+
     init {
         viewModelScope.launch {
             appSettings.autoplayNext.collect { v -> _state.update { it.copy(autoplayNext = v) } }
@@ -186,6 +190,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun selectHoster(index: Int) {
+        resolveJob?.cancel()
         _state.update {
             it.copy(
                 selectedHosterIndex = index,
@@ -196,7 +201,7 @@ class PlayerViewModel @Inject constructor(
                 hosterSwitching = true
             )
         }
-        viewModelScope.launch { resolveHoster(index) }
+        resolveJob = viewModelScope.launch { resolveHoster(index) }
     }
 
     fun selectSource(index: Int) {
@@ -222,8 +227,9 @@ class PlayerViewModel @Inject constructor(
 
     fun retry() {
         val index = _state.value.selectedHosterIndex
+        resolveJob?.cancel()
         _state.update { it.copy(error = null, loading = true) }
-        viewModelScope.launch { resolveHoster(index) }
+        resolveJob = viewModelScope.launch { resolveHoster(index) }
     }
 
     fun saveProgress(positionMs: Long, durationMs: Long) {
@@ -383,17 +389,19 @@ class PlayerViewModel @Inject constructor(
     }
 
     private suspend fun resolveHoster(index: Int) {
+        val generation = ++resolveGeneration
         val hoster = _state.value.hosters.getOrNull(index) ?: return
         if (hoster.redirectUrl.isBlank()) {
-            tryNextHoster(index)
+            tryNextHoster(index, generation)
             return
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
         val result = kotlinx.coroutines.withTimeoutOrNull(com.novastream.app.data.model.NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) { repo.resolveHoster(hoster) }
+        if (generation != resolveGeneration) return
         when (result) {
             is NovaStreamRepository.RepoResult.Success -> {
                 if (result.data.isEmpty()) {
-                    tryNextHoster(index)
+                    tryNextHoster(index, generation)
                 } else {
                     val sortedSources = sortSources(result.data)
                     _state.update {
@@ -408,19 +416,20 @@ class PlayerViewModel @Inject constructor(
                 }
             }
             is NovaStreamRepository.RepoResult.Error -> {
-                tryNextHoster(index)
+                tryNextHoster(index, generation)
             }
             null -> {
-                tryNextHoster(index)
+                tryNextHoster(index, generation)
             }
         }
     }
 
-    private fun tryNextHoster(currentIndex: Int) {
+    private fun tryNextHoster(currentIndex: Int, generation: Int) {
+        if (generation != resolveGeneration) return
         val nextIndex = currentIndex + 1
         if (nextIndex < _state.value.hosters.size) {
             _state.update { it.copy(selectedHosterIndex = nextIndex) }
-            viewModelScope.launch { resolveHoster(nextIndex) }
+            resolveJob = viewModelScope.launch { resolveHoster(nextIndex) }
         } else {
             _state.update {
                 it.copy(

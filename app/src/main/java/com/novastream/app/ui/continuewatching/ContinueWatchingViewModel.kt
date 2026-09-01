@@ -1,11 +1,12 @@
 package com.novastream.app.ui.continuewatching
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.repository.WatchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,9 +19,11 @@ data class ContinueWatchingUiState(
     val error: String? = null
 )
 
-class ContinueWatchingViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class ContinueWatchingViewModel @Inject constructor(
+    private val watchRepo: WatchRepository
+) : ViewModel() {
 
-    private val watchRepo = WatchRepository.get(application)
     private val _state = MutableStateFlow(ContinueWatchingUiState())
     val state: StateFlow<ContinueWatchingUiState> = _state.asStateFlow()
 

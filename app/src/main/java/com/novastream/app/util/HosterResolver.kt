@@ -28,6 +28,37 @@ class HosterResolver(
 ) {
 
     companion object {
+        private const val CACHE_MAX_SIZE = 50
+        private const val CACHE_TTL_MS = 30 * 60 * 1000L
+
+        private data class CacheEntry(val sources: List<StreamSource>, val expiresAt: Long)
+
+        private val resolveCache = object : LinkedHashMap<String, CacheEntry>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry>?): Boolean =
+                size > CACHE_MAX_SIZE
+        }
+        private val cacheLock = Any()
+
+        private fun cacheKey(hosterName: String, redirectUrl: String): String = "$hosterName|$redirectUrl"
+
+        private fun readCache(key: String): List<StreamSource>? {
+            synchronized(cacheLock) {
+                val entry = resolveCache[key] ?: return null
+                if (entry.expiresAt <= System.currentTimeMillis()) {
+                    resolveCache.remove(key)
+                    return null
+                }
+                return entry.sources
+            }
+        }
+
+        private fun writeCache(key: String, sources: List<StreamSource>) {
+            if (sources.isEmpty()) return
+            synchronized(cacheLock) {
+                resolveCache[key] = CacheEntry(sources, System.currentTimeMillis() + CACHE_TTL_MS)
+            }
+        }
+
         // Pre-compiled regex patterns (avoid recompilation on every call)
         private val SRC_PATTERN = Regex("src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]")
         private val DATA_SRC_PATTERN = Regex("data-src\\s*=\\s*['\"]([^'\"]+\\.(?:m3u8|mp4|webm)[^'\"]*)['\"]")
@@ -40,6 +71,23 @@ class HosterResolver(
         if (path.startsWith("http")) path else baseUrl + path
 
     suspend fun resolve(hosterName: String, redirectUrl: String): List<StreamSource> {
+        if (redirectUrl.isBlank()) return emptyList()
+        val cacheKey = cacheKey(hosterName, redirectUrl)
+        readCache(cacheKey)?.let { return it }
+
+        return try {
+            val resolved = resolveUncached(hosterName, redirectUrl)
+            writeCache(cacheKey, resolved)
+            resolved
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.e("HosterResolver", "resolve failed for $hosterName url=$redirectUrl", e)
+            }
+            emptyList()
+        }
+    }
+
+    private suspend fun resolveUncached(hosterName: String, redirectUrl: String): List<StreamSource> {
         return try {
             if (redirectUrl.isBlank()) return emptyList()
 
@@ -86,7 +134,7 @@ class HosterResolver(
             emptyList()
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) {
-                android.util.Log.e("HosterResolver", "resolve failed for $hosterName url=$redirectUrl", e)
+                android.util.Log.e("HosterResolver", "resolveUncached failed for $hosterName url=$redirectUrl", e)
             }
             emptyList()
         }

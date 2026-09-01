@@ -1,6 +1,5 @@
 package com.novastream.app.ui.home
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
@@ -10,11 +9,12 @@ import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.provider.capabilities
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.novastream.app.util.ProviderLoadMetrics
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -48,15 +48,18 @@ data class HomeUiState(
     val continueWatching: List<WatchProgress> = emptyList(),
     val watchlist: List<WatchlistItem> = emptyList(),
     val reduceMotion: Boolean = false,
+    val performanceMode: Boolean = false,
+    val lastLoadDurationMs: Long? = null,
+    val showProviderHealthWarning: Boolean = false,
     val error: String? = null
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
-    private val appSettings: AppSettings
+    private val appSettings: AppSettings,
+    private val providerController: ProviderController
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
@@ -107,12 +110,18 @@ class HomeViewModel @Inject constructor(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "reduceMotion flow error", e)
             }
         }
-        // Kritisch: erst DataStore abwarten, ActiveProvider setzen, dann laden.
-        // Verhindert SerienStream-Leaks bei AniWorld & Co.
         viewModelScope.launch {
             try {
-                ProviderManager.activeProviderIdFlow(context).collect { providerId ->
-                    ActiveProvider.setById(providerId)
+                appSettings.performanceMode.collect { enabled ->
+                    _state.update { it.copy(performanceMode = enabled) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "performanceMode flow error", e)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                providerController.activeProviderId.collect { providerId ->
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId
                         clearCatalogForProviderSwitch(providerId)
@@ -121,7 +130,6 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "provider flow error", e)
-                ActiveProvider.setById(ProviderManager.defaultProviderId)
                 load(force = true)
             }
         }
@@ -171,29 +179,35 @@ class HomeViewModel @Inject constructor(
             )
         }
         loadJob = viewModelScope.launch {
+            val startedAt = System.currentTimeMillis()
             try {
                 coroutineScope {
                     val provider = ActiveProvider.get()
                     if (provider.id != expectedProvider) return@coroutineScope
 
+                    val performanceMode = _state.value.performanceMode
                     val catalogDef = async { repo.loadHomeCatalog() }
                     val popularDef = async { repo.loadPopular() }
                     val newestDef = async { repo.loadNewest() }
                     val moviesDef = async {
                         if (provider.supportsMovies) repo.loadMovies() else null
                     }
-                    val extendedDef = async { repo.loadExtendedCatalog() }
-                    val genres = provider.availableGenres.take(4)
+                    val extendedDef = if (performanceMode) null else async { repo.loadExtendedCatalog() }
+                    val genres = if (performanceMode) emptyList() else provider.availableGenres.take(4)
                     val genreDefs = genres.map { g ->
                         g to async { repo.loadGenre(g.slug) }
                     }
-                    val latestDef = async { repo.loadLatestEpisodes() }
+                    val latestDef = if (performanceMode || !provider.capabilities().supportsLatestEpisodes) {
+                        null
+                    } else {
+                        async { repo.loadLatestEpisodes() }
+                    }
 
                     when (val catalogRes = catalogDef.await()) {
                         is NovaStreamRepository.RepoResult.Success -> {
                             if (ActiveProvider.id != expectedProvider) return@coroutineScope
                             val catalog = catalogRes.data
-                            val extended = extendedDef.await().ok()
+                            val extended = extendedDef?.await()?.ok().orEmpty()
                             val popular = popularDef.await().ok()
                                 .ifEmpty { catalog.popular.ifEmpty { catalog.all.take(24) } }
                             val newest = newestDef.await().ok()
@@ -211,11 +225,13 @@ class HomeViewModel @Inject constructor(
                             val scifi = genreRows.find {
                                 it.first.slug.contains("science", true) || it.first.slug.contains("fantasy", true)
                             }?.second.orEmpty()
-                            val latest = latestDef.await().okList()
+                            val latest = latestDef?.await()?.okList().orEmpty()
 
                             val merged = (catalog.flattened() + popular + newest + movies + extended +
                                 genreRows.flatMap { it.second }).distinctBy { it.id }
 
+                            val durationMs = System.currentTimeMillis() - startedAt
+                            ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
                             _state.update {
                                 it.copy(
                                     loading = false,
@@ -237,6 +253,8 @@ class HomeViewModel @Inject constructor(
                                     drama = drama,
                                     scifi = scifi,
                                     latestEpisodes = latest.ifEmpty { catalog.latestEpisodes },
+                                    lastLoadDurationMs = durationMs,
+                                    showProviderHealthWarning = ProviderLoadMetrics.shouldShowHealthWarning(durationMs, false),
                                     error = null
                                 )
                             }
@@ -248,6 +266,8 @@ class HomeViewModel @Inject constructor(
                                     val series = home.data
                                     val movies = moviesDef.await()?.ok().orEmpty()
                                         .ifEmpty { series.filter { it.isMovie } }
+                                    val durationMs = System.currentTimeMillis() - startedAt
+                                    ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
                                     _state.update {
                                         it.copy(
                                             loading = false,
@@ -263,14 +283,25 @@ class HomeViewModel @Inject constructor(
                                             comedy = emptyList(),
                                             drama = emptyList(),
                                             scifi = emptyList(),
+                                            lastLoadDurationMs = durationMs,
+                                            showProviderHealthWarning = ProviderLoadMetrics.shouldShowHealthWarning(durationMs, false),
                                             error = null
                                         )
                                     }
                                 }
-                                is NovaStreamRepository.RepoResult.Error ->
+                                is NovaStreamRepository.RepoResult.Error -> {
+                                    val durationMs = System.currentTimeMillis() - startedAt
+                                    ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
                                     _state.update {
-                                        it.copy(loading = false, isRefreshing = false, error = home.message)
+                                        it.copy(
+                                            loading = false,
+                                            isRefreshing = false,
+                                            error = home.message,
+                                            lastLoadDurationMs = durationMs,
+                                            showProviderHealthWarning = true
+                                        )
                                     }
+                                }
                             }
                         }
                     }
@@ -278,11 +309,15 @@ class HomeViewModel @Inject constructor(
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "load error", e)
+                val durationMs = System.currentTimeMillis() - startedAt
+                ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
                 _state.update {
                     it.copy(
                         loading = false,
                         isRefreshing = false,
-                        error = com.novastream.app.util.ErrorMapper.toUserMessage(e)
+                        error = com.novastream.app.util.ErrorMapper.toUserMessage(e),
+                        lastLoadDurationMs = durationMs,
+                        showProviderHealthWarning = true
                     )
                 }
             }

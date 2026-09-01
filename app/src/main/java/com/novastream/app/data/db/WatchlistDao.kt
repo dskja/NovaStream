@@ -65,9 +65,12 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist WHERE providerId = :providerId AND slug = :slug")
     suspend fun removeForProvider(providerId: String, slug: String)
 
-    @Query("DELETE FROM watchlist WHERE slug IN (:slugs)")
+    @Query("DELETE FROM watchlist WHERE slug IN (:slugs) AND providerId = :providerId")
     @Transaction
-    suspend fun removeAll(slugs: List<String>)
+    suspend fun removeAll(slugs: List<String>, providerId: String)
+
+    @Query("DELETE FROM watchlist WHERE providerId = :providerId")
+    suspend fun clearForProvider(providerId: String)
 
     @Query("DELETE FROM watchlist")
     suspend fun clear()

@@ -8,8 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,7 +43,11 @@ class MainActivity : ComponentActivity() {
             val appSettings = remember { com.novastream.app.data.prefs.AppSettings(this) }
             val dynamicColor by appSettings.dynamicColor.collectAsStateWithLifecycle(initialValue = true)
             val isTv = remember { TvUtils.isTvDevice(this) }
-            val deepLinkSlug = remember(intent) { parseDetailDeepLink(intent) }
+            var deepLinkSlug by remember { mutableStateOf(parseDetailDeepLink(intent)) }
+            DisposableEffect(Unit) {
+                deepLinkSlugUpdater = { deepLinkSlug = it }
+                onDispose { deepLinkSlugUpdater = null }
+            }
             NovaStreamTheme(useDynamicColor = dynamicColor, isTvDevice = isTv) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -55,6 +62,12 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        deepLinkSlugUpdater?.invoke(parseDetailDeepLink(intent))
+    }
+
+    companion object {
+        @Volatile
+        private var deepLinkSlugUpdater: ((String?) -> Unit)? = null
     }
 
     private fun parseDetailDeepLink(intent: android.content.Intent?): String? {

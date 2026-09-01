@@ -7,8 +7,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.db.NovaStreamDatabase
-import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.util.VoeWebViewResolver
 import com.novastream.app.util.CaptchaWebViewFetcher
 import com.novastream.app.data.repository.NovaStreamRepository
@@ -24,6 +23,7 @@ import kotlinx.coroutines.launch
 class NovaStreamApp : Application(), ImageLoaderFactory {
 
     @Inject lateinit var database: NovaStreamDatabase
+    @Inject lateinit var providerController: ProviderController
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -32,19 +32,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         // Set VoeWebViewResolver context for VOE hoster resolution
         VoeWebViewResolver.setContext(this)
         CaptchaWebViewFetcher.setContext(this)
-        // Load saved provider preference on app start
-        appScope.launch {
-            try {
-                // ActiveProvider bei jeder Emission setzen (erste Emission initialisiert,
-                // danach werden Änderungen reaktiv verarbeitet)
-                ProviderManager.activeProviderIdFlow(this@NovaStreamApp).collect { providerId ->
-                    ActiveProvider.setById(providerId)
-                }
-            } catch (e: Exception) {
-                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("NovaStreamApp", "Provider init failed", e)
-                ActiveProvider.setById(ProviderManager.defaultProvider.id)
-            }
-        }
+        providerController.startObserving(appScope)
         // Cleanup: Entferne abgeschlossene Episoden die älter als 30 Tage sind
         appScope.launch {
             try {
@@ -78,7 +66,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
-            .okHttpClient(NetworkModule.okHttpClient)
+            .okHttpClient(NetworkModule.imageOkHttpClient)
             .crossfade(200)
             .respectCacheHeaders(false)
             .allowHardware(true)

@@ -21,8 +21,8 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress WHERE slug = :slug ORDER BY season ASC, episode ASC")
     suspend fun getBySlug(slug: String): List<WatchProgress>
 
-    @Query("SELECT * FROM watch_progress WHERE slug = :slug ORDER BY updatedAt DESC LIMIT 1")
-    suspend fun getLatestForSlug(slug: String): WatchProgress?
+    @Query("SELECT * FROM watch_progress WHERE slug = :slug AND providerId = :providerId ORDER BY updatedAt DESC LIMIT 1")
+    suspend fun getLatestForSlug(slug: String, providerId: String): WatchProgress?
 
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC LIMIT :limit")
     fun getRecent(limit: Int): Flow<List<WatchProgress>>
@@ -36,8 +36,11 @@ interface WatchProgressDao {
     @Query("DELETE FROM watch_progress WHERE episodeKey = :key")
     suspend fun delete(key: String)
 
-    @Query("DELETE FROM watch_progress WHERE slug = :slug")
-    suspend fun deleteBySlug(slug: String)
+    @Query("DELETE FROM watch_progress WHERE slug = :slug AND providerId = :providerId")
+    suspend fun deleteBySlug(slug: String, providerId: String)
+
+    @Query("DELETE FROM watch_progress WHERE providerId = :providerId")
+    suspend fun clearForProvider(providerId: String)
 
     @Query("SELECT * FROM watch_progress WHERE durationMs > 0")
     suspend fun getWithProgress(): List<WatchProgress>

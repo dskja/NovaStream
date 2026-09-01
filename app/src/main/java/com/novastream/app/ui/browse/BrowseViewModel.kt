@@ -1,17 +1,15 @@
 package com.novastream.app.ui.browse
 
-import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.capabilities
 import com.novastream.app.data.repository.NovaStreamRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,9 +46,9 @@ data class BrowseUiState(
 
 @HiltViewModel
 class BrowseViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
-    private val repo: NovaStreamRepository
+    private val repo: NovaStreamRepository,
+    private val providerController: ProviderController
 ) : ViewModel() {
     private val _state = MutableStateFlow(BrowseUiState(loading = true))
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
@@ -64,8 +62,7 @@ class BrowseViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            ProviderManager.activeProviderIdFlow(context).collect { providerId ->
-                ActiveProvider.setById(providerId)
+            providerController.activeProviderId.collect { providerId ->
                 if (activeProviderId != providerId) {
                     activeProviderId = providerId
                     resetAndLoad()
@@ -259,16 +256,18 @@ class BrowseViewModel @Inject constructor(
             if (ActiveProvider.id != expectedProvider) return@launch
             when (result) {
                 is NovaStreamRepository.RepoResult.Success -> {
+                    val beforeSize = if (reset) 0 else allItems.size
                     val merged = if (reset) {
                         result.data
                     } else {
                         (allItems + result.data).distinctBy { it.id }
                     }
                     allItems = merged
+                    val grew = merged.size > beforeSize
                     publishItems(
                         reset = reset,
                         page = nextPage,
-                        hasMore = result.data.isNotEmpty() && _state.value.supportsPagination
+                        hasMore = grew && result.data.isNotEmpty() && _state.value.supportsPagination
                     )
                 }
                 is NovaStreamRepository.RepoResult.Error -> {

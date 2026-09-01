@@ -1,6 +1,7 @@
 package com.novastream.app.ui.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarDuration
@@ -10,9 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,8 +28,10 @@ import androidx.navigation.navArgument
 import com.novastream.app.data.prefs.AppSettings
 import kotlinx.coroutines.launch
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.ui.components.PremiumBottomBar
+import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.components.PremiumTopTabBar
 import com.novastream.app.ui.detail.DetailScreen
 import com.novastream.app.ui.browse.BrowseScreen
@@ -38,7 +43,6 @@ import com.novastream.app.ui.search.SearchScreen
 import com.novastream.app.ui.settings.SettingsScreen
 import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.watchlist.WatchlistScreen
-import kotlinx.coroutines.launch
 
 object Routes {
     const val ONBOARDING = "onboarding"
@@ -93,16 +97,31 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
     val currentRoute = backStack?.destination?.route?.substringBefore("?")
     val context = LocalContext.current
     val appSettings = remember { AppSettings(context) }
-    val onboardingComplete by appSettings.onboardingComplete.collectAsStateWithLifecycle(initialValue = false)
+    var onboardingComplete by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(appSettings) {
+        appSettings.onboardingComplete.collect { onboardingComplete = it }
+    }
+    val activeProviderId by ProviderManager.activeProviderIdFlow(context)
+        .collectAsStateWithLifecycle(initialValue = ActiveProvider.id)
     val watchRepo = remember { WatchRepository.get(context) }
     val watchlistItems by watchRepo.watchlist().collectAsStateWithLifecycle(initialValue = emptyList())
-    val watchlistCount = remember(watchlistItems) {
-        val pid = ActiveProvider.id
-        watchlistItems.count { it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown" }
+    val watchlistCount = remember(watchlistItems, activeProviderId) {
+        watchlistItems.count {
+            it.providerId.isBlank() || it.providerId == activeProviderId || it.providerId == "unknown"
+        }
     }
 
-    LaunchedEffect(deepLinkSlug, onboardingComplete) {
-        if (onboardingComplete && !deepLinkSlug.isNullOrBlank()) {
+    if (onboardingComplete == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            PremiumLoading(label = "Lädt…")
+        }
+        return
+    }
+
+    val onboardingDone = onboardingComplete == true
+
+    LaunchedEffect(deepLinkSlug, onboardingDone) {
+        if (onboardingDone && !deepLinkSlug.isNullOrBlank()) {
             nav.navigate(Routes.detail(deepLinkSlug)) {
                 launchSingleTop = true
             }
@@ -176,7 +195,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
     ) { padding ->
         NavHost(
             navController = nav,
-            startDestination = if (onboardingComplete) Routes.HOME else Routes.ONBOARDING,
+            startDestination = if (onboardingDone) Routes.HOME else Routes.ONBOARDING,
             modifier = Modifier.fillMaxSize().padding(padding)
         ) {
             composable(Routes.ONBOARDING) {

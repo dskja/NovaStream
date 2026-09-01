@@ -30,6 +30,7 @@ data class CatalogCacheEntry(
         const val TYPE_DETAIL = "detail"
         const val TYPE_SEARCH = "search"
         const val TYPE_LIST = "list"
+        const val TYPE_LATEST = "latest"
 
         fun key(providerId: String, type: String, vararg parts: String): String =
             "$providerId|$type|${parts.joinToString("|")}"
