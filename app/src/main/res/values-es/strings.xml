@@ -369,4 +369,34 @@
     <string name="player_previous_episode">Episodio anterior</string>
     <string name="player_subtitles">Subtítulos</string>
     <string name="player_subtitles_off">Subtítulos desactivados</string>
+
+    <string name="download_progress_fmt">Descarga: %1$d%%</string>
+    <string name="settings_update_checking">Buscando actualizaciones…</string>
+    <string name="settings_update_search">Buscar actualizaciones</string>
+    <string name="settings_update_current">Actual: v%1$s</string>
+    <string name="settings_update_github_releases">GitHub Releases · %1$s</string>
+    <string name="settings_update_download_apk">Descargar APK</string>
+    <string name="settings_update_open_release">Abrir release</string>
+    <string name="settings_update_changelog">Changelog</string>
+    <string name="settings_about_tagline">Un cliente Android moderno con continuar viendo, watchlist, multi-hoster y DNS-over-HTTPS.</string>
+    <string name="settings_source_code">Código fuente</string>
+    <string name="settings_report_bug">Reportar error</string>
+    <string name="settings_report_bug_sub">Crear issue en GitHub</string>
+    <string name="settings_star_repo">Dar estrella</string>
+    <string name="settings_star_repo_sub">Valorar el repositorio</string>
+    <string name="settings_license">Licencia</string>
+    <string name="settings_license_sub">Licencia MIT – ver</string>
+    <string name="settings_privacy">Privacidad</string>
+    <string name="settings_privacy_sub">No se recopilan datos</string>
+    <string name="settings_developer">Desarrollador</string>
+    <string name="settings_github_profile">Perfil de GitHub</string>
+    <string name="settings_made_with">Made with </string>
+    <string name="settings_client_disclaimer">NovaStream es un cliente no oficial.
+Solo con fines educativos. Úsalo bajo tu responsabilidad.</string>
+    <string name="settings_version_build_fmt">Versión %1$s · Build %2$d</string>
+    <string name="settings_unknown_cleanup_title">¿Limpiar entradas antiguas?</string>
+    <string name="settings_unknown_cleanup_message">%1$d entradas de watchlist o progreso son anteriores a la actualización del proveedor (providerId « unknown »). ¿Eliminarlas?</string>
+    <string name="settings_unknown_cleanup_removed">Se eliminaron %1$d entradas con proveedor desconocido</string>
+    <string name="settings_unknown_cleanup_none">No se encontraron entradas con proveedor desconocido</string>
+    <string name="settings_keep">Mantener</string>
 </resources>

@@ -369,4 +369,34 @@
     <string name="player_previous_episode">Épisode précédent</string>
     <string name="player_subtitles">Sous-titres</string>
     <string name="player_subtitles_off">Sous-titres désactivés</string>
+
+    <string name="download_progress_fmt">Téléchargement : %1$d%%</string>
+    <string name="settings_update_checking">Vérification des mises à jour…</string>
+    <string name="settings_update_search">Rechercher des mises à jour</string>
+    <string name="settings_update_current">Actuel : v%1$s</string>
+    <string name="settings_update_github_releases">GitHub Releases · %1$s</string>
+    <string name="settings_update_download_apk">Télécharger l\'APK</string>
+    <string name="settings_update_open_release">Ouvrir la release</string>
+    <string name="settings_update_changelog">Changelog</string>
+    <string name="settings_about_tagline">Un client Android moderne avec reprise de lecture, watchlist, multi-hébergeurs et DNS-over-HTTPS.</string>
+    <string name="settings_source_code">Code source</string>
+    <string name="settings_report_bug">Signaler un bug</string>
+    <string name="settings_report_bug_sub">Créer une issue sur GitHub</string>
+    <string name="settings_star_repo">Mettre une étoile</string>
+    <string name="settings_star_repo_sub">Évaluer le dépôt sur GitHub</string>
+    <string name="settings_license">Licence</string>
+    <string name="settings_license_sub">Licence MIT – voir</string>
+    <string name="settings_privacy">Confidentialité</string>
+    <string name="settings_privacy_sub">Aucune donnée collectée</string>
+    <string name="settings_developer">Développeur</string>
+    <string name="settings_github_profile">Profil GitHub</string>
+    <string name="settings_made_with">Made with </string>
+    <string name="settings_client_disclaimer">NovaStream est un client non officiel.
+À des fins éducatives uniquement. Utilisation à vos risques.</string>
+    <string name="settings_version_build_fmt">Version %1$s · Build %2$d</string>
+    <string name="settings_unknown_cleanup_title">Nettoyer les anciennes entrées ?</string>
+    <string name="settings_unknown_cleanup_message">%1$d entrées watchlist ou progression proviennent d\'avant la mise à jour provider (providerId « unknown »). Les supprimer ?</string>
+    <string name="settings_unknown_cleanup_removed">%1$d entrées avec provider inconnu supprimées</string>
+    <string name="settings_unknown_cleanup_none">Aucune entrée provider inconnue trouvée</string>
+    <string name="settings_keep">Garder</string>
 </resources>

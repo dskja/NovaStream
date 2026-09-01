@@ -369,4 +369,34 @@
     <string name="player_previous_episode">الحلقة السابقة</string>
     <string name="player_subtitles">الترجمة</string>
     <string name="player_subtitles_off">إيقاف الترجمة</string>
+
+    <string name="download_progress_fmt">التنزيل: %1$d%%</string>
+    <string name="settings_update_checking">جارٍ التحقق من التحديثات…</string>
+    <string name="settings_update_search">البحث عن تحديثات</string>
+    <string name="settings_update_current">الحالي: v%1$s</string>
+    <string name="settings_update_github_releases">GitHub Releases · %1$s</string>
+    <string name="settings_update_download_apk">تنزيل APK</string>
+    <string name="settings_update_open_release">فتح الإصدار</string>
+    <string name="settings_update_changelog">سجل التغييرات</string>
+    <string name="settings_about_tagline">عميل Android حديث مع متابعة المشاهدة وقائمة المشاهدة ودعم عدة مضيفين وDNS-over-HTTPS.</string>
+    <string name="settings_source_code">الكود المصدري</string>
+    <string name="settings_report_bug">الإبلاغ عن خطأ</string>
+    <string name="settings_report_bug_sub">إنشاء issue على GitHub</string>
+    <string name="settings_star_repo">تقييم المستودع</string>
+    <string name="settings_star_repo_sub">تقييم المستودع على GitHub</string>
+    <string name="settings_license">الترخيص</string>
+    <string name="settings_license_sub">ترخيص MIT – عرض</string>
+    <string name="settings_privacy">الخصوصية</string>
+    <string name="settings_privacy_sub">لا يتم جمع أي بيانات</string>
+    <string name="settings_developer">المطور</string>
+    <string name="settings_github_profile">ملف GitHub</string>
+    <string name="settings_made_with">Made with </string>
+    <string name="settings_client_disclaimer">NovaStream عميل غير رسمي.
+للأغراض التعليمية فقط. الاستخدام على مسؤوليتك.</string>
+    <string name="settings_version_build_fmt">الإصدار %1$s · Build %2$d</string>
+    <string name="settings_unknown_cleanup_title">تنظيف الإدخالات القديمة؟</string>
+    <string name="settings_unknown_cleanup_message">%1$d إدخالات من قائمة المشاهدة أو التقدم من قبل تحديث المزود (providerId « unknown »). هل تريد حذفها؟</string>
+    <string name="settings_unknown_cleanup_removed">تمت إزالة %1$d إدخالات بمزود غير معروف</string>
+    <string name="settings_unknown_cleanup_none">لم يتم العثور على إدخالات بمزود غير معروف</string>
+    <string name="settings_keep">إبقاء</string>
 </resources>

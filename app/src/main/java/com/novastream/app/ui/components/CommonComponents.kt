@@ -190,6 +190,7 @@ fun SeriesPosterCard(
 ) {
     val context = LocalContext.current
     val isTv = remember { TvUtils.isTvDevice(context) }
+    val imageSize = rememberPosterImageDimensions()
     val effectiveWidth = if (isTv) (cardWidth * 1.35f).toInt().coerceAtLeast(cardWidth + 20) else cardWidth
     var isLoading by remember(series.id, series.coverUrl) { mutableStateOf(true) }
     var isError by remember(series.id, series.coverUrl) { mutableStateOf(false) }
@@ -244,7 +245,7 @@ fun SeriesPosterCard(
                     model = ImageRequest.Builder(context)
                         .data(series.coverUrl)
                         .crossfade(true)
-                        .size(400, 600)
+                        .size(imageSize.width, imageSize.height)
                         .addHeader(
                             "Referer",
                             com.novastream.app.util.MediaUrls.refererFor(series.coverUrl)

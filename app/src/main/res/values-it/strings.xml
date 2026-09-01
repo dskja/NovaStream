@@ -369,4 +369,34 @@
     <string name="player_previous_episode">Episodio precedente</string>
     <string name="player_subtitles">Sottotitoli</string>
     <string name="player_subtitles_off">Sottotitoli disattivati</string>
+
+    <string name="download_progress_fmt">Download: %1$d%%</string>
+    <string name="settings_update_checking">Controllo aggiornamenti…</string>
+    <string name="settings_update_search">Cerca aggiornamenti</string>
+    <string name="settings_update_current">Attuale: v%1$s</string>
+    <string name="settings_update_github_releases">GitHub Releases · %1$s</string>
+    <string name="settings_update_download_apk">Scarica APK</string>
+    <string name="settings_update_open_release">Apri release</string>
+    <string name="settings_update_changelog">Changelog</string>
+    <string name="settings_about_tagline">Un client Android moderno con continua a guardare, watchlist, multi-hoster e DNS-over-HTTPS.</string>
+    <string name="settings_source_code">Codice sorgente</string>
+    <string name="settings_report_bug">Segnala bug</string>
+    <string name="settings_report_bug_sub">Crea issue su GitHub</string>
+    <string name="settings_star_repo">Metti stella</string>
+    <string name="settings_star_repo_sub">Valuta il repository</string>
+    <string name="settings_license">Licenza</string>
+    <string name="settings_license_sub">Licenza MIT – visualizza</string>
+    <string name="settings_privacy">Privacy</string>
+    <string name="settings_privacy_sub">Nessun dato raccolto</string>
+    <string name="settings_developer">Sviluppatore</string>
+    <string name="settings_github_profile">Profilo GitHub</string>
+    <string name="settings_made_with">Made with </string>
+    <string name="settings_client_disclaimer">NovaStream è un client non ufficiale.
+Solo per scopi educativi. Usa a tuo rischio.</string>
+    <string name="settings_version_build_fmt">Versione %1$s · Build %2$d</string>
+    <string name="settings_unknown_cleanup_title">Pulire vecchie voci?</string>
+    <string name="settings_unknown_cleanup_message">%1$d voci watchlist o progressi provengono da prima dell\'aggiornamento provider (providerId « unknown »). Rimuoverle?</string>
+    <string name="settings_unknown_cleanup_removed">Rimosse %1$d voci con provider sconosciuto</string>
+    <string name="settings_unknown_cleanup_none">Nessuna voce con provider sconosciuto</string>
+    <string name="settings_keep">Mantieni</string>
 </resources>
