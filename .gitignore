@@ -25,3 +25,12 @@ scr_*.png
 
 .commit_msg.txt
 
+# AI / IDE tooling (keep repo clean)
+.cursor/
+.cursorrules
+.cursorignore
+.claude/
+.codex/
+.agents/
+AGENTS.md
+
