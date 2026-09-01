@@ -56,7 +56,7 @@ import com.novastream.app.ui.theme.*
 @Composable
 fun DetailScreen(
     onBack: () -> Unit,
-    onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?) -> Unit
+    onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit
 ) {
     val vm: DetailViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -93,7 +93,7 @@ private fun DetailContent(
     coverUrl: String?,
     onBack: () -> Unit,
     onSelectSeason: (Int) -> Unit,
-    onPlay: (String, Int, Int, String, String, String?) -> Unit,
+    onPlay: (String, Int, Int, String, String, String?, Boolean) -> Unit,
     onToggleWatchlist: () -> Unit,
     onRemoveProgress: (String) -> Unit,
     onToggleWatched: (Int, Int, String) -> Unit,
@@ -185,7 +185,7 @@ private fun DetailContent(
             item {
                 ContinueWatchingBanner(
                     progress = progress,
-                    onPlay = { onPlay(slug, progress.season, progress.episode, progress.episodeTitle, seriesTitle, coverUrl) },
+                    onPlay = { onPlay(slug, progress.season, progress.episode, progress.episodeTitle, seriesTitle, coverUrl, progress.isMovie) },
                     onRemove = { onRemoveProgress(progress.episodeKey) }
                 )
             }
@@ -205,7 +205,7 @@ private fun DetailContent(
                             .clip(RoundedCornerShape(20.dp))
                             .background(PrimaryGradient)
                             .clickable {
-                                onPlay(slug, playSeason, epNum, epTitle, seriesTitle, coverUrl)
+                                onPlay(slug, playSeason, epNum, epTitle, seriesTitle, coverUrl, series.isMovie)
                             }
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         contentAlignment = Alignment.Center
@@ -502,7 +502,7 @@ private fun DetailContent(
                 PremiumEpisodeRow(
                     episode = ep,
                     progress = epProgress,
-                    onPlay = { onPlay(slug, season.number, ep.number, ep.title, seriesTitle, coverUrl) },
+                    onPlay = { onPlay(slug, season.number, ep.number, ep.title, seriesTitle, coverUrl, series.isMovie) },
                     onLongPress = { onToggleWatched(season.number, ep.number, ep.title) }
                 )
             }

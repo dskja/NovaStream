@@ -61,16 +61,27 @@ class BrowseViewModel(application: Application) : AndroidViewModel(application) 
         if (_state.value.selectedGenre == genre) return
         allItems = emptyList()
         _state.update { it.copy(selectedGenre = genre, page = 0, items = emptyList(), hasMore = true, error = null) }
-        loadPage(reset = true)
+        reloadForFilter(reset = true)
     }
 
     fun setContentFilter(filter: BrowseContentFilter) {
         if (_state.value.contentFilter == filter) return
-        _state.update { it.copy(contentFilter = filter, items = applyContentFilter(allItems, filter)) }
+        allItems = emptyList()
+        _state.update {
+            it.copy(
+                contentFilter = filter,
+                page = 0,
+                items = emptyList(),
+                hasMore = true,
+                error = null
+            )
+        }
+        reloadForFilter(reset = true)
     }
 
     fun loadMore() {
         if (_state.value.loadingMore || !_state.value.hasMore || _state.value.loading) return
+        if (usesMoviesCatalog()) return
         loadPage(reset = false)
     }
 
@@ -86,7 +97,61 @@ class BrowseViewModel(application: Application) : AndroidViewModel(application) 
                 supportsSeries = provider.supportsSeries
             )
         }
-        loadPage(reset = true)
+        reloadForFilter(reset = true)
+    }
+
+    private fun usesMoviesCatalog(): Boolean =
+        _state.value.contentFilter == BrowseContentFilter.MOVIES &&
+            _state.value.supportsMovies &&
+            _state.value.selectedGenre.isNullOrBlank()
+
+    private fun reloadForFilter(reset: Boolean) {
+        if (usesMoviesCatalog()) {
+            loadMovies(reset)
+        } else {
+            loadPage(reset)
+        }
+    }
+
+    private fun loadMovies(reset: Boolean) {
+        loadJob?.cancel()
+        val expectedProvider = ActiveProvider.id
+        _state.update {
+            it.copy(
+                loading = reset,
+                loadingMore = false,
+                error = null
+            )
+        }
+        loadJob = viewModelScope.launch {
+            when (val result = repo.loadMovies()) {
+                is NovaStreamRepository.RepoResult.Success -> {
+                    if (ActiveProvider.id != expectedProvider) return@launch
+                    allItems = result.data
+                    _state.update { current ->
+                        current.copy(
+                            loading = false,
+                            loadingMore = false,
+                            items = result.data,
+                            page = 0,
+                            hasMore = false,
+                            error = null
+                        )
+                    }
+                }
+                is NovaStreamRepository.RepoResult.Error -> {
+                    if (ActiveProvider.id != expectedProvider) return@launch
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            loadingMore = false,
+                            hasMore = false,
+                            error = result.message
+                        )
+                    }
+                }
+            }
+        }
     }
 
     private fun loadPage(reset: Boolean) {

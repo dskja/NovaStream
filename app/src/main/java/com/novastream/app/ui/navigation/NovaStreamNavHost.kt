@@ -206,8 +206,8 @@ fun NovaStreamNavHost() {
             ) {
                 DetailScreen(
                     onBack = { nav.popBackStack() },
-                    onPlay = { slug, season, episode, title, seriesTitle, coverUrl ->
-                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl))
+                    onPlay = { slug, season, episode, title, seriesTitle, coverUrl, isMovie ->
+                        nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl, isMovie))
                     }
                 )
             }
