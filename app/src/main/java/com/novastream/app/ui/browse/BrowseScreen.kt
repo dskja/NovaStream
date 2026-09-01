@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
+import com.novastream.app.ui.components.ProviderHealthBanner
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.TvUtils
@@ -153,6 +154,17 @@ fun BrowseScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                if (state.error != null && state.items.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        ProviderHealthBanner(
+                            providerName = state.providerName,
+                            loadDurationMs = null,
+                            error = state.error,
+                            onRetry = vm::refresh
+                        )
                     }
                 }
 

@@ -194,7 +194,6 @@ fun SettingsAdvancedScreen(
 ) {
     val vm: SettingsViewModel = hiltViewModel()
     val context = LocalContext.current
-    val appSettings = remember { AppSettings(context) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingActionTitle by remember { mutableStateOf("") }
 
@@ -213,7 +212,7 @@ fun SettingsAdvancedScreen(
         containerColor = BgPure
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            SettingsUltraSections(appSettings = appSettings, onOpenDownloads = onOpenDownloads)
+            SettingsUltraSections(vm = vm, onOpenDownloads = onOpenDownloads)
 
             Spacer(Modifier.height(8.dp))
             SettingsSectionHeader(stringResource(R.string.settings_data_management))

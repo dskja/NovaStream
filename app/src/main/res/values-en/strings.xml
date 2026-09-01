@@ -66,6 +66,7 @@
     <string name="settings_updates">App updates</string>
     <string name="settings_about">About NovaStream</string>
     <string name="settings_url_error">Could not open link</string>
+    <string name="settings_invalid_http_url">Please enter a valid http(s):// URL</string>
     <string name="settings_provider_not_found">Provider not found</string>
     <string name="settings_provider_switched">Switched provider to %1$s</string>
     <string name="settings_continue_cleared">Continue watching cleared</string>

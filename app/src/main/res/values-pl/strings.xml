@@ -66,6 +66,7 @@
     <string name="settings_updates">Aktualizacje aplikacji</string>
     <string name="settings_about">O NovaStream</string>
     <string name="settings_url_error">Nie udało się otworzyć linku</string>
+    <string name="settings_invalid_http_url">Please enter a valid http(s):// URL</string>
     <string name="settings_provider_not_found">Nie znaleziono dostawcy</string>
     <string name="settings_provider_switched">Dostawca zmieniony na %1$s</string>
     <string name="settings_continue_cleared">Kontynuuj oglądanie wyczyszczone</string>

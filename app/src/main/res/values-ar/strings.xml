@@ -66,6 +66,7 @@
     <string name="settings_updates">تحديثات التطبيق</string>
     <string name="settings_about">حول NovaStream</string>
     <string name="settings_url_error">تعذّر فتح الرابط</string>
+    <string name="settings_invalid_http_url">Please enter a valid http(s):// URL</string>
     <string name="settings_provider_not_found">لم يُعثر على المزوّد</string>
     <string name="settings_provider_switched">تم تغيير المزوّد إلى %1$s</string>
     <string name="settings_continue_cleared">تم مسح متابعة المشاهدة</string>

@@ -72,6 +72,8 @@ import com.novastream.app.ui.provider.ProviderLanguageSectionHeader
 import com.novastream.app.util.LocaleManager
 import com.novastream.app.util.findActivity
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.sync.BackupRestoreManager
+import com.novastream.app.sync.CloudSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -122,8 +124,10 @@ private val PREFERRED_LANGUAGES = listOf("Deutsch", "Englisch", "Ger-Sub", "Eng-
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
-    private val appSettings: AppSettings,
-    val providerController: ProviderController
+    val appSettings: AppSettings,
+    val providerController: ProviderController,
+    private val backupRestoreManager: BackupRestoreManager,
+    private val cloudSyncManager: CloudSyncManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -284,6 +288,12 @@ class SettingsViewModel @Inject constructor(
     fun showUrlError() {
         _state.update { it.copy(message = context.getString(R.string.settings_url_error)) }
     }
+
+    suspend fun exportBackupToFile(): java.io.File = backupRestoreManager.exportToFile()
+
+    suspend fun pushCloudSync(): CloudSyncManager.SyncResult = cloudSyncManager.pushToRemote()
+
+    suspend fun pullCloudSync(): CloudSyncManager.SyncResult = cloudSyncManager.pullFromRemote()
 
     fun setProvider(providerId: String) {
         viewModelScope.launch {

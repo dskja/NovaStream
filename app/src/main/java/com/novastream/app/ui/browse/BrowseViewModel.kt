@@ -290,11 +290,11 @@ class BrowseViewModel @Inject constructor(
                     )
                 }
                 is NovaStreamRepository.RepoResult.Error -> {
-                    _state.update {
-                        it.copy(
+                    _state.update { current ->
+                        current.copy(
                             loading = false,
                             loadingMore = false,
-                            hasMore = false,
+                            hasMore = if (reset) false else allItems.isNotEmpty(),
                             error = result.message
                         )
                     }
