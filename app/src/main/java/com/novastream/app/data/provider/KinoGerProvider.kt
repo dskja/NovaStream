@@ -38,8 +38,11 @@ class KinoGerProvider(
     private val appContext: Context? = null
 ) : StreamingProvider {
 
-    @Volatile
-    private var resolvedBaseUrl: String? = null
+    private val mirror = MirrorSupport(id, baseUrl, appContext, "/stream/") {
+        cachedApi = null
+        cachedApiBase = null
+        clearCache()
+    }
 
     @Volatile
     private var cachedApi: KinoGerApi? = null
@@ -47,26 +50,7 @@ class KinoGerProvider(
     @Volatile
     private var cachedApiBase: String? = null
 
-    init {
-        ProviderDomainResolver.registerInvalidator(id) {
-            resolvedBaseUrl = null
-            cachedApi = null
-            cachedApiBase = null
-            clearCache()
-        }
-    }
-
-    private suspend fun activeBaseUrl(): String {
-        resolvedBaseUrl?.let { return it }
-        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
-            providerId = id,
-            defaultBaseUrl = baseUrl,
-            contentNeedle = "/stream/",
-            appContext = appContext
-        )
-        resolvedBaseUrl = resolved
-        return resolved
-    }
+    private suspend fun activeBaseUrl(): String = mirror.activeBase()
 
     private suspend fun api(): KinoGerApi {
         val base = activeBaseUrl()
@@ -77,7 +61,7 @@ class KinoGerProvider(
         }
     }
 
-    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl)
+    private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String = "Filme & Serien"
@@ -107,95 +91,63 @@ class KinoGerProvider(
         return retrofit.create(KinoGerApi::class.java)
     }
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val series = KinoGerScraper.parseSeriesList(api().seriesHome())
         val movies = KinoGerScraper.parseSeriesList(api().movies()).map { it.copy(isMovie = true) }
         (series + movies).distinctBy { it.id }.map { it.copy(providerId = id) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    /** Lädt Filme (nicht-Serien). */
-    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api().movies()).map { it.copy(isMovie = true, providerId = id) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    /** Lädt TV-Shows. */
-    suspend fun loadTvShows(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api().tvShows())
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    /** Lädt Serien mit Pagination. */
-    suspend fun loadSeriesPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        KinoGerScraper.parseSeriesList(api().seriesPage(page.coerceAtLeast(1)))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    /** Lädt Genre mit Pagination. */
-    suspend fun loadGenrePaged(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        if (genre.isBlank()) return@runCatching emptyList()
-        KinoGerScraper.parseSeriesList(api().genrePage(genre.trim(), page.coerceAtLeast(1)))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
-            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
-        )
-        return runCatching {
-            KinoGerScraper.parseSeriesList(api().search(query = query.trim()))
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
     }
 
-    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
+    /** Lädt Filme (nicht-Serien). */
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        KinoGerScraper.parseSeriesList(api().movies()).map { it.copy(isMovie = true, providerId = id) }
+    }
+
+    /** Lädt TV-Shows. */
+    suspend fun loadTvShows(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        KinoGerScraper.parseSeriesList(api().tvShows())
+    }
+
+    /** Lädt Serien mit Pagination. */
+    suspend fun loadSeriesPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        KinoGerScraper.parseSeriesList(api().seriesPage(page.coerceAtLeast(1)))
+    }
+
+    /** Lädt Genre mit Pagination. */
+    suspend fun loadGenrePaged(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.isBlank()) emptyList()
+        else KinoGerScraper.parseSeriesList(api().genrePage(genre.trim(), page.coerceAtLeast(1)))
+    }
+
+    override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
+            KinoGerScraper.parseSeriesList(api().search(query = query.trim()))
+        }
+    }
+
+    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatchingProvider {
         val html = fetchDetailPage(slug)
         KinoGerScraper.parseSeriesDetail(html, slug)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
+    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatchingProvider {
         val html = fetchDetailPage(slug)
         val (_, seasons) = KinoGerScraper.parseSeriesDetail(html, slug)
         seasons.find { it.number == season }?.episodes ?: emptyList()
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
+    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         if (episode.hosters.isNotEmpty()) {
             episode.hosters
         } else {
             val html = fetchDetailPage(episode.slug)
             KinoGerScraper.parseHosters(html)
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
+    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> =
         loadGenrePaged(genre, 1)

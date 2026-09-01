@@ -23,7 +23,7 @@ import okhttp3.Request
 /**
  * Generischer Provider auf Basis von [SiteProfile] + [UniversalHtmlScraper].
  * Mit [appContext] und Mirrors in [ProviderDomainManager] wird automatisch
- * Failover über [ProviderDomainResolver] aktiviert.
+ * Failover über [MirrorSupport] / [ProviderDomainResolver] aktiviert.
  */
 open class ConfigurableSiteProvider(
     private val profile: SiteProfile,
@@ -42,22 +42,20 @@ open class ConfigurableSiteProvider(
     override val changeUrlMutex: Mutex = Mutex()
 
     override val baseUrl: String
-        get() = _resolvedBase ?: profile.baseUrl
+        get() = mirror?.parseBase() ?: defaultBaseUrl
 
     override val supportsSeries: Boolean get() = profile.supportsSeries
     override val supportsMovies: Boolean get() = profile.supportsMovies
     override val catalogHint: String?
         get() = null
 
-    @Volatile
-    private var _resolvedBase: String? = null
-
     private val mirrorNeedle: String? = mirrorContentNeedle?.takeIf {
         ProviderMirrorNeedles.hasMirrors(profile.id)
     }
 
-    private val usesMirrors: Boolean
-        get() = appContext != null && mirrorNeedle != null
+    private val mirror: MirrorSupport? = mirrorNeedle?.let { needle ->
+        MirrorSupport(id, defaultBaseUrl, appContext, needle) { fetchCache.clear() }
+    }
 
     private val fetchCache = object : LinkedHashMap<String, Pair<Long, String>>(FETCH_CACHE_SIZE, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
@@ -65,56 +63,35 @@ open class ConfigurableSiteProvider(
     }
     private val fetchCacheMutex = Mutex()
 
-    init {
-        if (usesMirrors) {
-            ProviderDomainResolver.registerInvalidator(id) {
-                _resolvedBase = null
-                fetchCache.clear()
-            }
-        }
-    }
-
     override suspend fun resolveBaseUrl(forceRefresh: Boolean): String = changeUrlMutex.withLock {
-        if (!usesMirrors) return defaultBaseUrl
-        if (!forceRefresh && _resolvedBase != null) return _resolvedBase!!
-        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
-            providerId = id,
-            defaultBaseUrl = defaultBaseUrl,
-            contentNeedle = mirrorNeedle.orEmpty(),
-            appContext = appContext,
-            forceRefresh = forceRefresh
-        )
-        _resolvedBase = resolved
-        resolved
+        mirror?.activeBase(forceRefresh) ?: defaultBaseUrl
     }
 
     protected open suspend fun activeBaseUrl(): String =
-        if (usesMirrors) resolveBaseUrl() else defaultBaseUrl
+        mirror?.activeBase() ?: defaultBaseUrl
 
     private suspend fun hosterResolver(): HosterResolver =
         HosterResolver(baseUrl = activeBaseUrl())
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val homeUrl = base + profile.homePath
         UniversalHtmlScraper.parseSeriesList(fetchCached(homeUrl), profile)
-    }.toResult()
+    }
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
         if (!supportsMovies) return StreamingProvider.ProviderResult.Success(emptyList())
-        return runCatching {
+        return runCatchingProvider {
             val base = activeBaseUrl()
             val path = profile.moviePath.ifBlank { profile.homePath }
             UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
                 .map { it.copy(isMovie = true) }
-        }.toResult()
+        }
     }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
-            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
-        )
-        return runCatching {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
             val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
             val paths = buildList {
@@ -133,23 +110,23 @@ open class ConfigurableSiteProvider(
                 if (results.isNotEmpty()) break
             }
             results
-        }.toResult()
+        }
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> =
-        runCatching {
+        runCatchingProvider {
             val url = resolveDetailUrl(slug)
             UniversalHtmlScraper.parseDetail(fetch(url), profile, slug)
-        }.toResult()
+        }
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> =
-        runCatching {
+        runCatchingProvider {
             val url = resolveDetailUrl(slug)
             UniversalHtmlScraper.parseEpisodesOnly(fetch(url), profile, slug, season)
-        }.toResult()
+        }
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> =
-        runCatching {
+        runCatchingProvider {
             val base = activeBaseUrl()
             val url = when {
                 episode.episodeUrl.startsWith("http") -> episode.episodeUrl
@@ -171,10 +148,10 @@ open class ConfigurableSiteProvider(
                     )
                 } else emptyList()
             }
-        }.toResult()
+        }
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> =
-        runCatching {
+        runCatchingProvider {
             when {
                 hoster.redirectUrl.contains("vidsrc") || hoster.name.contains("VidSrc", true) -> {
                     val imdb = Regex("""tt\d+""").find(hoster.redirectUrl)?.value
@@ -200,19 +177,19 @@ open class ConfigurableSiteProvider(
                 }
                 else -> ExtractorRegistry.resolve(hoster.name, hoster.redirectUrl, activeBaseUrl())
             }
-        }.toResult()
+        }
 
-    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
         UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
             .ifEmpty { loadHome().getOrNull().orEmpty() }
-    }.toResult()
+    }
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         if (page <= 0) {
             UniversalHtmlScraper.parseSeriesList(fetch(base + profile.homePath), profile)
@@ -221,9 +198,9 @@ open class ConfigurableSiteProvider(
             val path = template.replace("{page}", (page + 1).toString())
             UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
         }
-    }.toResult()
+    }
 
-    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         if (page <= 0) {
             val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
@@ -237,7 +214,7 @@ open class ConfigurableSiteProvider(
                 .replace("{page}", (page + 1).toString())
             UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
         }
-    }.toResult()
+    }
 
     protected open suspend fun resolveDetailUrl(slug: String): String {
         val base = activeBaseUrl()
@@ -277,18 +254,8 @@ open class ConfigurableSiteProvider(
         return html
     }
 
-    private suspend fun fetchNetwork(url: String): String {
-        val base = activeBaseUrl()
-        var html = ProviderHttp.fetch(url, referer = "$base/", webViewFallback = true)
-        if (usesMirrors && (html.isBlank() || ProviderHttp.isChallenge(html))) {
-            val refreshedBase = resolveBaseUrl(forceRefresh = true)
-            if (refreshedBase != base) {
-                val refreshedUrl = url.replace(base, refreshedBase)
-                html = ProviderHttp.fetch(refreshedUrl, referer = "$refreshedBase/", webViewFallback = true)
-            }
-        }
-        return html
-    }
+    private suspend fun fetchNetwork(url: String): String =
+        mirror?.fetch(url) ?: ProviderHttp.fetch(url, referer = "${defaultBaseUrl}/", webViewFallback = true)
 
     private suspend fun postSearch(query: String): String = withContext(Dispatchers.IO) {
         val field = profile.searchPostField ?: return@withContext ""
@@ -304,9 +271,6 @@ open class ConfigurableSiteProvider(
             if (resp.isSuccessful) resp.body?.string() ?: "" else ""
         }
     }
-
-    private fun <T> Result<T>.toResult(): StreamingProvider.ProviderResult<T> =
-        ProviderResults.fold(id, this)
 }
 
 // ─── Konkrete FMHY-Provider ─────────────────────────────────────────────────

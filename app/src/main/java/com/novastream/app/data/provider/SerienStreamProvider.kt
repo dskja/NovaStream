@@ -50,8 +50,10 @@ open class SerienStreamProvider(
         com.novastream.app.data.model.Genre("abenteuer", "Abenteuer")
     )
 
-    @Volatile
-    private var resolvedBaseUrl: String? = null
+    private val mirror = MirrorSupport(id, baseUrl, appContext, "/serie/") {
+        cachedApi = null
+        cachedApiBase = null
+    }
 
     @Volatile
     private var cachedApi: NovaStreamApi? = null
@@ -59,25 +61,7 @@ open class SerienStreamProvider(
     @Volatile
     private var cachedApiBase: String? = null
 
-    init {
-        ProviderDomainResolver.registerInvalidator(id) {
-            resolvedBaseUrl = null
-            cachedApi = null
-            cachedApiBase = null
-        }
-    }
-
-    private suspend fun activeBaseUrl(): String {
-        resolvedBaseUrl?.let { return it }
-        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
-            providerId = id,
-            defaultBaseUrl = baseUrl,
-            contentNeedle = "/serie/",
-            appContext = appContext
-        )
-        resolvedBaseUrl = resolved
-        return resolved
-    }
+    private suspend fun activeBaseUrl(): String = mirror.activeBase()
 
     private suspend fun api(): NovaStreamApi {
         val base = activeBaseUrl()
@@ -112,7 +96,7 @@ open class SerienStreamProvider(
     }
 
     /** Strukturierte Home-Sektionen (Hero, Trends, Neue Episoden, …). */
-    suspend fun loadHomeCatalog(): StreamingProvider.ProviderResult<HomeCatalog> = runCatching {
+    suspend fun loadHomeCatalog(): StreamingProvider.ProviderResult<HomeCatalog> = runCatchingProvider {
         val html = api().home()
         parseWithBase { base ->
             val catalog = NovaStreamScraper.parseHomeCatalog(html)
@@ -125,41 +109,33 @@ open class SerienStreamProvider(
                 all = tagAll(catalog.all, base)
             )
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val html = api().home()
         parseWithBase { base ->
             val catalog = NovaStreamScraper.parseHomeCatalog(html)
             tagAll(catalog.flattened().ifEmpty { NovaStreamScraper.parseSeriesList(html) }, base)
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        if (genre.isBlank()) return@runCatching emptyList()
-        val html = api().genre(genre.trim())
-        parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.isBlank()) emptyList()
+        else {
+            val html = api().genre(genre.trim())
+            parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
+        }
+    }
 
-    suspend fun loadGenrePaged(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        if (genre.isBlank()) return@runCatching emptyList()
-        val html = api().genrePaged(genre.trim(), page.coerceAtLeast(1))
-        parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    suspend fun loadGenrePaged(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.isBlank()) emptyList()
+        else {
+            val html = api().genrePaged(genre.trim(), page.coerceAtLeast(1))
+            parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
+        }
+    }
 
-    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val latestHtml = api().neueEpisoden()
         val latest = parseWithBase { NovaStreamScraper.parseLatestEpisodes(latestHtml) }
         if (latest.isNotEmpty()) {
@@ -180,20 +156,14 @@ open class SerienStreamProvider(
             val catalogHtml = api().catalog()
             parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(catalogHtml), base) }
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<LatestEpisode>> = runCatching {
+    suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<LatestEpisode>> = runCatchingProvider {
         val html = api().neueEpisoden()
         parseWithBase { NovaStreamScraper.parseLatestEpisodes(html) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val popularHtml = api().beliebteSerien()
         val parsed = parseWithBase { NovaStreamScraper.parseSeriesList(popularHtml) }
         if (parsed.isNotEmpty()) tagAll(parsed, activeBaseUrl())
@@ -201,20 +171,14 @@ open class SerienStreamProvider(
             val homeHtml = api().home()
             parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(homeHtml), base) }
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadExtendedCatalog(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadExtendedCatalog(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val html = api().catalog()
         parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         if (page <= 0) {
             val html = api().catalog()
             parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
@@ -226,10 +190,7 @@ open class SerienStreamProvider(
             }
             parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> =
         loadGenrePaged(genre, page + 1)
@@ -237,61 +198,44 @@ open class SerienStreamProvider(
     suspend fun loadCatalog(): StreamingProvider.ProviderResult<List<Series>> = loadExtendedCatalog()
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
-            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
-        )
-        return runCatching {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
             val q = query.trim()
             val base = activeBaseUrl()
             val html = api().search(q)
             val htmlResults = parseWithBase { base -> tagAll(NovaStreamScraper.parseSeriesList(html), base) }
-            if (htmlResults.isNotEmpty()) return@runCatching htmlResults
-            AjaxSearchClient.search(
+            if (htmlResults.isNotEmpty()) htmlResults
+            else AjaxSearchClient.search(
                 baseUrl = base,
                 query = q,
                 linkHint = "/serie/",
                 isAnime = false
             ).map { tag(it, base) }
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
     }
 
-    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
+    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatchingProvider {
         val html = api().seriesDetail(slug)
         parseWithBase { base ->
             val (series, seasons) = NovaStreamScraper.parseSeriesDetail(html, slug)
             tag(series, base) to seasons
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
+    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatchingProvider {
         val html = api().season(slug, season)
         parseWithBase { NovaStreamScraper.parseSeasonEpisodes(html, slug, season) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
+    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         val html = api().episode(episode.slug, episode.season, episode.number)
         parseWithBase { NovaStreamScraper.parseHosters(html) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
+    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
         val base = activeBaseUrl()
         HosterResolver(baseUrl = base).resolve(hoster.name, hoster.redirectUrl)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 }
 
 /**

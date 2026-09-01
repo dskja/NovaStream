@@ -35,46 +35,26 @@ class BurningSeriesProvider(
     private val appContext: Context? = null
 ) : StreamingProvider {
 
-    @Volatile
-    private var resolvedBaseUrl: String? = null
+    private val mirror = MirrorSupport(id, baseUrl, appContext, "/serie/")
 
-    init {
-        ProviderDomainResolver.registerInvalidator(id) { resolvedBaseUrl = null }
-    }
+    private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
 
-    private val hosterResolver get() = HosterResolver(baseUrl = resolvedBaseUrl ?: baseUrl.trimEnd('/'))
+    private suspend fun activeBaseUrl(): String = mirror.activeBase()
 
-    private suspend fun activeBaseUrl(): String {
-        resolvedBaseUrl?.let { return it }
-        val resolved = ProviderDomainResolver.resolveActiveBaseUrl(
-            providerId = id,
-            defaultBaseUrl = baseUrl,
-            contentNeedle = "/serie/",
-            appContext = appContext
-        )
-        resolvedBaseUrl = resolved
-        return resolved
-    }
-
-    private fun parseBase(): String = resolvedBaseUrl ?: baseUrl.trimEnd('/')
+    private fun parseBase(): String = mirror.parseBase()
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val html = fetchUrlWithCaptcha("$base/andelselect")
         val finalHtml = if (html.isBlank() || ProviderHttp.isChallenge(html)) fetchUrlWithCaptcha(base) else html
         parseBsSeriesList(finalHtml)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error(
-            com.novastream.app.util.AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
-        )
-        return runCatching {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
             val base = activeBaseUrl()
             val q = query.trim()
             val encoded = java.net.URLEncoder.encode(q, "UTF-8")
@@ -99,31 +79,22 @@ class BurningSeriesProvider(
                 if (results.isNotEmpty()) break
             }
             results.map { it.copy(providerId = id) }
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
     }
 
-    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
+    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatchingProvider {
         val base = activeBaseUrl()
         val html = fetchUrl("$base/serie/$slug")
         parseBsDetail(html, slug)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
+    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatchingProvider {
         val base = activeBaseUrl()
         val html = fetchUrl("$base/serie/$slug/$season")
         parseBsEpisodes(html, slug, season)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
+    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         val base = activeBaseUrl()
         val url = if (episode.episodeUrl.startsWith("http")) {
             episode.episodeUrl
@@ -134,55 +105,37 @@ class BurningSeriesProvider(
         }
         val html = fetchUrl(url)
         parseBsHosters(html)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
+    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val letters = ('A'..'Z').map { it.toString() }
         if (page <= 0) {
             val html = fetchUrlWithCaptcha("$base/andelselect")
             parseBsSeriesList(html).map { it.copy(providerId = id) }
         } else {
-            val letter = letters.getOrNull(page - 1) ?: return@runCatching emptyList()
-            val html = fetchUrlWithCaptcha("$base/andere-serien?letter=$letter")
-                .ifBlank { fetchUrlWithCaptcha("$base/andere-serien") }
-            val list = parseBsSeriesList(html)
-            val filtered = list.filter { it.title.startsWith(letter, ignoreCase = true) || it.id.startsWith(letter, ignoreCase = true) }
-            (if (filtered.isNotEmpty()) filtered else list).map { it.copy(providerId = id) }
+            val letter = letters.getOrNull(page - 1)
+            if (letter == null) emptyList()
+            else {
+                val html = fetchUrlWithCaptcha("$base/andere-serien?letter=$letter")
+                    .ifBlank { fetchUrlWithCaptcha("$base/andere-serien") }
+                val list = parseBsSeriesList(html)
+                val filtered = list.filter { it.title.startsWith(letter, ignoreCase = true) || it.id.startsWith(letter, ignoreCase = true) }
+                (if (filtered.isNotEmpty()) filtered else list).map { it.copy(providerId = id) }
+            }
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
     /** Lädt HTML; bei Captcha/leerem OkHttp-Ergebnis WebView-Fallback. */
-    private suspend fun fetchUrlWithCaptcha(url: String): String {
-        val base = activeBaseUrl()
-        val http = ProviderHttp.fetch(url, referer = base + "/", webViewFallback = false)
-        if (http.isNotBlank() && !ProviderHttp.isChallenge(http)) return http
-        val web = com.novastream.app.util.CaptchaWebViewFetcher.fetchHtml(url)
-        return web.ifBlank { http }
-    }
+    private suspend fun fetchUrlWithCaptcha(url: String): String = mirror.fetchWithCaptcha(url)
 
-    private fun looksLikeCaptcha(html: String): Boolean = ProviderHttp.isChallenge(html)
-
-    /** Lädt eine absolute URL via shared [ProviderHttp]. */
-    private suspend fun fetchUrl(url: String): String {
-        val base = activeBaseUrl()
-        return ProviderHttp.fetch(url, referer = base + "/", webViewFallback = true)
-    }
+    private suspend fun fetchUrl(url: String): String = mirror.fetch(url)
 
     /** Parst eine Liste von Serien (Startseite, Suche). */
     private fun parseBsSeriesList(html: String): List<Series> {
