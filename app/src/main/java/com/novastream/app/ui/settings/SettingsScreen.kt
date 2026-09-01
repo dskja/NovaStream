@@ -1168,34 +1168,36 @@ private fun SettingsDropdownRow(
     onSelect: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable { expanded = true }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
+    Box(Modifier.fillMaxWidth()) {
+        Row(
             Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(BgSurface),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-        }
-        Box(
-            Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(Primary.copy(alpha = 0.12f))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            Text(selectedValue, color = Primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(BgSurface),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+            }
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Primary.copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(selectedValue, color = Primary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+            }
         }
         DropdownMenu(
             expanded = expanded,

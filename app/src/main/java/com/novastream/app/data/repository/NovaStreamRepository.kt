@@ -50,6 +50,8 @@ class NovaStreamRepository private constructor(
                     NovaStreamDatabase.get(context.applicationContext).catalogCacheDao()
                 ).also { INSTANCE = it }
             }
+
+        fun forCache(cacheDao: CatalogCacheDao?): NovaStreamRepository = NovaStreamRepository(cacheDao)
     }
 
     private val provider: StreamingProvider get() = ActiveProvider.get()
@@ -168,7 +170,6 @@ class NovaStreamRepository private constructor(
                             seriesTitle = s.title,
                             season = 1,
                             episode = 1,
-                            episodeTitle = s.title,
                             coverUrl = s.coverUrl
                         )
                     }
@@ -184,7 +185,6 @@ class NovaStreamRepository private constructor(
                                 seriesTitle = s.title,
                                 season = 1,
                                 episode = 1,
-                                episodeTitle = s.title,
                                 coverUrl = s.coverUrl
                             )
                         }

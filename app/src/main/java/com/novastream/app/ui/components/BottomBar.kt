@@ -31,9 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.novastream.app.R
 import com.novastream.app.ui.theme.*
 
 data class NavItem(
@@ -50,11 +52,11 @@ fun PremiumBottomBar(
     watchlistCount: Int = 0
 ) {
     val items = listOf(
-        NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
-        NavItem("Entdecken", Icons.Filled.Explore, Icons.Outlined.Explore, "browse"),
-        NavItem("Liste", Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
-        NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search"),
-        NavItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
+        NavItem(stringResource(R.string.nav_home), Icons.Filled.Home, Icons.Outlined.Home, "home"),
+        NavItem(stringResource(R.string.nav_browse), Icons.Filled.Explore, Icons.Outlined.Explore, "browse"),
+        NavItem(stringResource(R.string.nav_watchlist), Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
+        NavItem(stringResource(R.string.nav_search), Icons.Filled.Search, Icons.Outlined.Search, "search"),
+        NavItem(stringResource(R.string.nav_settings), Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
     )
 
     Box(
@@ -106,7 +108,11 @@ fun PremiumBottomBar(
                     ) {
                         Icon(
                             imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                            contentDescription = if (selected) "${item.label}, ausgewählt" else item.label,
+                            contentDescription = if (selected) {
+                                "${item.label}${stringResource(R.string.nav_selected_suffix)}"
+                            } else {
+                                item.label
+                            },
                             tint = iconColor,
                             modifier = Modifier.size(24.dp)
                         )
@@ -154,11 +160,11 @@ fun PremiumTopTabBar(
     onNavigate: (String) -> Unit
 ) {
     val items = listOf(
-        NavItem("Home", Icons.Filled.Home, Icons.Outlined.Home, "home"),
-        NavItem("Entdecken", Icons.Filled.Explore, Icons.Outlined.Explore, "browse"),
-        NavItem("Liste", Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
-        NavItem("Suche", Icons.Filled.Search, Icons.Outlined.Search, "search"),
-        NavItem("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
+        NavItem(stringResource(R.string.nav_home), Icons.Filled.Home, Icons.Outlined.Home, "home"),
+        NavItem(stringResource(R.string.nav_browse), Icons.Filled.Explore, Icons.Outlined.Explore, "browse"),
+        NavItem(stringResource(R.string.nav_watchlist), Icons.Filled.Bookmark, Icons.Outlined.Bookmark, "watchlist"),
+        NavItem(stringResource(R.string.nav_search), Icons.Filled.Search, Icons.Outlined.Search, "search"),
+        NavItem(stringResource(R.string.nav_settings), Icons.Filled.Settings, Icons.Outlined.Settings, "settings")
     )
 
     Row(
@@ -204,7 +210,11 @@ fun PremiumTopTabBar(
             ) {
                 Icon(
                     imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                    contentDescription = if (selected) "${item.label}, ausgewählt" else item.label,
+                    contentDescription = if (selected) {
+                        "${item.label}${stringResource(R.string.nav_selected_suffix)}"
+                    } else {
+                        item.label
+                    },
                     tint = iconColor,
                     modifier = Modifier.size(20.dp)
                 )

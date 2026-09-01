@@ -3,7 +3,11 @@
 package com.novastream.app.ui.player
 
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Rational
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -23,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,35 +37,43 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
-import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.tvPlayerKeyHandler
+import kotlinx.coroutines.isActive
+
+private const val INTRO_SKIP_POSITION_MS = 90_000L
 
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
-    onNextEpisode: (Int, Int, String) -> Unit = { _, _, _ -> }
+    onNextEpisode: (Int, Int, String) -> Unit = { _, _, _ -> },
+    onPreviousEpisode: (Int, Int, String) -> Unit = { _, _, _ -> }
 ) {
-    val vm: PlayerViewModel = viewModel()
+    val vm: PlayerViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Lock to landscape orientation + immersive fullscreen
     DisposableEffect(Unit) {
         val originalOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -81,6 +92,7 @@ fun PlayerScreen(
             if (originalSystemBarsBehavior != null) {
                 controller?.systemBarsBehavior = originalSystemBarsBehavior
             }
+            PlaybackForegroundService.stop(context)
         }
     }
 
@@ -90,8 +102,30 @@ fun PlayerScreen(
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
     var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
+    var showSkipIntro by remember { mutableStateOf(false) }
 
-    // Back handler
+    fun enterPipIfSupported() {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        if (exoPlayer == null || currentSource == null) return
+        try {
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
+            activity.enterPictureInPictureMode(params)
+        } catch (_: Exception) {}
+    }
+
+    DisposableEffect(lifecycleOwner, exoPlayer, currentSource) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE && exoPlayer?.isPlaying == true) {
+                enterPipIfSupported()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     androidx.activity.compose.BackHandler {
         when {
             showNextEpisodeOverlay -> showNextEpisodeOverlay = false
@@ -100,7 +134,6 @@ fun PlayerScreen(
         }
     }
 
-    // Track listener for episode end
     val episodeEndListener = remember {
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -112,15 +145,11 @@ fun PlayerScreen(
         }
     }
 
-    // Create/recreate player when source URL changes
-    // KEY FIX: Only release+recreate when we have a NEW valid source URL
-    // This prevents black screen during hoster switching when sources is empty
-    LaunchedEffect(currentSource?.url) {
+    LaunchedEffect(currentSource?.url, state.selectedSourceIndex, state.dataSaverMode) {
         showNextEpisodeOverlay = false
         val src = currentSource ?: return@LaunchedEffect
         val url = src.url
         if (url.isBlank()) {
-            // Release old player when URL is blank
             exoPlayer?.let { old ->
                 try {
                     old.removeListener(episodeEndListener)
@@ -132,10 +161,9 @@ fun PlayerScreen(
             return@LaunchedEffect
         }
 
-        // Skip if we already loaded this exact URL
-        if (url == lastLoadedUrl && exoPlayer != null) return@LaunchedEffect
+        val sourceKey = "$url|${src.subtitleUrl.orEmpty()}|${state.dataSaverMode}"
+        if (sourceKey == lastLoadedUrl && exoPlayer != null) return@LaunchedEffect
 
-        // Release old player
         exoPlayer?.let { old ->
             try {
                 old.removeListener(episodeEndListener)
@@ -144,8 +172,34 @@ fun PlayerScreen(
         }
         exoPlayer = null
 
-        // Create new player
+        val trackSelector = DefaultTrackSelector(context).apply {
+            if (state.dataSaverMode) {
+                setParameters(
+                    buildUponParameters()
+                        .setMaxVideoSize(1280, 720)
+                        .setMaxVideoBitrate(1_500_000)
+                )
+            }
+        }
+
+        val mediaItemBuilder = MediaItem.Builder()
+            .setUri(url)
+            .setMimeType(src.mimeType)
+
+        src.subtitleUrl?.takeIf { it.isNotBlank() }?.let { subUrl ->
+            mediaItemBuilder.setSubtitleConfigurations(
+                listOf(
+                    MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(subUrl))
+                        .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                        .setLanguage("de")
+                        .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                )
+            )
+        }
+
         val player = ExoPlayer.Builder(context)
+            .setTrackSelector(trackSelector)
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
@@ -154,11 +208,7 @@ fun PlayerScreen(
                 true
             )
             .build().apply {
-                val mediaItem = MediaItem.Builder()
-                    .setUri(url)
-                    .setMimeType(src.mimeType)
-                    .build()
-                setMediaItem(mediaItem)
+                setMediaItem(mediaItemBuilder.build())
                 prepare()
                 playWhenReady = true
                 if (state.resumePositionMs > 0) {
@@ -167,17 +217,32 @@ fun PlayerScreen(
             }
         player.addListener(episodeEndListener)
         exoPlayer = player
-        lastLoadedUrl = url
+        lastLoadedUrl = sourceKey
         playerVisible = true
         showHosters = false
-        // Apply playback speed from settings
         try {
-            val params = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
-            player.playbackParameters = params
+            player.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
         } catch (_: Exception) {}
+
+        val playbackTitle = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
+        PlaybackForegroundService.start(context, playbackTitle)
     }
 
-    // Save progress periodically (only when position changed - avoids unnecessary DB writes)
+    LaunchedEffect(state.playbackSpeed, exoPlayer) {
+        exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
+    }
+
+    LaunchedEffect(exoPlayer, state.skipIntroButton) {
+        val player = exoPlayer ?: return@LaunchedEffect
+        while (isActive) {
+            kotlinx.coroutines.delay(500)
+            val pos = player.currentPosition
+            showSkipIntro = state.skipIntroButton &&
+                player.isPlaying &&
+                pos in 1 until INTRO_SKIP_POSITION_MS
+        }
+    }
+
     LaunchedEffect(exoPlayer) {
         val player = exoPlayer ?: return@LaunchedEffect
         var lastSavedPos = 0L
@@ -195,7 +260,6 @@ fun PlayerScreen(
         } catch (_: kotlinx.coroutines.CancellationException) {}
     }
 
-    // Save progress on dispose and release player
     DisposableEffect(Unit) {
         onDispose {
             val player = exoPlayer
@@ -214,6 +278,7 @@ fun PlayerScreen(
             playerVisible = false
             showHosters = false
             lastLoadedUrl = null
+            PlaybackForegroundService.stop(context)
         }
     }
 
@@ -246,10 +311,19 @@ fun PlayerScreen(
                         p.seekTo((p.currentPosition - 10000).coerceAtLeast(0))
                     }
                 },
+                onNext = {
+                    state.nextEpisode?.let { next ->
+                        onNextEpisode(next.season, next.episode, next.title)
+                    }
+                },
+                onPrevious = {
+                    state.previousEpisode?.let { prev ->
+                        onPreviousEpisode(prev.season, prev.episode, prev.title)
+                    }
+                },
                 onBack = { onBack() }
             )
     ) {
-        // Player - nur anzeigen wenn wir einen validen Source haben
         val player = exoPlayer
         if (player != null && currentSource != null) {
             AndroidView(
@@ -278,10 +352,14 @@ fun PlayerScreen(
         } else if (state.loading) {
             PremiumLoading(label = "Stream wird aufgelöst…")
         } else if (state.error != null) {
-            PremiumError(state.error ?: "Unbekannter Fehler")
+            PlayerErrorOverlay(
+                message = state.error ?: "Unbekannter Fehler",
+                canTryAlternateHoster = state.hasAlternateHoster,
+                onRetry = { vm.retry() },
+                onTryAlternateHoster = { vm.tryAlternateHoster() }
+            )
         }
 
-        // Loading overlay when switching hosters (player still visible with old content)
         if (playerVisible && state.loading && exoPlayer != null && state.hosterSwitching) {
             Box(
                 Modifier
@@ -299,7 +377,35 @@ fun PlayerScreen(
             }
         }
 
-        // Top overlay: Back + Title + Hoster toggle
+        AnimatedVisibility(
+            visible = showSkipIntro && playerVisible && exoPlayer != null,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 16.dp,
+                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 72.dp
+                )
+        ) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(PrimaryGradient)
+                    .clickable {
+                        exoPlayer?.seekTo(INTRO_SKIP_POSITION_MS)
+                        showSkipIntro = false
+                    }
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.SkipNext, "Intro überspringen", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Intro überspringen", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
+        }
+
         Row(
             Modifier
                 .align(Alignment.TopStart)
@@ -354,6 +460,49 @@ fun PlayerScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            if (playerVisible && state.hasMultipleSources) {
+                var showQualityMenu by remember { mutableStateOf(false) }
+                Box {
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(GlassMedium)
+                            .clickable { showQualityMenu = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            currentSource?.qualityHint ?: "Qualität",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showQualityMenu,
+                        onDismissRequest = { showQualityMenu = false },
+                        modifier = Modifier.background(Color(0xFF1A1A1A))
+                    ) {
+                        state.sources.forEachIndexed { i, source ->
+                            val label = source.qualityHint ?: source.displayName
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        label,
+                                        color = if (i == state.selectedSourceIndex) Primary else Color.White,
+                                        fontWeight = if (i == state.selectedSourceIndex) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    vm.selectSource(i)
+                                    showQualityMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
             if (playerVisible && state.hosters.isNotEmpty()) {
                 Box(
                     Modifier
@@ -371,7 +520,6 @@ fun PlayerScreen(
                     )
                 }
             }
-            // Playback speed button
             if (playerVisible && exoPlayer != null) {
                 var showSpeedMenu by remember { mutableStateOf(false) }
                 Box {
@@ -391,13 +539,13 @@ fun PlayerScreen(
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    androidx.compose.material3.DropdownMenu(
+                    DropdownMenu(
                         expanded = showSpeedMenu,
                         onDismissRequest = { showSpeedMenu = false },
                         modifier = Modifier.background(Color(0xFF1A1A1A))
                     ) {
                         listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f).forEach { speed ->
-                            androidx.compose.material3.DropdownMenuItem(
+                            DropdownMenuItem(
                                 text = {
                                     Text(
                                         "${speed}x",
@@ -406,7 +554,7 @@ fun PlayerScreen(
                                     )
                                 },
                                 onClick = {
-                                    exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(speed)
+                                    vm.setPlaybackSpeed(speed)
                                     showSpeedMenu = false
                                 }
                             )
@@ -416,7 +564,6 @@ fun PlayerScreen(
             }
         }
 
-        // Bottom overlay: Hoster pills
         AnimatedVisibility(
             visible = showHosters && state.hosters.isNotEmpty(),
             enter = slideInVertically { it } + fadeIn(),
@@ -502,7 +649,6 @@ fun PlayerScreen(
             }
         }
 
-        // Next Episode overlay (only for series, not movies)
         AnimatedVisibility(
             visible = !state.isMovie && showNextEpisodeOverlay && state.nextEpisode != null && state.autoplayNext,
             enter = fadeIn(),
@@ -511,7 +657,7 @@ fun PlayerScreen(
         ) {
             val next = state.nextEpisode
             if (next != null) {
-                var countdown by remember { mutableStateOf(5) }
+                var countdown by remember { mutableIntStateOf(5) }
                 LaunchedEffect(showNextEpisodeOverlay, next) {
                     if (showNextEpisodeOverlay) {
                         countdown = 5
@@ -588,7 +734,7 @@ fun PlayerScreen(
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -629,6 +775,77 @@ fun PlayerScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerErrorOverlay(
+    message: String,
+    canTryAlternateHoster: Boolean,
+    onRetry: () -> Unit,
+    onTryAlternateHoster: () -> Unit
+) {
+    Box(
+        Modifier.fillMaxSize().wrapContentSize(Alignment.Center),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text(
+                "⚠",
+                color = Primary,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Etwas ist schiefgelaufen",
+                color = TextPrimary,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                message,
+                color = TextTertiary,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            if (canTryAlternateHoster) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(PrimaryGradient)
+                        .clickable(onClick = onTryAlternateHoster)
+                        .padding(horizontal = 32.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        "Anderen Hoster versuchen",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(GlassMedium)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 32.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    "Erneut versuchen",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         }
     }

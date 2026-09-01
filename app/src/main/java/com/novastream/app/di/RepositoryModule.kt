@@ -1,13 +1,11 @@
 package com.novastream.app.di
 
-import android.content.Context
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -17,8 +15,8 @@ object RepositoryModule {
 
     @Provides
     @Singleton
-    fun provideNovaStreamRepository(@ApplicationContext context: Context): NovaStreamRepository =
-        NovaStreamRepository.get(context)
+    fun provideNovaStreamRepository(db: NovaStreamDatabase): NovaStreamRepository =
+        NovaStreamRepository.forCache(db.catalogCacheDao())
 
     @Provides
     @Singleton

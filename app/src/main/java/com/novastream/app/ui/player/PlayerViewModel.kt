@@ -1,14 +1,16 @@
 package com.novastream.app.ui.player
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.StreamSource
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +22,7 @@ data class PlayerUiState(
     val hosters: List<HosterLink> = emptyList(),
     val selectedHosterIndex: Int = 0,
     val sources: List<StreamSource> = emptyList(),
+    val selectedSourceIndex: Int = 0,
     val error: String? = null,
     val episodeTitle: String = "",
     val seriesTitle: String = "",
@@ -28,16 +31,20 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val isFinished: Boolean = false,
     val nextEpisode: NextEpisodeInfo? = null,
+    val previousEpisode: PreviousEpisodeInfo? = null,
     val hosterSwitching: Boolean = false,
     val autoplayNext: Boolean = true,
     val playbackSpeed: Float = 1.0f,
     val skipIntroButton: Boolean = true,
+    val dataSaverMode: Boolean = false,
+    val preferredHoster: String = "VOE",
+    val preferredLanguage: String = "Deutsch",
     val season: Int = 1,
     val episode: Int = 1,
     val isMovie: Boolean = false
 ) {
     val currentSource: StreamSource?
-        get() = sources.getOrNull(selectedHosterIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
+        get() = sources.getOrNull(selectedSourceIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
 
     /** True wenn mindestens ein Hoster verfügbar ist. */
     val hasHosters: Boolean get() = hosters.isNotEmpty()
@@ -45,11 +52,21 @@ data class PlayerUiState(
     /** True wenn der ausgewählte Hoster einen Source hat. */
     val hasCurrentSource: Boolean get() = currentSource != null
 
+    /** True wenn mehrere Qualitätsstufen verfügbar sind. */
+    val hasMultipleSources: Boolean get() = sources.size > 1
+
     /** Anzahl der verfügbaren Hosters. */
     val hosterCount: Int get() = hosters.size
 
     /** True wenn die nächste Episode verfügbar ist. */
     val hasNextEpisode: Boolean get() = nextEpisode != null
+
+    /** True wenn die vorherige Episode verfügbar ist. */
+    val hasPreviousEpisode: Boolean get() = previousEpisode != null
+
+    /** True wenn ein alternativer Hoster verfügbar ist. */
+    val hasAlternateHoster: Boolean
+        get() = hosters.isNotEmpty() && selectedHosterIndex < hosters.lastIndex
 
     /** Formatierte Episode-Anzeige (z.B. "S1 E5" oder Filmtitel). */
     val episodeDisplay: String
@@ -63,10 +80,20 @@ data class NextEpisodeInfo(
     val coverUrl: String? = null
 )
 
-class PlayerViewModel(
-    application: Application,
-    savedStateHandle: SavedStateHandle
-) : AndroidViewModel(application) {
+data class PreviousEpisodeInfo(
+    val season: Int,
+    val episode: Int,
+    val title: String,
+    val coverUrl: String? = null
+)
+
+@HiltViewModel
+class PlayerViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val repo: NovaStreamRepository,
+    private val watchRepo: WatchRepository,
+    private val appSettings: AppSettings
+) : ViewModel() {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
     private val season: Int = savedStateHandle.get<Int>("season") ?: 1
@@ -84,10 +111,6 @@ class PlayerViewModel(
     }?.takeIf { it.isNotBlank() }
     private val isMovie: Boolean = savedStateHandle.get<Boolean>("isMovie") ?: false
 
-    private val repo = NovaStreamRepository()
-    private val watchRepo = WatchRepository.get(application)
-    private val appSettings = com.novastream.app.data.prefs.AppSettings(application)
-
     private val _state = MutableStateFlow(PlayerUiState(
         episodeTitle = title,
         seriesTitle = seriesTitle,
@@ -99,7 +122,6 @@ class PlayerViewModel(
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     init {
-        // Load user settings
         viewModelScope.launch {
             appSettings.autoplayNext.collect { v -> _state.update { it.copy(autoplayNext = v) } }
         }
@@ -109,19 +131,30 @@ class PlayerViewModel(
         viewModelScope.launch {
             appSettings.skipIntroButton.collect { v -> _state.update { it.copy(skipIntroButton = v) } }
         }
+        viewModelScope.launch {
+            appSettings.dataSaverMode.collect { v -> _state.update { it.copy(dataSaverMode = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.preferredHoster.collect { v -> _state.update { it.copy(preferredHoster = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.preferredLanguage.collect { v -> _state.update { it.copy(preferredLanguage = v) } }
+        }
         load()
+        if (!isMovie) {
+            viewModelScope.launch { loadNextEpisode() }
+            viewModelScope.launch { loadPreviousEpisode() }
+        }
     }
 
     private fun load() {
         _state.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
-            // Restore saved position
             val saved = watchRepo.getProgress(slug, season, episode)
             if (saved != null && !saved.isCompleted && saved.durationMs > 0 && saved.positionMs < saved.durationMs) {
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
             }
 
-            // Build episode URL based on active provider (movies use detail path, not /serien/.../episode-...)
             val epUrl = if (isMovie) {
                 com.novastream.app.data.provider.ActiveProvider.movieDetailUrl(slug)
             } else {
@@ -141,10 +174,8 @@ class PlayerViewModel(
                         _state.update { it.copy(loading = false, error = "Keine Hoster gefunden") }
                         return@launch
                     }
-                    // Deutsche Hoster priorisieren
-                    val sorted = hosters.sortedWith(
-                        compareByDescending { it.language.contains("Deutsch", ignoreCase = true) }
-                    )
+                    val prefs = _state.value
+                    val sorted = sortHosters(hosters, prefs.preferredHoster, prefs.preferredLanguage)
                     _state.update { it.copy(hosters = sorted, loading = false) }
                     resolveHoster(0)
                 }
@@ -155,10 +186,10 @@ class PlayerViewModel(
     }
 
     fun selectHoster(index: Int) {
-        // Mark as switching - keeps old player alive until new source is ready
         _state.update {
             it.copy(
                 selectedHosterIndex = index,
+                selectedSourceIndex = 0,
                 sources = emptyList(),
                 loading = true,
                 error = null,
@@ -168,7 +199,33 @@ class PlayerViewModel(
         viewModelScope.launch { resolveHoster(index) }
     }
 
-    /** Speichert den Wiedergabefortschritt. */
+    fun selectSource(index: Int) {
+        val safeIndex = index.coerceIn(0, _state.value.sources.lastIndex.coerceAtLeast(0))
+        _state.update { it.copy(selectedSourceIndex = safeIndex) }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        viewModelScope.launch {
+            appSettings.setPlaybackSpeed(speed)
+            _state.update { it.copy(playbackSpeed = speed.coerceIn(0.25f, 4.0f)) }
+        }
+    }
+
+    fun tryAlternateHoster() {
+        val nextIndex = _state.value.selectedHosterIndex + 1
+        if (nextIndex < _state.value.hosters.size) {
+            selectHoster(nextIndex)
+        } else {
+            _state.update { it.copy(error = "Keine weiteren Hoster verfügbar") }
+        }
+    }
+
+    fun retry() {
+        val index = _state.value.selectedHosterIndex
+        _state.update { it.copy(error = null, loading = true) }
+        viewModelScope.launch { resolveHoster(index) }
+    }
+
     fun saveProgress(positionMs: Long, durationMs: Long) {
         if (durationMs <= 0) return
         val safePosition = positionMs.coerceIn(0L, durationMs)
@@ -188,7 +245,6 @@ class PlayerViewModel(
         }
     }
 
-    /** Markiert die Episode als fertig und lädt die nächste Episode Info. */
     fun onEpisodeFinished() {
         _state.update { it.copy(isFinished = true) }
         viewModelScope.launch {
@@ -226,7 +282,6 @@ class PlayerViewModel(
                         ))
                     }
                 } else {
-                    // Try next season
                     val nextSeason = season + 1
                     val nextSeasonUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, nextSeason, 1)
                     val nextSeasonEpisode = Episode(
@@ -257,6 +312,63 @@ class PlayerViewModel(
         }
     }
 
+    private suspend fun loadPreviousEpisode() {
+        if (isMovie) return
+        if (episode > 1) {
+            val prevEp = episode - 1
+            val prevEpUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, prevEp)
+            val ep = Episode(
+                number = prevEp,
+                title = "",
+                slug = slug,
+                season = season,
+                episodeUrl = prevEpUrl
+            )
+            when (val h = repo.loadHosters(ep)) {
+                is NovaStreamRepository.RepoResult.Success -> {
+                    if (h.data.isNotEmpty()) {
+                        _state.update {
+                            it.copy(previousEpisode = PreviousEpisodeInfo(
+                                season = season,
+                                episode = prevEp,
+                                title = "Episode $prevEp",
+                                coverUrl = coverUrl
+                            ))
+                        }
+                    }
+                }
+                else -> {}
+            }
+            return
+        }
+        if (season > 1) {
+            val prevSeason = season - 1
+            val prevSeasonUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, prevSeason, 1)
+            val prevSeasonEpisode = Episode(
+                number = 1,
+                title = "",
+                slug = slug,
+                season = prevSeason,
+                episodeUrl = prevSeasonUrl
+            )
+            when (val h = repo.loadHosters(prevSeasonEpisode)) {
+                is NovaStreamRepository.RepoResult.Success -> {
+                    if (h.data.isNotEmpty()) {
+                        _state.update {
+                            it.copy(previousEpisode = PreviousEpisodeInfo(
+                                season = prevSeason,
+                                episode = 1,
+                                title = "Staffel $prevSeason Episode 1",
+                                coverUrl = coverUrl
+                            ))
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
     fun clearProgress() {
         viewModelScope.launch {
             watchRepo.removeProgress(
@@ -283,11 +395,12 @@ class PlayerViewModel(
                 if (result.data.isEmpty()) {
                     tryNextHoster(index)
                 } else {
-                    // Sources gefunden - hosterSwitching bleibt true bis Player den neuen Source lädt
+                    val sortedSources = sortSources(result.data)
                     _state.update {
                         it.copy(
                             loading = false,
-                            sources = result.data,
+                            sources = sortedSources,
+                            selectedSourceIndex = 0,
                             error = null,
                             hosterSwitching = false
                         )
@@ -317,5 +430,28 @@ class PlayerViewModel(
                 )
             }
         }
+    }
+
+    private fun sortHosters(
+        hosters: List<HosterLink>,
+        preferredHoster: String,
+        preferredLanguage: String
+    ): List<HosterLink> {
+        return hosters.sortedWith(
+            compareByDescending<HosterLink> { hosterMatchesPreference(it.name, preferredHoster) }
+                .thenByDescending { it.language.contains(preferredLanguage, ignoreCase = true) }
+                .thenByDescending { it.language.contains("Deutsch", ignoreCase = true) }
+                .thenBy { it.index }
+        )
+    }
+
+    private fun hosterMatchesPreference(name: String, preferredHoster: String): Boolean {
+        if (preferredHoster.isBlank()) return false
+        return name.contains(preferredHoster, ignoreCase = true) ||
+            preferredHoster.contains(name, ignoreCase = true)
+    }
+
+    private fun sortSources(sources: List<StreamSource>): List<StreamSource> {
+        return sources.sortedByDescending { it.qualityRank }
     }
 }
