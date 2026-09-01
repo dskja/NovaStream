@@ -1,15 +1,19 @@
 package com.novastream.app.ui.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,7 +21,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.R
 import com.novastream.app.data.prefs.AppSettings
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.ui.theme.*
+import com.novastream.app.util.LocaleManager
+import com.novastream.app.util.findActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,15 +80,28 @@ fun SettingsPlaybackScreen(onBack: () -> Unit) {
                 )
             }
             Text(
+                stringResource(R.string.settings_preferred_language_title),
+                Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                color = TextPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+            PREFERRED_LANGUAGES.forEach { language ->
+                SettingsChipRow(
+                    label = language,
+                    selected = state.preferredLanguage == language,
+                    onClick = { vm.setPreferredLanguage(language) }
+                )
+            }
+            Text(
                 stringResource(R.string.settings_playback_speed_title),
                 Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 color = TextPrimary,
                 fontWeight = FontWeight.SemiBold
             )
-            listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+            listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
                 SettingsChipRow(
                     label = "${speed}x",
-                    selected = state.playbackSpeed == speed,
+                    selected = kotlin.math.abs(state.playbackSpeed - speed) < 0.01f,
                     onClick = { vm.setPlaybackSpeed(speed) }
                 )
             }
@@ -94,6 +114,7 @@ fun SettingsPlaybackScreen(onBack: () -> Unit) {
 fun SettingsAppearanceScreen(onBack: () -> Unit) {
     val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -111,6 +132,38 @@ fun SettingsAppearanceScreen(onBack: () -> Unit) {
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())
         ) {
+            SettingsDropdownRow(
+                icon = Icons.Default.Language,
+                title = stringResource(R.string.settings_ui_language_title),
+                subtitle = stringResource(R.string.settings_ui_language_subtitle),
+                selectedValue = LocaleManager.localeDisplayName(state.uiLocale),
+                options = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
+                    .map { LocaleManager.localeDisplayName(it) },
+                onSelect = { label ->
+                    val tag = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
+                        .first { LocaleManager.localeDisplayName(it) == label }
+                    if (tag != state.uiLocale) {
+                        vm.setUiLocale(tag)
+                        context.findActivity()?.recreate()
+                    }
+                }
+            )
+            SettingsDropdownRow(
+                icon = Icons.Default.Stream,
+                title = stringResource(R.string.settings_content_language_title),
+                subtitle = stringResource(R.string.settings_content_language_subtitle),
+                selectedValue = com.novastream.app.data.provider.ProviderLanguageManager
+                    .getLanguageDisplayName(ContentLanguage.fromTag(state.contentLanguageTag)),
+                options = ContentLanguage.entries.filter { it != ContentLanguage.MULTI }
+                    .map { com.novastream.app.data.provider.ProviderLanguageManager.getLanguageDisplayName(it) },
+                onSelect = { label ->
+                    val tag = ContentLanguage.entries.filter { it != ContentLanguage.MULTI }
+                        .first {
+                            com.novastream.app.data.provider.ProviderLanguageManager.getLanguageDisplayName(it) == label
+                        }.tag
+                    vm.setContentLanguage(tag)
+                }
+            )
             SettingsToggleRow(
                 title = stringResource(R.string.settings_dynamic_color_title),
                 subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
@@ -139,8 +192,12 @@ fun SettingsAdvancedScreen(
     onBack: () -> Unit,
     onOpenDownloads: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val appSettings = androidx.compose.runtime.remember { AppSettings(context) }
+    val vm: SettingsViewModel = hiltViewModel()
+    val context = LocalContext.current
+    val appSettings = remember { AppSettings(context) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var pendingActionTitle by remember { mutableStateOf("") }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -157,7 +214,58 @@ fun SettingsAdvancedScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             SettingsUltraSections(appSettings = appSettings, onOpenDownloads = onOpenDownloads)
+
+            Spacer(Modifier.height(8.dp))
+            SettingsSectionHeader(stringResource(R.string.settings_data_management))
+            SettingsItem(
+                icon = Icons.Default.PlayCircle,
+                title = stringResource(R.string.settings_clear_continue_title),
+                subtitle = stringResource(R.string.settings_clear_continue_subtitle),
+                onClick = {
+                    pendingActionTitle = context.getString(R.string.settings_clear_continue_confirm)
+                    pendingAction = { vm.clearContinueWatching() }
+                }
+            )
+            SettingsItem(
+                icon = Icons.Default.CleaningServices,
+                title = stringResource(R.string.settings_clear_completed_title),
+                subtitle = stringResource(R.string.settings_clear_completed_subtitle),
+                onClick = {
+                    pendingActionTitle = context.getString(R.string.settings_clear_completed_confirm)
+                    pendingAction = { vm.clearCompleted() }
+                }
+            )
+            SettingsItem(
+                icon = Icons.Default.DeleteSweep,
+                title = stringResource(R.string.settings_clear_watchlist_title),
+                subtitle = stringResource(R.string.settings_clear_watchlist_subtitle),
+                onClick = {
+                    pendingActionTitle = context.getString(R.string.settings_clear_watchlist_confirm)
+                    pendingAction = { vm.clearWatchlist() }
+                }
+            )
         }
+    }
+
+    if (pendingAction != null) {
+        AlertDialog(
+            onDismissRequest = { pendingAction = null },
+            title = { Text(pendingActionTitle, fontWeight = FontWeight.Bold) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingAction?.invoke()
+                    pendingAction = null
+                }) {
+                    Text(stringResource(R.string.confirm), color = Primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingAction = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+            containerColor = BgSurface
+        )
     }
 }
 
@@ -196,3 +304,4 @@ private fun SettingsChipRow(label: String, selected: Boolean, onClick: () -> Uni
 }
 
 private val PREFERRED_HOSTERS = listOf("VOE", "Streamtape", "Doodstream", "Filemoon", "Vidoza", "Vidmoly", "Mixdrop")
+private val PREFERRED_LANGUAGES = listOf("Deutsch", "Englisch", "Ger-Sub", "Eng-Sub")

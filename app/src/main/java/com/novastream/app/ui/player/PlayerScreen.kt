@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -116,6 +117,8 @@ fun PlayerScreen(
         mutableStateOf(com.novastream.app.util.hasNotificationPermission(context))
     }
     var pendingForegroundTitle by remember { mutableStateOf<String?>(null) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isCasting by remember { mutableStateOf(false) }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -165,6 +168,17 @@ fun PlayerScreen(
             showNextEpisodeOverlay -> showNextEpisodeOverlay = false
             showHosters -> showHosters = false
             else -> onBack()
+        }
+    }
+
+    LaunchedEffect(castHelper, playerVisible) {
+        while (isActive) {
+            isCasting = castHelper.isCastSessionActive()
+            if (isCasting && exoPlayer.isPlaying) {
+                exoPlayer.pause()
+                exoPlayer.playWhenReady = false
+            }
+            kotlinx.coroutines.delay(500)
         }
     }
 
@@ -356,14 +370,14 @@ fun PlayerScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        useController = !showHosters
+                        useController = false
                         this.player = player
                         setPadding(0, 0, 0, navBarHeightPx)
                     }
                 },
                 update = { pv ->
                     pv.player = player
-                    pv.useController = !showHosters
+                    pv.useController = false
                     pv.setPadding(0, 0, 0, navBarHeightPx)
                     pv.isFocusable = true
                     pv.isFocusableInTouchMode = true
@@ -371,6 +385,34 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .focusable()
+            )
+
+            if (!showHosters) {
+                PlayerTapToToggleControls(
+                    controlsVisible = controlsVisible,
+                    onToggle = { controlsVisible = !controlsVisible },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            PlayerControlsOverlay(
+                player = exoPlayer,
+                trackSelector = exoPlayer.trackSelector as DefaultTrackSelector,
+                visible = playerVisible && !showHosters && controlsVisible && !isCasting,
+                isLive = state.isLive,
+                hasPreviousEpisode = state.previousEpisode != null,
+                hasNextEpisode = state.nextEpisode != null,
+                onPreviousEpisode = {
+                    state.previousEpisode?.let { prev ->
+                        onPreviousEpisode(prev.season, prev.episode, prev.title)
+                    }
+                },
+                onNextEpisode = {
+                    state.nextEpisode?.let { next ->
+                        onNextEpisode(next.season, next.episode, next.title)
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         } else if (state.loading) {
             PremiumLoading(label = stringResource(R.string.player_resolving_stream))
@@ -543,6 +585,28 @@ fun PlayerScreen(
                     }
                 }
             }
+            if (playerVisible && !state.isMovie && state.previousEpisode != null) {
+                Box(
+                    Modifier
+                        .padding(start = 8.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(GlassMedium)
+                        .clickable {
+                            state.previousEpisode?.let { prev ->
+                                onPreviousEpisode(prev.season, prev.episode, prev.title)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.SkipPrevious,
+                        stringResource(R.string.player_previous_episode),
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
             if (playerVisible && castEnabled && castHelper.isAvailable) {
                 Box(
                     Modifier
@@ -553,8 +617,11 @@ fun PlayerScreen(
                         .clickable {
                             val url = currentSource?.url ?: return@clickable
                             val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
+                            exoPlayer.pause()
+                            exoPlayer.playWhenReady = false
                             val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
                             cp?.let { castHelper.loadOnCast(it, url, title) }
+                            isCasting = true
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -623,6 +690,38 @@ fun PlayerScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isCasting,
+            enter = fadeIn() + slideInVertically { -it / 2 },
+            exit = fadeOut() + slideOutVertically { -it / 2 },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                )
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xDD1A1A1A))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Cast, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.player_casting_to_tv),
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

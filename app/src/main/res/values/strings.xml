@@ -352,6 +352,14 @@
     <string name="detail_download_no_source">Kein direkter Stream verfügbar</string>
     <string name="player_cast">An Cast senden</string>
     <string name="player_cast_unavailable">Cast nicht verfügbar</string>
+    <string name="player_casting_to_tv">Wird auf dem TV wiedergegeben</string>
+    <string name="player_previous_episode">Vorherige Folge</string>
+    <string name="player_subtitles">Untertitel</string>
+    <string name="player_subtitles_off">Untertitel aus</string>
+    <string name="cd_pause">Pause</string>
+    <string name="settings_clear_continue_confirm">Weitersehen leeren?</string>
+    <string name="settings_clear_completed_confirm">Abgeschlossene Episoden entfernen?</string>
+    <string name="settings_clear_watchlist_confirm">Watchlist leeren?</string>
     <string name="live_tv_epg_now">Jetzt: %1$s</string>
     <string name="live_tv_epg_loading">EPG wird geladen…</string>
     <string name="settings_provider_import">Provider Import</string>

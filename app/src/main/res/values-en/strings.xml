@@ -350,6 +350,14 @@
     <string name="detail_download_no_source">No direct stream available</string>
     <string name="player_cast">Cast to TV</string>
     <string name="player_cast_unavailable">Cast unavailable</string>
+    <string name="player_casting_to_tv">Playing on TV</string>
+    <string name="player_previous_episode">Previous episode</string>
+    <string name="player_subtitles">Subtitles</string>
+    <string name="player_subtitles_off">Subtitles off</string>
+    <string name="cd_pause">Pause</string>
+    <string name="settings_clear_continue_confirm">Clear continue watching?</string>
+    <string name="settings_clear_completed_confirm">Remove completed episodes?</string>
+    <string name="settings_clear_watchlist_confirm">Clear watchlist?</string>
     <string name="live_tv_epg_now">Now: %1$s</string>
     <string name="live_tv_epg_loading">Loading EPG…</string>
     <string name="settings_provider_import">Provider import</string>
