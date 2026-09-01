@@ -62,8 +62,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.novastream.app.R
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.provider.ProviderFavorites
 import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.ui.provider.ProviderLanguageFilterChips
+import com.novastream.app.ui.provider.ProviderLanguageSectionHeader
+import com.novastream.app.util.LocaleManager
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -99,7 +104,13 @@ data class SettingsUiState(
     val updateInfo: com.novastream.app.util.UpdateChecker.UpdateInfo? = null,
     val updateChecked: Boolean = false,
     val unknownProviderRowCount: Int = 0,
-    val showUnknownProviderCleanup: Boolean = false
+    val showUnknownProviderCleanup: Boolean = false,
+    val uiLocale: String = LocaleManager.SYSTEM_LOCALE,
+    val contentLanguageTag: String = ContentLanguage.DE.tag,
+    val providerLanguageFilter: ContentLanguage? = null,
+    val favoritesOnly: Boolean = false,
+    val favoriteIds: Set<String> = emptySet(),
+    val groupedProviders: Map<ContentLanguage, List<com.novastream.app.data.provider.ProviderInfo>> = emptyMap()
 )
 
 private val PREFERRED_HOSTERS = listOf("VOE", "Streamtape", "Doodstream", "Filemoon", "Vidoza", "Vidmoly", "Mixdrop")
@@ -132,7 +143,8 @@ class SettingsViewModel @Inject constructor(
         _state.update {
             it.copy(
                 availableProviders = ProviderManager.getProviderInfos(),
-                activeProviderId = ActiveProvider.id
+                activeProviderId = ActiveProvider.id,
+                groupedProviders = ProviderManager.getProviderInfosGroupedByLanguage()
             )
         }
         viewModelScope.launch {
@@ -166,6 +178,18 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             appSettings.performanceMode.collect { v -> _state.update { it.copy(performanceMode = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.uiLocale.collect { v -> _state.update { it.copy(uiLocale = v) } }
+        }
+        viewModelScope.launch {
+            appSettings.contentLanguage.collect { v -> _state.update { it.copy(contentLanguageTag = v) } }
+        }
+        viewModelScope.launch {
+            ProviderFavorites.favoriteIdsFlow(context).collect { ids ->
+                _state.update { it.copy(favoriteIds = ids) }
+                refreshProviderLists()
+            }
         }
         _state.update { it.copy(providerLoadAveragesMs = ProviderLoadMetrics.snapshotAverages()) }
         viewModelScope.launch {
@@ -307,13 +331,46 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { appSettings.setPerformanceMode(enabled) }
     }
 
+    fun setUiLocale(localeTag: String) {
+        viewModelScope.launch { appSettings.setUiLocale(localeTag) }
+    }
+
+    fun setContentLanguage(tag: String) {
+        viewModelScope.launch { appSettings.setContentLanguage(tag) }
+    }
+
+    fun setProviderLanguageFilter(language: ContentLanguage?) {
+        _state.update { it.copy(providerLanguageFilter = language, favoritesOnly = false) }
+        refreshProviderLists()
+    }
+
+    fun setFavoritesOnly(enabled: Boolean) {
+        _state.update { it.copy(favoritesOnly = enabled, providerLanguageFilter = if (enabled) null else it.providerLanguageFilter) }
+        refreshProviderLists()
+    }
+
+    private fun refreshProviderLists() {
+        val s = _state.value
+        val filtered = ProviderManager.getFilteredProviderInfos(
+            language = s.providerLanguageFilter,
+            favoriteIds = s.favoriteIds,
+            favoritesOnly = s.favoritesOnly
+        )
+        val grouped = if (s.providerLanguageFilter == null && !s.favoritesOnly) {
+            ProviderManager.getProviderInfosGroupedByLanguage()
+        } else emptyMap()
+        _state.update { it.copy(availableProviders = filtered, groupedProviders = grouped) }
+    }
+
     fun refreshProviderLoadMetrics() {
         _state.update { it.copy(providerLoadAveragesMs = ProviderLoadMetrics.snapshotAverages()) }
     }
 }
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onOpenMarketplace: () -> Unit = {}
+) {
     val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -407,73 +464,48 @@ fun SettingsScreen() {
 
             // Section: Streaming Provider
             SettingsSectionHeader(stringResource(R.string.settings_streaming_provider))
-            state.availableProviders.forEachIndexed { index, providerInfo ->
-                val isSelected = providerInfo.id == state.activeProviderId
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (isSelected) return@clickable
-                            pendingProviderId = providerInfo.id
-                            pendingProviderName = providerInfo.displayName
-                        }
-                        .tvFocusIfNeeded(
-                            cornerRadius = 12.dp,
-                            focusRequester = if (index == 0) initialFocus else null
-                        )
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (isSelected) Primary.copy(alpha = 0.15f) else BgSurface),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            if (isSelected) Icons.Default.Check else Icons.Default.Stream,
-                            contentDescription = null,
-                            tint = if (isSelected) Primary else TextTertiary,
-                            modifier = Modifier.size(20.dp)
+            SettingsNavigationRow(
+                icon = Icons.Default.Stream,
+                title = stringResource(R.string.settings_marketplace_title),
+                subtitle = stringResource(R.string.settings_marketplace_subtitle),
+                onClick = onOpenMarketplace
+            )
+            ProviderLanguageFilterChips(
+                selectedLanguage = state.providerLanguageFilter,
+                favoritesOnly = state.favoritesOnly,
+                onLanguageSelected = vm::setProviderLanguageFilter,
+                onFavoritesToggle = vm::setFavoritesOnly
+            )
+            if (state.groupedProviders.isNotEmpty() && !state.favoritesOnly && state.providerLanguageFilter == null) {
+                state.groupedProviders.forEach { (lang, providers) ->
+                    ProviderLanguageSectionHeader(lang, providers.size)
+                    providers.forEach { providerInfo ->
+                        ProviderSettingsRow(
+                            providerInfo = providerInfo,
+                            isSelected = providerInfo.id == state.activeProviderId,
+                            context = context,
+                            onSelect = {
+                                if (providerInfo.id != state.activeProviderId) {
+                                    pendingProviderId = providerInfo.id
+                                    pendingProviderName = providerInfo.displayName
+                                }
+                            }
                         )
                     }
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            providerInfo.displayName,
-                            color = TextPrimary,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            "${providerInfo.contentLabel} · ${providerInfo.hostLabel}",
-                            color = TextTertiary,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                        providerInfo.catalogHint?.let { hint ->
-                            Text(
-                                hint,
-                                color = TextTertiary,
-                                style = MaterialTheme.typography.labelSmall
-                            )
+                }
+            } else {
+                state.availableProviders.forEach { providerInfo ->
+                    ProviderSettingsRow(
+                        providerInfo = providerInfo,
+                        isSelected = providerInfo.id == state.activeProviderId,
+                        context = context,
+                        onSelect = {
+                            if (providerInfo.id != state.activeProviderId) {
+                                pendingProviderId = providerInfo.id
+                                pendingProviderName = providerInfo.displayName
+                            }
                         }
-                    }
-                    if (isSelected) {
-                        Box(
-                            Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Primary.copy(alpha = 0.15f))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                stringResource(R.string.active),
-                                color = Primary,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    )
                 }
             }
 
@@ -666,6 +698,36 @@ fun SettingsScreen() {
 
             // Section: Design
             SettingsSectionHeader(stringResource(R.string.settings_design))
+
+            SettingsDropdownRow(
+                icon = Icons.Default.Language,
+                title = stringResource(R.string.settings_ui_language_title),
+                subtitle = stringResource(R.string.settings_ui_language_subtitle),
+                selectedValue = LocaleManager.localeDisplayName(state.uiLocale),
+                options = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
+                    .map { LocaleManager.localeDisplayName(it) },
+                onSelect = { label ->
+                    val tag = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
+                        .first { LocaleManager.localeDisplayName(it) == label }
+                    vm.setUiLocale(tag)
+                }
+            )
+            SettingsDropdownRow(
+                icon = Icons.Default.Stream,
+                title = stringResource(R.string.settings_content_language_title),
+                subtitle = stringResource(R.string.settings_content_language_subtitle),
+                selectedValue = com.novastream.app.data.provider.ProviderLanguageManager
+                    .getLanguageDisplayName(ContentLanguage.fromTag(state.contentLanguageTag)),
+                options = ContentLanguage.entries.filter { it != ContentLanguage.MULTI }
+                    .map { com.novastream.app.data.provider.ProviderLanguageManager.getLanguageDisplayName(it) },
+                onSelect = { label ->
+                    val tag = ContentLanguage.entries.filter { it != ContentLanguage.MULTI }
+                        .first {
+                            com.novastream.app.data.provider.ProviderLanguageManager.getLanguageDisplayName(it) == label
+                        }.tag
+                    vm.setContentLanguage(tag)
+                }
+            )
 
             // Performance mode toggle
             Row(
@@ -1347,6 +1409,88 @@ private fun SettingsDropdownRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProviderSettingsRow(
+    providerInfo: com.novastream.app.data.provider.ProviderInfo,
+    isSelected: Boolean,
+    context: Context,
+    onSelect: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(if (isSelected) Primary.copy(alpha = 0.15f) else BgSurface),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (isSelected) Icons.Default.Check else Icons.Default.Stream,
+                contentDescription = null,
+                tint = if (isSelected) Primary else TextTertiary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                providerInfo.displayName,
+                color = TextPrimary,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                "${providerInfo.contentLabel(context)} · ${providerInfo.hostLabel}",
+                color = TextTertiary,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+        if (isSelected) {
+            Text(
+                stringResource(R.string.active),
+                color = Primary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsNavigationRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(BgSurface),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+        }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextTertiary)
     }
 }
 

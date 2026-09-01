@@ -38,7 +38,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.novastream.app.R
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -230,7 +235,17 @@ fun SearchScreen(
     onSeriesClick: (String) -> Unit
 ) {
     val vm: SearchViewModel = hiltViewModel()
+    val globalVm: GlobalSearchViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
+    val globalState by globalVm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val appSettings = remember { AppSettings(context) }
+    val contentLanguageTag by appSettings.contentLanguage.collectAsStateWithLifecycle(initialValue = ContentLanguage.DE.tag)
+    val contentLanguage = ContentLanguage.fromTag(contentLanguageTag)
+    val useGlobal = globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE
+    val displayResults = if (useGlobal) globalState.results else state.results
+    val displayLoading = if (useGlobal) globalState.loading else state.loading
+    val displayError = if (useGlobal) globalState.error else state.error
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
@@ -245,6 +260,32 @@ fun SearchScreen(
             .fillMaxSize()
             .background(BgPure)
     ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = globalState.scope == GlobalSearchScope.ACTIVE_PROVIDER,
+                onClick = {
+                    globalVm.setScope(GlobalSearchScope.ACTIVE_PROVIDER)
+                    vm.onQueryChange(state.query)
+                },
+                label = { Text(stringResource(com.novastream.app.R.string.search_scope_active)) }
+            )
+            FilterChip(
+                selected = globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE,
+                onClick = {
+                    globalVm.setContentLanguage(contentLanguage)
+                    globalVm.setScope(GlobalSearchScope.CONTENT_LANGUAGE)
+                    globalVm.search(state.query)
+                },
+                label = {
+                    Text(stringResource(com.novastream.app.R.string.search_scope_global, contentLanguage.tag.uppercase()))
+                }
+            )
+        }
         // Search Bar
         Row(
             Modifier
@@ -269,8 +310,11 @@ fun SearchScreen(
             Spacer(Modifier.width(12.dp))
             TextField(
                 value = state.query,
-                onValueChange = vm::onQueryChange,
-                placeholder = { Text("Titel suchen…", color = TextTertiary) },
+                onValueChange = {
+                    vm.onQueryChange(it)
+                    if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) globalVm.search(it)
+                },
+                placeholder = { Text(stringResource(com.novastream.app.R.string.search_placeholder), color = TextTertiary) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
@@ -311,7 +355,7 @@ fun SearchScreen(
         // Content
         Box(Modifier.fillMaxSize()) {
             when {
-                state.loading -> {
+                displayLoading -> {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 130.dp),
                         contentPadding = PaddingValues(12.dp),
@@ -321,9 +365,12 @@ fun SearchScreen(
                         items(6) { ShimmerPoster(Modifier.width(130.dp)) }
                     }
                 }
-                state.error != null -> PremiumError(
-                    state.error ?: "Unbekannter Fehler",
-                    onRetry = { vm.onQueryChange(state.query) }
+                displayError != null -> PremiumError(
+                    displayError ?: stringResource(com.novastream.app.R.string.error_title),
+                    onRetry = {
+                        vm.onQueryChange(state.query)
+                        if (useGlobal) globalVm.search(state.query)
+                    }
                 )
                 state.query.isBlank() -> {
                     // Show recent searches + trending when query is blank
@@ -380,21 +427,21 @@ fun SearchScreen(
                         }
                     }
                 }
-                state.results.isEmpty() -> PremiumEmpty(
+                displayResults.isEmpty() && state.query.isNotBlank() -> PremiumEmpty(
                     if (ActiveProvider.isBurningSeries) {
-                        "Keine Treffer. Burning Series blockiert oft Bot-Suchen (Captcha) – bitte später erneut versuchen."
+                        stringResource(com.novastream.app.R.string.search_bs_blocked)
                     } else {
-                        "Keine Treffer für '${state.query}'"
+                        stringResource(com.novastream.app.R.string.search_no_results, state.query)
                     },
                     icon = Icons.Default.Search
                 )
-                else -> LazyVerticalGrid(
+                displayResults.isNotEmpty() -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 130.dp),
                     contentPadding = PaddingValues(12.dp, bottom = 80.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(state.results, key = { it.id }) { s ->
+                    items(displayResults, key = { it.id }) { s ->
                         SeriesPosterCard(s, onClick = {
                             vm.saveRecentSearch(state.query)
                             onSeriesClick(s.id)

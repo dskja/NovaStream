@@ -74,4 +74,40 @@
     <string name="settings_update_check_failed">Update-Check fehlgeschlagen oder keine Releases</string>
     <string name="settings_update_available">Update verfügbar: v%1$s</string>
     <string name="settings_up_to_date">Du bist auf dem neuesten Stand (v%1$s)</string>
+
+    <!-- Provider v9 -->
+    <string name="provider_content_series">Serien</string>
+    <string name="provider_content_movies">Filme</string>
+    <string name="provider_content_series_movies">Serien &amp; Filme</string>
+    <string name="provider_filter_all">Alle</string>
+    <string name="provider_filter_favorites">Favoriten</string>
+    <string name="provider_section_header">%1$s (%2$d)</string>
+    <string name="marketplace_title">Provider Marketplace</string>
+    <string name="settings_ui_language_title">App-Sprache</string>
+    <string name="settings_ui_language_subtitle">Oberflächensprache unabhängig vom System</string>
+    <string name="settings_content_language_title">Inhalts-Sprache</string>
+    <string name="settings_content_language_subtitle">Standard-Region für Provider und Suche</string>
+    <string name="settings_marketplace_title">Provider Marketplace</string>
+    <string name="settings_marketplace_subtitle">Alle Provider durchsuchen und favorisieren</string>
+    <string name="settings_app_language_system">System</string>
+    <string name="onboarding_welcome">Willkommen bei NovaStream</string>
+    <string name="onboarding_ui_language">Wähle deine App-Sprache</string>
+    <string name="onboarding_content_language">Wähle deine Inhalts-Sprache</string>
+    <string name="onboarding_provider">Wähle deinen Streaming-Provider</string>
+    <string name="onboarding_provider_hint">Du kannst ihn später in den Einstellungen ändern.</string>
+    <string name="onboarding_continue">Weiter</string>
+    <string name="onboarding_start">Los geht\'s</string>
+    <string name="onboarding_disclaimer">NovaStream ist ein inoffizieller Client – nur für Bildungszwecke.</string>
+    <string name="search_scope_active">Aktiver Provider</string>
+    <string name="search_scope_global">Alle (%1$s)</string>
+    <string name="search_placeholder">Titel suchen…</string>
+    <string name="search_recent">Letzte Suchen</string>
+    <string name="search_clear">Löschen</string>
+    <string name="search_trending">Beliebt jetzt</string>
+    <string name="search_empty">Suche nach Filmen &amp; Serien</string>
+    <string name="search_no_results">Keine Treffer für \'%1$s\'</string>
+    <string name="search_bs_blocked">Keine Treffer. Burning Series blockiert oft Bot-Suchen (Captcha) – bitte später erneut versuchen.</string>
+    <string name="press_back_again">Nochmal zurück drücken zum Beenden</string>
+    <string name="invalid_playback_params">Ungültige Wiedergabeparameter</string>
+    <string name="stale_cache_notice">Offline-Katalog (Provider nicht erreichbar)</string>
 </resources>

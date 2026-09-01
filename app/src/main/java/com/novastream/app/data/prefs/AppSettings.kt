@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.novastream.app.data.provider.ContentLanguage
+import com.novastream.app.util.LocaleManager
 
 /**
  * App-weite Einstellungen via DataStore.
@@ -35,6 +37,8 @@ class AppSettings(private val context: Context) {
         val DATA_SAVER_MODE = booleanPreferencesKey("data_saver_mode")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
+        val UI_LOCALE = stringPreferencesKey("ui_locale")
+        val CONTENT_LANGUAGE = stringPreferencesKey("content_language")
     }
 
     // ─── Flows ──────────────────────────────────────────────────────
@@ -52,6 +56,8 @@ class AppSettings(private val context: Context) {
     val dataSaverMode: Flow<Boolean> = context.dataStore.data.map { it[DATA_SAVER_MODE] ?: false }
     val reduceMotion: Flow<Boolean> = context.dataStore.data.map { it[REDUCE_MOTION] ?: false }
     val performanceMode: Flow<Boolean> = context.dataStore.data.map { it[PERFORMANCE_MODE] ?: false }
+    val uiLocale: Flow<String> = context.dataStore.data.map { it[UI_LOCALE] ?: LocaleManager.SYSTEM_LOCALE }
+    val contentLanguage: Flow<String> = context.dataStore.data.map { it[CONTENT_LANGUAGE] ?: ContentLanguage.DE.tag }
 
     // ─── Setters ────────────────────────────────────────────────────
 
@@ -101,5 +107,13 @@ class AppSettings(private val context: Context) {
 
     suspend fun setPerformanceMode(enabled: Boolean) {
         context.dataStore.edit { it[PERFORMANCE_MODE] = enabled }
+    }
+
+    suspend fun setUiLocale(localeTag: String) {
+        context.dataStore.edit { it[UI_LOCALE] = localeTag }
+    }
+
+    suspend fun setContentLanguage(tag: String) {
+        context.dataStore.edit { it[CONTENT_LANGUAGE] = tag }
     }
 }

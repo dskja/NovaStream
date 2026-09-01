@@ -1,6 +1,7 @@
 package com.novastream.app
 
 import android.app.Application
+import android.content.Context
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -12,8 +13,9 @@ import com.novastream.app.util.VoeWebViewResolver
 import com.novastream.app.util.CaptchaWebViewFetcher
 import com.novastream.app.data.repository.CatalogCachePurgeWorker
 import com.novastream.app.data.repository.NovaStreamRepository
-import dagger.hilt.android.HiltAndroidApp
-import javax.inject.Inject
+import com.novastream.app.util.LocaleManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,6 +29,17 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
     @Inject lateinit var providerController: ProviderController
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun attachBaseContext(base: Context) {
+        val localeTag = runBlocking {
+            try {
+                com.novastream.app.data.prefs.AppSettings(base).uiLocale.first()
+            } catch (_: Exception) {
+                LocaleManager.SYSTEM_LOCALE
+            }
+        }
+        super.attachBaseContext(LocaleManager.wrap(base, localeTag))
+    }
 
     override fun onCreate() {
         super.onCreate()

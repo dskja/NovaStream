@@ -39,6 +39,7 @@ import com.novastream.app.ui.continuewatching.ContinueWatchingScreen
 import com.novastream.app.ui.home.HomeScreen
 import com.novastream.app.ui.onboarding.OnboardingScreen
 import com.novastream.app.ui.player.PlayerScreen
+import com.novastream.app.ui.provider.ProviderMarketplaceScreen
 import com.novastream.app.ui.search.SearchScreen
 import com.novastream.app.ui.settings.SettingsScreen
 import com.novastream.app.ui.tv.TvUtils
@@ -52,6 +53,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val BROWSE = "browse?section={section}&genre={genre}&filter={filter}"
     const val CONTINUE_WATCHING = "continue_watching"
+    const val MARKETPLACE = "marketplace"
     const val DETAIL = "detail/{slug}"
     const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}"
 
@@ -147,7 +149,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             backPressedTime = now
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "Nochmal zurück drücken zum Beenden",
+                    message = context.getString(R.string.press_back_again),
                     duration = SnackbarDuration.Short
                 )
             }
@@ -270,7 +272,15 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             }
 
             composable(Routes.SETTINGS) {
-                SettingsScreen()
+                SettingsScreen(
+                    onOpenMarketplace = {
+                        nav.navigate(Routes.MARKETPLACE) { launchSingleTop = true }
+                    }
+                )
+            }
+
+            composable(Routes.MARKETPLACE) {
+                ProviderMarketplaceScreen(onBack = { nav.popBackStack() })
             }
 
             composable(
@@ -344,7 +354,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                 if (slugArg.isBlank() || seasonArg < 1 || episodeArg < 1) {
                     LaunchedEffect(Unit) {
                         snackbarHostState.showSnackbar(
-                            message = "Ungültige Wiedergabeparameter",
+                            message = context.getString(R.string.invalid_playback_params),
                             duration = SnackbarDuration.Short
                         )
                         nav.popBackStack()

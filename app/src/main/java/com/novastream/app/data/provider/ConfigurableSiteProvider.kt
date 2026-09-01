@@ -10,6 +10,7 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.scraper.SiteProfile
 import com.novastream.app.data.scraper.UniversalHtmlScraper
 import com.novastream.app.util.EmbedStreamResolver
+import com.novastream.app.util.ExtractorRegistry
 import com.novastream.app.util.HosterResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -47,18 +48,23 @@ open class ConfigurableSiteProvider(
         else if (supportsMovies) "Filme"
         else null
 
-    private val hosterResolver = HosterResolver(baseUrl = profile.baseUrl)
+    private val hosterResolver get() = HosterResolver(baseUrl = profile.baseUrl)
+
+    protected open suspend fun activeBaseUrl(): String =
+        if (this is DynamicBaseUrlProvider) resolveBaseUrl() else profile.baseUrl.trimEnd('/')
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val homeUrl = profile.baseUrl + profile.homePath
+        val base = activeBaseUrl()
+        val homeUrl = base + profile.homePath
         UniversalHtmlScraper.parseSeriesList(fetchCached(homeUrl), profile)
     }.toResult()
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
         if (!supportsMovies) return StreamingProvider.ProviderResult.Success(emptyList())
         return runCatching {
+            val base = activeBaseUrl()
             val path = profile.moviePath.ifBlank { profile.homePath }
-            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
                 .map { it.copy(isMovie = true) }
         }.toResult()
     }
@@ -66,6 +72,7 @@ open class ConfigurableSiteProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
+            val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
             val paths = buildList {
                 add(profile.searchPath.replace("{query}", encoded))
@@ -77,7 +84,7 @@ open class ConfigurableSiteProvider(
                 val html = if (profile.searchMethod.equals("POST", true) && profile.searchPostField != null) {
                     postSearch(query.trim())
                 } else {
-                    fetch(profile.baseUrl.trimEnd('/') + path)
+                    fetch(base + path)
                 }
                 results = UniversalHtmlScraper.parseSeriesList(html, profile)
                 if (results.isNotEmpty()) break
@@ -100,10 +107,11 @@ open class ConfigurableSiteProvider(
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> =
         runCatching {
+            val base = activeBaseUrl()
             val url = when {
                 episode.episodeUrl.startsWith("http") -> episode.episodeUrl
-                episode.episodeUrl.startsWith("/") -> profile.baseUrl.trimEnd('/') + episode.episodeUrl
-                episode.episodeUrl.isNotBlank() -> profile.baseUrl.trimEnd('/') + "/" + episode.episodeUrl.trimStart('/')
+                episode.episodeUrl.startsWith("/") -> base + episode.episodeUrl
+                episode.episodeUrl.isNotBlank() -> "$base/${episode.episodeUrl.trimStart('/')}"
                 else -> resolveDetailUrl(episode.slug)
             }
             val hosters = UniversalHtmlScraper.parseHosters(fetch(url), profile)
@@ -148,13 +156,14 @@ open class ConfigurableSiteProvider(
                         ).ifEmpty { hosterResolver.resolve(hoster.name, hoster.redirectUrl) }
                     } else hosterResolver.resolve(hoster.name, hoster.redirectUrl)
                 }
-                else -> hosterResolver.resolve(hoster.name, hoster.redirectUrl)
+                else -> ExtractorRegistry.resolve(hoster.name, hoster.redirectUrl, activeBaseUrl())
             }
         }.toResult()
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val base = activeBaseUrl()
         val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
-        UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+        UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
             .ifEmpty { loadHome().getOrNull().orEmpty() }
     }.toResult()
 
@@ -162,19 +171,21 @@ open class ConfigurableSiteProvider(
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val base = activeBaseUrl()
         if (page <= 0) {
-            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl + profile.homePath), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + profile.homePath), profile)
         } else {
             val template = profile.catalogPageTemplate.ifBlank { "${profile.homePath}?page={page}" }
             val path = template.replace("{page}", (page + 1).toString())
-            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
         }
     }.toResult()
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val base = activeBaseUrl()
         if (page <= 0) {
             val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
-            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
         } else {
             val template = profile.genrePageTemplate.ifBlank {
                 profile.genrePathTemplate + "?page={page}"
@@ -182,12 +193,12 @@ open class ConfigurableSiteProvider(
             val path = template
                 .replace("{genre}", genre.trim())
                 .replace("{page}", (page + 1).toString())
-            UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl.trimEnd('/') + path), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
         }
     }.toResult()
 
-    protected open fun resolveDetailUrl(slug: String): String {
-        val base = profile.baseUrl.trimEnd('/')
+    protected open suspend fun resolveDetailUrl(slug: String): String {
+        val base = activeBaseUrl()
         return when {
             slug.startsWith("tv-") -> "$base/tv/${slug.removePrefix("tv-")}"
             slug.startsWith("movie-") -> "$base/movie/${slug.removePrefix("movie-")}"
@@ -229,12 +240,13 @@ open class ConfigurableSiteProvider(
 
     private suspend fun postSearch(query: String): String = withContext(Dispatchers.IO) {
         val field = profile.searchPostField ?: return@withContext ""
+        val base = activeBaseUrl()
         val body = FormBody.Builder().add(field, query).build()
         val req = Request.Builder()
-            .url(profile.baseUrl.trimEnd('/') + profile.searchPath.substringBefore("?"))
+            .url(base + profile.searchPath.substringBefore("?"))
             .post(body)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
-            .header("Referer", profile.baseUrl + "/")
+            .header("Referer", "$base/")
             .build()
         NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
             if (resp.isSuccessful) resp.body?.string() ?: "" else ""

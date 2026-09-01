@@ -1,6 +1,7 @@
 package com.novastream.app.data.provider
 
 import android.content.Context
+import com.novastream.app.R
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -8,39 +9,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Verwaltet alle Streaming-Provider (SerienStream-Familie + FMHY + Free Catalog).
+ * Verwaltet alle Streaming-Provider — delegates to [ProviderRegistry].
  */
 object ProviderManager {
 
     private val Context.providerDataStore by preferencesDataStore("provider_prefs")
     private val ACTIVE_PROVIDER_KEY = stringPreferencesKey("active_provider")
 
-    val providers: List<StreamingProvider> by lazy {
-        listOf(
-            // Primär / DE
-            SerienStreamProvider(),
-            SerienStreamCxProvider(),
-            AniWorldProvider(),
-            KinoGerProvider(),
-            BurningSeriesProvider(),
-            MegaKinoProvider(),
-            StreamKisteProvider(),
-            FilmPalastProvider(),
-            KinoZProvider(),
-            // AAA Free Catalog (TVMaze, kein Key)
-            FreeCatalogProvider(),
-            // FMHY / internationale Sites
-            HydraHdProvider(),
-            CinezoProvider(),
-            ShowsStProvider(),
-            PhantomFlixProvider(),
-            FlixerProvider(),
-            DramaCoolProvider(),
-            PressPlayProvider()
-        )
-    }
+    val providers: List<StreamingProvider> get() = ProviderRegistry.providers
 
-    val defaultProvider: StreamingProvider by lazy { providers.first() }
+    val defaultProvider: StreamingProvider get() = ProviderRegistry.defaultProvider
 
     fun activeProviderIdFlow(context: Context): Flow<String> =
         context.providerDataStore.data.map { prefs ->
@@ -53,28 +31,24 @@ object ProviderManager {
         }
     }
 
-    fun getProvider(id: String): StreamingProvider =
-        providers.find { it.id == id } ?: defaultProvider
+    fun getProvider(id: String): StreamingProvider = ProviderRegistry.getProvider(id)
 
-    fun getProviderOrNull(id: String): StreamingProvider? =
-        providers.find { it.id == id }
+    fun getProviderOrNull(id: String): StreamingProvider? = ProviderRegistry.getProviderOrNull(id)
 
-    fun isValidProviderId(id: String): Boolean =
-        providers.any { it.id == id }
+    fun isValidProviderId(id: String): Boolean = ProviderRegistry.isValidProviderId(id)
 
     fun getProviderIds(): List<String> = providers.map { it.id }
 
-    fun getProviderInfos(): List<ProviderInfo> = providers.map {
-        ProviderInfo(
-            id = it.id,
-            displayName = it.displayName,
-            baseUrl = it.baseUrl,
-            supportsSeries = it.supportsSeries,
-            supportsMovies = it.supportsMovies,
-            catalogHint = it.catalogHint,
-            capabilities = it.capabilities()
-        )
-    }
+    fun getProviderInfos(): List<ProviderInfo> = ProviderRegistry.getProviderInfos()
+
+    fun getProviderInfosGroupedByLanguage(): Map<ContentLanguage, List<ProviderInfo>> =
+        ProviderRegistry.getGroupedByLanguage()
+
+    fun getFilteredProviderInfos(
+        language: ContentLanguage? = null,
+        favoriteIds: Set<String> = emptySet(),
+        favoritesOnly: Boolean = false
+    ): List<ProviderInfo> = ProviderRegistry.getFiltered(language, favoriteIds, favoritesOnly)
 
     fun getProviderByName(displayName: String): StreamingProvider? =
         providers.find { it.displayName.equals(displayName, ignoreCase = true) }
@@ -88,6 +62,9 @@ object ProviderManager {
     val defaultProviderId: String get() = defaultProvider.id
     fun seriesProviders(): List<StreamingProvider> = providers.filter { it.supportsSeries }
     fun movieProviders(): List<StreamingProvider> = providers.filter { it.supportsMovies }
+
+    fun contentLanguageOf(providerId: String): ContentLanguage =
+        ProviderRegistry.contentLanguageOf(providerId)
 }
 
 data class ProviderInfo(
@@ -97,7 +74,10 @@ data class ProviderInfo(
     val supportsSeries: Boolean,
     val supportsMovies: Boolean = !supportsSeries,
     val catalogHint: String? = null,
-    val capabilities: ProviderCapabilities = ProviderCapabilities()
+    val capabilities: ProviderCapabilities = ProviderCapabilities(),
+    val contentLanguage: ContentLanguage = ContentLanguage.MULTI,
+    val regionLabel: String? = null,
+    val logoUrl: String? = null
 ) {
     val hostLabel: String
         get() = try {
@@ -106,10 +86,20 @@ data class ProviderInfo(
             baseUrl
         }
 
-    val contentLabel: String
+    val languageTag: String get() = contentLanguage.tag
+
+    val contentLabelKey: String
         get() = when {
-            supportsSeries && supportsMovies -> "Serien & Filme"
-            supportsMovies -> "Filme"
-            else -> "Serien"
+            supportsSeries && supportsMovies -> "provider_content_series_movies"
+            supportsMovies -> "provider_content_movies"
+            else -> "provider_content_series"
         }
+
+    fun contentLabelRes(): Int = when (contentLabelKey) {
+        "provider_content_series_movies" -> R.string.provider_content_series_movies
+        "provider_content_movies" -> R.string.provider_content_movies
+        else -> R.string.provider_content_series
+    }
+
+    fun contentLabel(context: Context): String = context.getString(contentLabelRes())
 }

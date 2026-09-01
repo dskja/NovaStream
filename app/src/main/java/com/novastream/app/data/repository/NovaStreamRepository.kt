@@ -80,7 +80,17 @@ class NovaStreamRepository private constructor(
             }
         }
 
-    suspend fun loadHomeCatalog(): RepoResult<HomeCatalog> = withRetry {
+    suspend fun loadHomeCatalog(): RepoResult<HomeCatalog> {
+        val live = loadHomeCatalogLive()
+        if (live is RepoResult.Success) return live
+        val cacheKey = CatalogCacheEntry.key(provider.id, CatalogCacheEntry.TYPE_HOME)
+        getCachedHomeStale(cacheKey)?.let { stale ->
+            return RepoResult.Success(stale.tagAll(provider.id))
+        }
+        return live
+    }
+
+    private suspend fun loadHomeCatalogLive(): RepoResult<HomeCatalog> = withRetry {
         val p = provider
         val expectedId = p.id
         val cacheKey = CatalogCacheEntry.key(expectedId, CatalogCacheEntry.TYPE_HOME)
@@ -377,13 +387,24 @@ class NovaStreamRepository private constructor(
             dao.delete(key)
             return null
         }
-        return try {
-            gson.fromJson(entry.payload, HomeCatalog::class.java)
-        } catch (_: Exception) {
+        return decodeHome(entry) ?: run {
             dao.delete(key)
             null
         }
     }
+
+    private suspend fun getCachedHomeStale(key: String): HomeCatalog? {
+        val dao = cacheDao ?: return null
+        val entry = dao.get(key) ?: return null
+        return decodeHome(entry)
+    }
+
+    private fun decodeHome(entry: CatalogCacheEntry): HomeCatalog? =
+        try {
+            gson.fromJson(entry.payload, HomeCatalog::class.java)
+        } catch (_: Exception) {
+            null
+        }
 
     private suspend fun getCachedList(key: String): List<Series>? {
         val dao = cacheDao ?: return null
