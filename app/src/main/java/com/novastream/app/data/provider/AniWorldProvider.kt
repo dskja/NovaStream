@@ -35,7 +35,7 @@ class AniWorldProvider(
 
     override val supportsMovies: Boolean = false
 
-    override val catalogHint: String = "Tausende Animes"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
 
     override val availableGenres: List<Genre> = listOf(
         Genre("action", "Action"),

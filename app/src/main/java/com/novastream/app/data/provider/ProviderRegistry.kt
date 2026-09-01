@@ -17,7 +17,9 @@ object ProviderRegistry {
         if (entriesCache == null) {
             synchronized(this) {
                 if (entriesCache == null) {
-                    entriesCache = buildRegistry(context.applicationContext)
+                    val appCtx = context.applicationContext
+                    SiteProfileImporter.bindContext(appCtx)
+                    entriesCache = buildRegistry(appCtx)
                 }
             }
         }

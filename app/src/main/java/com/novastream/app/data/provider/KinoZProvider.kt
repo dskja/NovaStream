@@ -48,7 +48,7 @@ class KinoZProvider(
     private suspend fun fetchUrl(url: String): String = mirror.fetch(url)
 
     override val supportsMovies: Boolean = true
-    override val catalogHint: String = "Filme & Serien"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
         com.novastream.app.data.model.Genre("Action", "Action"),
         com.novastream.app.data.model.Genre("Komodie", "Komödie"),

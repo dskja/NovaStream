@@ -48,7 +48,7 @@ class FilmPalastProvider(
     private suspend fun fetchUrl(url: String): String = mirror.fetch(url)
 
     override val supportsMovies: Boolean = true
-    override val catalogHint: String = "Filme & Serien"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
         com.novastream.app.data.model.Genre("action", "Action"),
         com.novastream.app.data.model.Genre("comedy", "Comedy"),
@@ -127,13 +127,16 @@ class FilmPalastProvider(
     }
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        val base = activeBaseUrl()
-        val path = when (genre.trim().lowercase()) {
-            "serien", "series", "serie" -> "/serien/view"
-            "filme", "movies", "movie", "neu", "new" -> "/movies/new"
-            else -> "/serien/view"
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            val base = activeBaseUrl()
+            val path = when (genre.trim().lowercase()) {
+                "serien", "series", "serie" -> "/serien/view"
+                "filme", "movies", "movie", "neu", "new" -> "/movies/new"
+                else -> "/serien/view"
+            }
+            parseFilmPalastList(fetchUrl(base + path))
         }
-        parseFilmPalastList(fetchUrl(base + path))
     }
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {

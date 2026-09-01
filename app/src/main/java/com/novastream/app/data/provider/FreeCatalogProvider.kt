@@ -26,7 +26,7 @@ class FreeCatalogProvider(
 ) : StreamingProvider {
 
     override val supportsMovies: Boolean = false
-    override val catalogHint: String = "Tausende Serien via TVMaze"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
         com.novastream.app.data.model.Genre("Action", "Action"),
         com.novastream.app.data.model.Genre("Comedy", "Comedy"),

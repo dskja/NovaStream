@@ -24,7 +24,7 @@ class FreeCatalogBrowseProvider(
 ) : StreamingProvider {
 
     override val supportsMovies: Boolean = false
-    override val catalogHint: String = "Trending TV & anime via free APIs"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<Genre> = ContentLanguageGenres.forLanguage(
         if (language == ContentLanguage.MULTI) ContentLanguage.EN else language
     )

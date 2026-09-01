@@ -39,6 +39,8 @@ class StreamKisteProvider(
     private val appContext: Context? = null
 ) : StreamingProvider {
 
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
+
     private val mirror = MirrorSupport(id, baseUrl, appContext, "/serien/")
 
     private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
@@ -124,6 +126,20 @@ class StreamKisteProvider(
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
+    }
+
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            val base = activeBaseUrl()
+            val name = genre.trim().lowercase()
+            val path = when (name) {
+                "filme", "movies", "movie" -> "/filme"
+                "serien", "series", "serie" -> "/serien"
+                else -> "/serien"
+            }
+            parseStreamKisteSeriesList(fetchUrl("$base$path")).map { it.copy(providerId = id) }
+        }
     }
 
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {

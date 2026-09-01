@@ -64,7 +64,7 @@ class KinoGerProvider(
     private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
 
     override val supportsMovies: Boolean = true
-    override val catalogHint: String = "Filme & Serien"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
         com.novastream.app.data.model.Genre("action", "Action"),
         com.novastream.app.data.model.Genre("komodie", "Komödie"),

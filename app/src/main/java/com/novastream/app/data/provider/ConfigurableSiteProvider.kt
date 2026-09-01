@@ -47,7 +47,10 @@ open class ConfigurableSiteProvider(
     override val supportsSeries: Boolean get() = profile.supportsSeries
     override val supportsMovies: Boolean get() = profile.supportsMovies
     override val catalogHint: String?
-        get() = null
+        get() = ProviderCatalogHints.forId(profile.id)
+
+    private fun List<Series>.tagged(): List<Series> =
+        map { if (it.providerId == id) it else it.copy(providerId = id) }
 
     private val mirrorNeedle: String? = mirrorContentNeedle?.takeIf {
         ProviderMirrorNeedles.hasMirrors(profile.id)
@@ -76,7 +79,7 @@ open class ConfigurableSiteProvider(
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val homeUrl = base + profile.homePath
-        UniversalHtmlScraper.parseSeriesList(fetchCached(homeUrl), profile)
+        UniversalHtmlScraper.parseSeriesList(fetchCached(homeUrl), profile).tagged()
     }
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
@@ -85,7 +88,7 @@ open class ConfigurableSiteProvider(
             val base = activeBaseUrl()
             val path = profile.moviePath.ifBlank { profile.homePath }
             UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
-                .map { it.copy(isMovie = true) }
+                .map { it.copy(isMovie = true, providerId = id) }
         }
     }
 
@@ -106,7 +109,7 @@ open class ConfigurableSiteProvider(
                 } else {
                     fetch(base + path)
                 }
-                results = UniversalHtmlScraper.parseSeriesList(html, profile)
+                results = UniversalHtmlScraper.parseSeriesList(html, profile).tagged()
                 if (results.isNotEmpty()) break
             }
             results
@@ -116,7 +119,8 @@ open class ConfigurableSiteProvider(
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> =
         runCatchingProvider {
             val url = resolveDetailUrl(slug)
-            UniversalHtmlScraper.parseDetail(fetch(url), profile, slug)
+            val (series, seasons) = UniversalHtmlScraper.parseDetail(fetch(url), profile, slug)
+            series.copy(providerId = id) to seasons
         }
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> =
@@ -180,10 +184,13 @@ open class ConfigurableSiteProvider(
         }
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        val base = activeBaseUrl()
-        val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
-        UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
-            .ifEmpty { loadHome().getOrNull().orEmpty() }
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            val base = activeBaseUrl()
+            val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
+            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
+                .ifEmpty { loadHome().getOrNull().orEmpty() }
+        }
     }
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
@@ -192,46 +199,35 @@ open class ConfigurableSiteProvider(
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         if (page <= 0) {
-            UniversalHtmlScraper.parseSeriesList(fetch(base + profile.homePath), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + profile.homePath), profile).tagged()
         } else {
             val template = profile.catalogPageTemplate.ifBlank { "${profile.homePath}?page={page}" }
             val path = template.replace("{page}", (page + 1).toString())
-            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
+            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
         }
     }
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        val base = activeBaseUrl()
-        if (page <= 0) {
-            val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
-            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
-        } else {
-            val template = profile.genrePageTemplate.ifBlank {
-                profile.genrePathTemplate + "?page={page}"
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            val base = activeBaseUrl()
+            if (page <= 0) {
+                val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
+                UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
+            } else {
+                val template = profile.genrePageTemplate.ifBlank {
+                    profile.genrePathTemplate + "?page={page}"
+                }
+                val path = template
+                    .replace("{genre}", genre.trim())
+                    .replace("{page}", (page + 1).toString())
+                UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
             }
-            val path = template
-                .replace("{genre}", genre.trim())
-                .replace("{page}", (page + 1).toString())
-            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile)
         }
     }
 
-    protected open suspend fun resolveDetailUrl(slug: String): String {
-        val base = activeBaseUrl()
-        return when {
-            slug.startsWith("tv-") -> "$base/tv/${slug.removePrefix("tv-")}"
-            slug.startsWith("movie-") -> "$base/movie/${slug.removePrefix("movie-")}"
-            slug.startsWith("http") -> slug
-            slug.startsWith("/") -> base + slug
-            profile.id == "showsst" -> "$base/watch/tv/$slug"
-            profile.id == "hydrahd" -> {
-                if (slug.contains("watch-") || slug.contains("-online")) "$base/movie/$slug"
-                else "$base/watchseries/$slug"
-            }
-            profile.id == "dramacool" -> "$base/$slug/"
-            else -> "$base/$slug"
-        }
-    }
+    protected open suspend fun resolveDetailUrl(slug: String): String =
+        ProviderDetailUrls.resolve(profile.id, activeBaseUrl(), slug)
 
     private fun slugTmdbId(slug: String): String? {
         val cleaned = slug.removePrefix("tv-").removePrefix("movie-")

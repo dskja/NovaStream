@@ -2,6 +2,8 @@ package com.novastream.app.data.provider
 
 import android.content.Context
 import com.novastream.app.util.CaptchaWebViewFetcher
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Composable mirror resolution + HTTP fetch for custom HTML scraper providers.
@@ -15,6 +17,8 @@ class MirrorSupport(
     private val onInvalidate: (() -> Unit)? = null
 ) {
 
+    private val resolveMutex = Mutex()
+
     @Volatile
     private var resolvedBaseUrl: String? = null
 
@@ -27,7 +31,7 @@ class MirrorSupport(
 
     fun parseBase(): String = resolvedBaseUrl ?: defaultBaseUrl.trimEnd('/')
 
-    suspend fun activeBase(forceRefresh: Boolean = false): String {
+    suspend fun activeBase(forceRefresh: Boolean = false): String = resolveMutex.withLock {
         if (!forceRefresh) {
             resolvedBaseUrl?.let { return it }
         }
@@ -39,7 +43,7 @@ class MirrorSupport(
             forceRefresh = forceRefresh
         )
         resolvedBaseUrl = resolved
-        return resolved
+        resolved
     }
 
     suspend fun fetch(

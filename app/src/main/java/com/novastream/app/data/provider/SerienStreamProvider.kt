@@ -33,7 +33,7 @@ open class SerienStreamProvider(
 
     override val supportsMovies: Boolean = false
 
-    override val catalogHint: String = "Große Serien-Auswahl"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
 
     override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
         com.novastream.app.data.model.Genre("action", "Action"),
