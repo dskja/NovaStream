@@ -6,6 +6,8 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -27,6 +29,7 @@ object CaptchaWebViewFetcher {
     private var sharedWebView: WebView? = null
 
     private val rateLimitLock = Any()
+    private val webViewMutex = Mutex()
     private val requestTimestamps = ArrayDeque<Long>()
 
     fun setContext(context: Context) {
@@ -68,47 +71,49 @@ object CaptchaWebViewFetcher {
             }
             return ""
         }
-        return withContext(Dispatchers.Main) {
-            withTimeoutOrNull(timeoutMs) {
-                suspendCancellableCoroutine { cont ->
-                    val webView = try {
-                        getOrCreateWebView(context)
-                    } catch (_: Exception) {
-                        cont.resume("")
-                        return@suspendCancellableCoroutine
-                    }
-                    webView.webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-                            if (!cont.isActive) return
-                            try {
-                                view?.evaluateJavascript(
-                                    "(function(){return document.documentElement.outerHTML;})();"
-                                ) { result ->
-                                    if (cont.isActive) {
-                                        val decoded = result?.trim('"')
-                                            ?.replace("\\n", "\n")
-                                            ?.replace("\\\"", "\"")
-                                            ?.replace("\\\\", "\\")
-                                            ?: ""
-                                        cont.resume(decoded)
+        return webViewMutex.withLock {
+            withContext(Dispatchers.Main) {
+                withTimeoutOrNull(timeoutMs) {
+                    suspendCancellableCoroutine { cont ->
+                        val webView = try {
+                            getOrCreateWebView(context)
+                        } catch (_: Exception) {
+                            cont.resume("")
+                            return@suspendCancellableCoroutine
+                        }
+                        webView.webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, finishedUrl: String?) {
+                                if (!cont.isActive) return
+                                try {
+                                    view?.evaluateJavascript(
+                                        "(function(){return document.documentElement.outerHTML;})();"
+                                    ) { result ->
+                                        if (cont.isActive) {
+                                            val decoded = result?.trim('"')
+                                                ?.replace("\\n", "\n")
+                                                ?.replace("\\\"", "\"")
+                                                ?.replace("\\\\", "\\")
+                                                ?: ""
+                                            cont.resume(decoded)
+                                        }
                                     }
+                                } catch (_: Exception) {
+                                    if (cont.isActive) cont.resume("")
                                 }
-                            } catch (_: Exception) {
-                                if (cont.isActive) cont.resume("")
                             }
                         }
+                        cont.invokeOnCancellation {
+                            try { webView.stopLoading() } catch (_: Exception) {}
+                        }
+                        try {
+                            webView.stopLoading()
+                            webView.loadUrl(url)
+                        } catch (_: Exception) {
+                            if (cont.isActive) cont.resume("")
+                        }
                     }
-                    cont.invokeOnCancellation {
-                        try { webView.stopLoading() } catch (_: Exception) {}
-                    }
-                    try {
-                        webView.stopLoading()
-                        webView.loadUrl(url)
-                    } catch (_: Exception) {
-                        if (cont.isActive) cont.resume("")
-                    }
-                }
-            } ?: ""
+                } ?: ""
+            }
         }
     }
 }

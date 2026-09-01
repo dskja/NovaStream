@@ -40,7 +40,7 @@ object NetworkModule {
                 else HttpLoggingInterceptor.Level.NONE
     }
 
-    /** Retry-Interceptor: wiederholt fehlgeschlagene Requests bis zu 2 Mal (ohne blockierendes Sleep). */
+    /** Retry-Interceptor: wiederholt fehlgeschlagene Requests bis zu 2 Mal mit kurzem Backoff. */
     private val retryInterceptor = Interceptor { chain ->
         var attempt = 0
         var lastException: Exception? = null
@@ -58,6 +58,9 @@ object NetworkModule {
                 }
             }
             attempt++
+            if (attempt < 3) {
+                Thread.sleep(250L * attempt)
+            }
         }
         throw lastException ?: java.io.IOException("Max retries exceeded")
     }

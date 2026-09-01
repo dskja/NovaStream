@@ -12,6 +12,8 @@ import com.novastream.app.data.scraper.UniversalHtmlScraper
 import com.novastream.app.util.EmbedStreamResolver
 import com.novastream.app.util.HosterResolver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.Request
@@ -32,6 +34,7 @@ open class ConfigurableSiteProvider(
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
                 size > FETCH_CACHE_SIZE
         }
+        private val fetchCacheMutex = Mutex()
     }
 
     override val id: String get() = profile.id
@@ -198,14 +201,14 @@ open class ConfigurableSiteProvider(
     protected suspend fun fetch(url: String): String = fetchCached(url)
 
     private suspend fun fetchCached(url: String): String {
-        synchronized(fetchCache) {
+        fetchCacheMutex.withLock {
             fetchCache[url]?.let { (cachedAt, html) ->
                 if (System.currentTimeMillis() - cachedAt < FETCH_CACHE_TTL_MS) return html
                 fetchCache.remove(url)
             }
         }
         val html = fetchNetwork(url)
-        synchronized(fetchCache) {
+        fetchCacheMutex.withLock {
             fetchCache[url] = System.currentTimeMillis() to html
         }
         return html

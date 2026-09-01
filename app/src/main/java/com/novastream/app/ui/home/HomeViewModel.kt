@@ -138,9 +138,6 @@ class HomeViewModel @Inject constructor(
     private fun clearCatalogForProviderSwitch(providerId: String) {
         loadJob?.cancel()
         genreJob?.cancel()
-        viewModelScope.launch {
-            repo.clearCacheForProvider(providerId)
-        }
         val provider = ActiveProvider.get()
         _state.update {
             it.copy(
@@ -282,14 +279,18 @@ class HomeViewModel @Inject constructor(
             try {
                 val genres = provider.availableGenres.take(2)
                 if (genres.isEmpty()) return@launch
-                val genreRows = genres.mapNotNull { genre ->
-                    when (val res = repo.loadGenre(genre.slug)) {
-                        is NovaStreamRepository.RepoResult.Success -> {
-                            val list = res.data.filter { it.belongsToActiveProvider() || it.providerId == null }
-                            if (list.isEmpty()) null else genre to list
+                val genreRows = kotlinx.coroutines.coroutineScope {
+                    genres.map { genre ->
+                        kotlinx.coroutines.async {
+                            when (val res = repo.loadGenre(genre.slug)) {
+                                is NovaStreamRepository.RepoResult.Success -> {
+                                    val list = res.data.filter { it.belongsToActiveProvider() || it.providerId == null }
+                                    if (list.isEmpty()) null else genre to list
+                                }
+                                else -> null
+                            }
                         }
-                        else -> null
-                    }
+                    }.mapNotNull { it.await() }
                 }
                 if (ActiveProvider.id != expectedProvider) return@launch
                 val action = genreRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()

@@ -34,8 +34,8 @@ class RequestCoalescer {
         return deferred.await().getOrThrow() as T
     }
 
-    fun clear() {
-        inFlight.clear()
+    suspend fun clear() {
+        mutex.withLock { inFlight.clear() }
     }
 }
 

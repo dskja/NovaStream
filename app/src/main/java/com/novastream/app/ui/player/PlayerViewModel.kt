@@ -12,6 +12,7 @@ import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,6 +26,7 @@ data class PlayerUiState(
     val sources: List<StreamSource> = emptyList(),
     val selectedSourceIndex: Int = 0,
     val error: String? = null,
+    val hosterFallbackNotice: String? = null,
     val episodeTitle: String = "",
     val seriesTitle: String = "",
     val coverUrl: String? = null,
@@ -42,34 +44,21 @@ data class PlayerUiState(
     val preferredLanguage: String = "Deutsch",
     val season: Int = 1,
     val episode: Int = 1,
-    val isMovie: Boolean = false
+    val isMovie: Boolean = false,
+    val adjacentEpisodesLoading: Boolean = false
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(selectedSourceIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
 
-    /** True wenn mindestens ein Hoster verfügbar ist. */
     val hasHosters: Boolean get() = hosters.isNotEmpty()
-
-    /** True wenn der ausgewählte Hoster einen Source hat. */
     val hasCurrentSource: Boolean get() = currentSource != null
-
-    /** True wenn mehrere Qualitätsstufen verfügbar sind. */
     val hasMultipleSources: Boolean get() = sources.size > 1
-
-    /** Anzahl der verfügbaren Hosters. */
     val hosterCount: Int get() = hosters.size
-
-    /** True wenn die nächste Episode verfügbar ist. */
     val hasNextEpisode: Boolean get() = nextEpisode != null
-
-    /** True wenn die vorherige Episode verfügbar ist. */
     val hasPreviousEpisode: Boolean get() = previousEpisode != null
-
-    /** True wenn ein alternativer Hoster verfügbar ist. */
     val hasAlternateHoster: Boolean
         get() = hosters.isNotEmpty() && selectedHosterIndex < hosters.lastIndex
 
-    /** Formatierte Episode-Anzeige (z.B. "S1 E5" oder Filmtitel). */
     val episodeDisplay: String
         get() = if (isMovie) episodeTitle.ifBlank { seriesTitle } else "S$season E$episode"
 }
@@ -123,13 +112,45 @@ class PlayerViewModel @Inject constructor(
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
     companion object {
-        /** Returns true when a resolve result from [requestGeneration] must be ignored. */
         internal fun isResolveStale(requestGeneration: Int, currentGeneration: Int): Boolean =
             requestGeneration != currentGeneration
+
+        internal fun resolveNextEpisode(
+            episodes: List<Episode>,
+            currentSeason: Int,
+            currentEpisode: Int,
+            coverUrl: String?
+        ): NextEpisodeInfo? {
+            val sorted = episodes.sortedBy { it.number }
+            val idx = sorted.indexOfFirst { it.number == currentEpisode }
+            if (idx in 0 until sorted.lastIndex) {
+                val next = sorted[idx + 1]
+                return NextEpisodeInfo(currentSeason, next.number, next.title.ifBlank { "Episode ${next.number}" }, coverUrl)
+            }
+            return null
+        }
+
+        internal fun resolvePreviousEpisode(
+            episodes: List<Episode>,
+            currentSeason: Int,
+            currentEpisode: Int,
+            coverUrl: String?
+        ): PreviousEpisodeInfo? {
+            val sorted = episodes.sortedBy { it.number }
+            val idx = sorted.indexOfFirst { it.number == currentEpisode }
+            if (idx > 0) {
+                val prev = sorted[idx - 1]
+                return PreviousEpisodeInfo(currentSeason, prev.number, prev.title.ifBlank { "Episode ${prev.number}" }, coverUrl)
+            }
+            return null
+        }
     }
 
     private var resolveJob: Job? = null
     private var resolveGeneration = 0
+    private var adjacentEpisodesJob: Job? = null
+    private var saveProgressJob: Job? = null
+    private var lastSavedProgressBucket = -1L
 
     init {
         viewModelScope.launch {
@@ -151,14 +172,18 @@ class PlayerViewModel @Inject constructor(
             appSettings.preferredLanguage.collect { v -> _state.update { it.copy(preferredLanguage = v) } }
         }
         load()
-        if (!isMovie) {
-            viewModelScope.launch { loadNextEpisode() }
-            viewModelScope.launch { loadPreviousEpisode() }
-        }
+    }
+
+    fun ensureAdjacentEpisodesLoaded() {
+        if (isMovie) return
+        val current = _state.value
+        if (current.nextEpisode != null && current.previousEpisode != null) return
+        if (adjacentEpisodesJob?.isActive == true) return
+        adjacentEpisodesJob = viewModelScope.launch { loadAdjacentEpisodesFromSeason() }
     }
 
     private fun load() {
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
             val saved = watchRepo.getProgress(slug, season, episode)
             if (saved != null && !saved.isCompleted && saved.durationMs > 0 && saved.positionMs < saved.durationMs) {
@@ -204,6 +229,7 @@ class PlayerViewModel @Inject constructor(
                 sources = emptyList(),
                 loading = true,
                 error = null,
+                hosterFallbackNotice = null,
                 hosterSwitching = true
             )
         }
@@ -231,15 +257,44 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    fun dismissHosterFallbackNotice() {
+        _state.update { it.copy(hosterFallbackNotice = null) }
+    }
+
     fun retry() {
         val index = _state.value.selectedHosterIndex
         resolveJob?.cancel()
-        _state.update { it.copy(error = null, loading = true) }
+        _state.update { it.copy(error = null, loading = true, hosterFallbackNotice = null) }
         resolveJob = viewModelScope.launch { resolveHoster(index) }
     }
 
     fun saveProgress(positionMs: Long, durationMs: Long) {
         if (durationMs <= 0) return
+        val safePosition = positionMs.coerceIn(0L, durationMs)
+        val bucket = safePosition / 5000L
+        if (bucket == lastSavedProgressBucket && saveProgressJob?.isActive == true) return
+        saveProgressJob?.cancel()
+        saveProgressJob = viewModelScope.launch {
+            delay(750)
+            lastSavedProgressBucket = bucket
+            watchRepo.saveProgress(
+                slug = slug,
+                seriesTitle = seriesTitle,
+                coverUrl = coverUrl,
+                season = season,
+                episode = episode,
+                episodeTitle = title,
+                positionMs = safePosition,
+                durationMs = durationMs,
+                isMovie = isMovie
+            )
+            _state.update { it.copy(resumePositionMs = safePosition, durationMs = durationMs) }
+        }
+    }
+
+    fun saveProgressImmediate(positionMs: Long, durationMs: Long) {
+        if (durationMs <= 0) return
+        saveProgressJob?.cancel()
         val safePosition = positionMs.coerceIn(0L, durationMs)
         viewModelScope.launch {
             watchRepo.saveProgress(
@@ -268,116 +323,74 @@ class PlayerViewModel @Inject constructor(
                     episode
                 )
             )
-            if (!isMovie) loadNextEpisode()
+            ensureAdjacentEpisodesLoaded()
         }
     }
 
-    private suspend fun loadNextEpisode() {
-        val nextEp = episode + 1
-        val nextEpUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, nextEp)
-        val ep = Episode(
-            number = nextEp,
-            title = "",
-            slug = slug,
-            season = season,
-            episodeUrl = nextEpUrl
-        )
-        when (val h = repo.loadHosters(ep)) {
-            is NovaStreamRepository.RepoResult.Success -> {
-                if (h.data.isNotEmpty()) {
-                    _state.update {
-                        it.copy(nextEpisode = NextEpisodeInfo(
-                            season = season,
-                            episode = nextEp,
-                            title = "Episode $nextEp",
-                            coverUrl = coverUrl
-                        ))
-                    }
-                } else {
-                    val nextSeason = season + 1
-                    val nextSeasonUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, nextSeason, 1)
-                    val nextSeasonEpisode = Episode(
-                        number = 1,
-                        title = "",
-                        slug = slug,
-                        season = nextSeason,
-                        episodeUrl = nextSeasonUrl
-                    )
-                    when (val h2 = repo.loadHosters(nextSeasonEpisode)) {
-                        is NovaStreamRepository.RepoResult.Success -> {
-                            if (h2.data.isNotEmpty()) {
-                                _state.update {
-                                    it.copy(nextEpisode = NextEpisodeInfo(
+    private suspend fun loadAdjacentEpisodesFromSeason() {
+        _state.update { it.copy(adjacentEpisodesLoading = true) }
+        try {
+            when (val currentSeasonRes = repo.loadSeason(slug, season)) {
+                is NovaStreamRepository.RepoResult.Success -> {
+                    val episodes = currentSeasonRes.data
+                    val next = resolveNextEpisode(episodes, season, episode, coverUrl)
+                    val previous = resolvePreviousEpisode(episodes, season, episode, coverUrl)
+                    var resolvedNext = next
+                    var resolvedPrevious = previous
+
+                    if (next == null && episodes.any { it.number == episode }) {
+                        val nextSeason = season + 1
+                        when (val nextSeasonRes = repo.loadSeason(slug, nextSeason)) {
+                            is NovaStreamRepository.RepoResult.Success -> {
+                                val first = nextSeasonRes.data.minByOrNull { it.number }
+                                if (first != null) {
+                                    resolvedNext = NextEpisodeInfo(
                                         season = nextSeason,
-                                        episode = 1,
-                                        title = "Staffel $nextSeason Episode 1",
+                                        episode = first.number,
+                                        title = first.title.ifBlank { "Staffel $nextSeason Episode ${first.number}" },
                                         coverUrl = coverUrl
-                                    ))
+                                    )
                                 }
                             }
+                            else -> {}
                         }
-                        else -> {}
                     }
-                }
-            }
-            else -> {}
-        }
-    }
 
-    private suspend fun loadPreviousEpisode() {
-        if (isMovie) return
-        if (episode > 1) {
-            val prevEp = episode - 1
-            val prevEpUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, season, prevEp)
-            val ep = Episode(
-                number = prevEp,
-                title = "",
-                slug = slug,
-                season = season,
-                episodeUrl = prevEpUrl
-            )
-            when (val h = repo.loadHosters(ep)) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    if (h.data.isNotEmpty()) {
-                        _state.update {
-                            it.copy(previousEpisode = PreviousEpisodeInfo(
-                                season = season,
-                                episode = prevEp,
-                                title = "Episode $prevEp",
-                                coverUrl = coverUrl
-                            ))
+                    if (previous == null && episode <= 1 && season > 1) {
+                        val prevSeason = season - 1
+                        when (val prevSeasonRes = repo.loadSeason(slug, prevSeason)) {
+                            is NovaStreamRepository.RepoResult.Success -> {
+                                val last = prevSeasonRes.data.maxByOrNull { it.number }
+                                if (last != null) {
+                                    resolvedPrevious = PreviousEpisodeInfo(
+                                        season = prevSeason,
+                                        episode = last.number,
+                                        title = last.title.ifBlank { "Staffel $prevSeason Episode ${last.number}" },
+                                        coverUrl = coverUrl
+                                    )
+                                }
+                            }
+                            else -> {}
                         }
                     }
-                }
-                else -> {}
-            }
-            return
-        }
-        if (season > 1) {
-            val prevSeason = season - 1
-            val prevSeasonUrl = com.novastream.app.data.provider.ActiveProvider.episodeUrl(slug, prevSeason, 1)
-            val prevSeasonEpisode = Episode(
-                number = 1,
-                title = "",
-                slug = slug,
-                season = prevSeason,
-                episodeUrl = prevSeasonUrl
-            )
-            when (val h = repo.loadHosters(prevSeasonEpisode)) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    if (h.data.isNotEmpty()) {
-                        _state.update {
-                            it.copy(previousEpisode = PreviousEpisodeInfo(
-                                season = prevSeason,
-                                episode = 1,
-                                title = "Staffel $prevSeason Episode 1",
-                                coverUrl = coverUrl
-                            ))
-                        }
+
+                    _state.update {
+                        it.copy(
+                            nextEpisode = resolvedNext ?: it.nextEpisode,
+                            previousEpisode = resolvedPrevious ?: it.previousEpisode,
+                            adjacentEpisodesLoading = false
+                        )
                     }
                 }
-                else -> {}
+                else -> {
+                    _state.update { it.copy(adjacentEpisodesLoading = false) }
+                }
             }
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w("PlayerVM", "adjacent episodes failed", e)
+            }
+            _state.update { it.copy(adjacentEpisodesLoading = false) }
         }
     }
 
@@ -402,7 +415,9 @@ class PlayerViewModel @Inject constructor(
             return
         }
         _state.update { it.copy(selectedHosterIndex = index, loading = true, error = null) }
-        val result = kotlinx.coroutines.withTimeoutOrNull(com.novastream.app.data.model.NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) { repo.resolveHoster(hoster) }
+        val result = kotlinx.coroutines.withTimeoutOrNull(com.novastream.app.data.model.NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) {
+            repo.resolveHoster(hoster)
+        }
         if (isResolveStale(generation, resolveGeneration)) return
         when (result) {
             is NovaStreamRepository.RepoResult.Success -> {
@@ -416,17 +431,14 @@ class PlayerViewModel @Inject constructor(
                             sources = sortedSources,
                             selectedSourceIndex = 0,
                             error = null,
-                            hosterSwitching = false
+                            hosterSwitching = false,
+                            hosterFallbackNotice = null
                         )
                     }
                 }
             }
-            is NovaStreamRepository.RepoResult.Error -> {
-                tryNextHoster(index, generation)
-            }
-            null -> {
-                tryNextHoster(index, generation)
-            }
+            is NovaStreamRepository.RepoResult.Error -> tryNextHoster(index, generation)
+            null -> tryNextHoster(index, generation)
         }
     }
 
@@ -434,13 +446,25 @@ class PlayerViewModel @Inject constructor(
         if (isResolveStale(generation, resolveGeneration)) return
         val nextIndex = currentIndex + 1
         if (nextIndex < _state.value.hosters.size) {
-            _state.update { it.copy(selectedHosterIndex = nextIndex) }
+            val failedName = _state.value.hosters.getOrNull(currentIndex)?.name.orEmpty()
+            val nextName = _state.value.hosters.getOrNull(nextIndex)?.name.orEmpty()
+            _state.update {
+                it.copy(
+                    selectedHosterIndex = nextIndex,
+                    hosterFallbackNotice = if (failedName.isNotBlank() && nextName.isNotBlank()) {
+                        "$failedName fehlgeschlagen — versuche $nextName"
+                    } else {
+                        "Hoster fehlgeschlagen — versuche nächsten"
+                    }
+                )
+            }
             resolveJob = viewModelScope.launch { resolveHoster(nextIndex) }
         } else {
             _state.update {
                 it.copy(
                     loading = false,
                     hosterSwitching = false,
+                    hosterFallbackNotice = null,
                     error = "Kein Hoster konnte aufgelöst werden. Versuche es später erneut oder wähle einen anderen Hoster."
                 )
             }

@@ -52,7 +52,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.tvPlayerKeyHandler
@@ -97,16 +97,30 @@ fun PlayerScreen(
     }
 
     val currentSource = state.currentSource
-    var exoPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
     var showHosters by remember { mutableStateOf(true) }
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
-    var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
+    var lastLoadedSourceKey by remember { mutableStateOf<String?>(null) }
     var showSkipIntro by remember { mutableStateOf(false) }
+    var pendingResumeMs by remember { mutableLongStateOf(0L) }
+    var hasAppliedResumeSeek by remember { mutableStateOf(false) }
     var notificationReady by remember {
         mutableStateOf(com.novastream.app.util.hasNotificationPermission(context))
     }
     var pendingForegroundTitle by remember { mutableStateOf<String?>(null) }
+
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context)
+            .setTrackSelector(createPlayerTrackSelector(context, false))
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true
+            )
+            .build()
+    }
 
     com.novastream.app.util.RememberPlaybackNotificationPermission {
         notificationReady = true
@@ -119,7 +133,7 @@ fun PlayerScreen(
     fun enterPipIfSupported() {
         if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
-        if (exoPlayer == null || currentSource == null) return
+        if (currentSource == null) return
         try {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
@@ -128,9 +142,9 @@ fun PlayerScreen(
         } catch (_: Exception) {}
     }
 
-    DisposableEffect(lifecycleOwner, exoPlayer, currentSource) {
+    DisposableEffect(lifecycleOwner, currentSource) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE && exoPlayer?.isPlaying == true) {
+            if (event == Lifecycle.Event.ON_PAUSE && exoPlayer.isPlaying) {
                 enterPipIfSupported()
             }
         }
@@ -146,9 +160,13 @@ fun PlayerScreen(
         }
     }
 
-    val episodeEndListener = remember {
+    val episodeEndListener = remember(vm) {
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY && pendingResumeMs > 0L && !hasAppliedResumeSeek) {
+                    exoPlayer.seekTo(pendingResumeMs)
+                    hasAppliedResumeSeek = true
+                }
                 if (playbackState == Player.STATE_ENDED) {
                     vm.onEpisodeFinished()
                     showNextEpisodeOverlay = true
@@ -162,15 +180,28 @@ fun PlayerScreen(
         val src = currentSource ?: return@LaunchedEffect
         val url = src.url
         if (url.isBlank()) {
-            exoPlayer = null
-            lastLoadedUrl = null
+            lastLoadedSourceKey = null
             return@LaunchedEffect
         }
 
         val sourceKey = "$url|${src.subtitleUrl.orEmpty()}|${state.dataSaverMode}"
-        if (sourceKey == lastLoadedUrl && exoPlayer != null) return@LaunchedEffect
+        if (sourceKey == lastLoadedSourceKey) return@LaunchedEffect
 
-        val trackSelector = createPlayerTrackSelector(context, state.dataSaverMode)
+        (exoPlayer.trackSelector as? DefaultTrackSelector)?.let { selector ->
+            if (state.dataSaverMode) {
+                selector.setParameters(
+                    selector.buildUponParameters()
+                        .setMaxVideoSize(1280, 720)
+                        .setMaxVideoBitrate(1_500_000)
+                )
+            } else {
+                selector.setParameters(
+                    selector.buildUponParameters()
+                        .clearVideoSizeConstraints()
+                        .setMaxVideoBitrate(Int.MAX_VALUE)
+                )
+            }
+        }
 
         val mediaItemBuilder = MediaItem.Builder()
             .setUri(url)
@@ -188,31 +219,19 @@ fun PlayerScreen(
             )
         }
 
-        val player = ExoPlayer.Builder(context)
-            .setTrackSelector(trackSelector)
-            .setAudioAttributes(
-                androidx.media3.common.AudioAttributes.Builder()
-                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
-                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(),
-                true
-            )
-            .build().apply {
-                setMediaItem(mediaItemBuilder.build())
-                prepare()
-                playWhenReady = true
-                if (state.resumePositionMs > 0) {
-                    seekTo(state.resumePositionMs)
-                }
-            }
-        player.addListener(episodeEndListener)
-        exoPlayer = player
-        lastLoadedUrl = sourceKey
+        pendingResumeMs = state.resumePositionMs
+        hasAppliedResumeSeek = state.resumePositionMs <= 0L
+        exoPlayer.setMediaItem(mediaItemBuilder.build())
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+        try {
+            exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
+        } catch (_: Exception) {}
+
+        lastLoadedSourceKey = sourceKey
         playerVisible = true
         showHosters = false
-        try {
-            player.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
-        } catch (_: Exception) {}
+        vm.ensureAdjacentEpisodesLoaded()
 
         val playbackTitle = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
         if (notificationReady || com.novastream.app.util.hasNotificationPermission(context)) {
@@ -222,59 +241,58 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(state.playbackSpeed, exoPlayer) {
-        exoPlayer?.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
+    LaunchedEffect(state.playbackSpeed) {
+        exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
     }
 
-    LaunchedEffect(exoPlayer, state.skipIntroButton) {
-        val player = exoPlayer ?: return@LaunchedEffect
+    LaunchedEffect(state.skipIntroButton, playerVisible) {
         while (isActive) {
             kotlinx.coroutines.delay(500)
-            val pos = player.currentPosition
+            val pos = exoPlayer.currentPosition
             showSkipIntro = state.skipIntroButton &&
-                player.isPlaying &&
+                playerVisible &&
+                exoPlayer.isPlaying &&
                 pos in 1 until INTRO_SKIP_POSITION_MS
         }
     }
 
-    LaunchedEffect(exoPlayer) {
-        val player = exoPlayer ?: return@LaunchedEffect
+    LaunchedEffect(playerVisible) {
+        if (!playerVisible) return@LaunchedEffect
         var lastSavedPos = 0L
         try {
             while (true) {
                 kotlinx.coroutines.delay(5000)
-                if (!player.isPlaying) continue
-                val pos = player.currentPosition
-                val dur = player.duration
+                if (!exoPlayer.isPlaying) continue
+                val pos = exoPlayer.currentPosition
+                val dur = exoPlayer.duration
                 if (dur > 0 && pos > 0 && kotlin.math.abs(pos - lastSavedPos) > 3000) {
                     vm.saveProgress(pos, dur)
                     lastSavedPos = pos
+                }
+                if (dur > 0 && pos > 0 && pos.toFloat() / dur.toFloat() > 0.9f) {
+                    vm.ensureAdjacentEpisodesLoaded()
                 }
             }
         } catch (_: kotlinx.coroutines.CancellationException) {}
     }
 
-    DisposableEffect(exoPlayer) {
-        val player = exoPlayer
-        if (player != null) {
-            PlayerPlaybackController.attach(player)
-        }
+    DisposableEffect(exoPlayer, episodeEndListener) {
+        exoPlayer.addListener(episodeEndListener)
+        PlayerPlaybackController.attach(exoPlayer)
         onDispose {
-            if (player != null) {
-                PlayerPlaybackController.detach(player)
-                try {
-                    val pos = player.currentPosition
-                    val dur = player.duration
-                    if (dur > 0 && pos > 0) {
-                        vm.saveProgress(pos, dur)
-                    }
-                } catch (_: Exception) {}
-                try { player.removeListener(episodeEndListener) } catch (_: Exception) {}
-                try { player.release() } catch (_: Exception) {}
-            }
+            PlayerPlaybackController.detach(exoPlayer)
+            try {
+                val pos = exoPlayer.currentPosition
+                val dur = exoPlayer.duration
+                if (dur > 0 && pos > 0) {
+                    vm.saveProgressImmediate(pos, dur)
+                }
+            } catch (_: Exception) {}
+            try { exoPlayer.removeListener(episodeEndListener) } catch (_: Exception) {}
+            try { exoPlayer.release() } catch (_: Exception) {}
             playerVisible = false
             showHosters = false
-            lastLoadedUrl = null
+            lastLoadedSourceKey = null
             PlaybackForegroundService.stop(context)
         }
     }
@@ -291,22 +309,15 @@ fun PlayerScreen(
             .background(Color.Black)
             .tvPlayerKeyHandler(
                 onPlayPause = {
-                    val p = exoPlayer
-                    if (p != null) {
-                        if (p.isPlaying) p.pause() else p.play()
-                    }
+                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                 },
                 onSeekForward = {
-                    val p = exoPlayer
-                    if (p != null && p.duration > 0) {
-                        p.seekTo((p.currentPosition + 10000).coerceAtMost(p.duration))
+                    if (exoPlayer.duration > 0) {
+                        exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
                     }
                 },
                 onSeekBackward = {
-                    val p = exoPlayer
-                    if (p != null) {
-                        p.seekTo((p.currentPosition - 10000).coerceAtLeast(0))
-                    }
+                    exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
                 },
                 onNext = {
                     state.nextEpisode?.let { next ->
@@ -322,7 +333,7 @@ fun PlayerScreen(
             )
     ) {
         val player = exoPlayer
-        if (player != null && currentSource != null) {
+        if (currentSource != null) {
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -357,7 +368,7 @@ fun PlayerScreen(
             )
         }
 
-        if (playerVisible && state.loading && exoPlayer != null && state.hosterSwitching) {
+        if (playerVisible && state.loading && state.hosterSwitching) {
             Box(
                 Modifier
                     .align(Alignment.Center)
@@ -375,7 +386,7 @@ fun PlayerScreen(
         }
 
         AnimatedVisibility(
-            visible = showSkipIntro && playerVisible && exoPlayer != null,
+            visible = showSkipIntro && playerVisible,
             enter = fadeIn() + slideInVertically { it / 2 },
             exit = fadeOut() + slideOutVertically { it / 2 },
             modifier = Modifier
@@ -390,7 +401,7 @@ fun PlayerScreen(
                     .clip(RoundedCornerShape(24.dp))
                     .background(PrimaryGradient)
                     .clickable {
-                        exoPlayer?.seekTo(INTRO_SKIP_POSITION_MS)
+                        exoPlayer.seekTo(INTRO_SKIP_POSITION_MS)
                         showSkipIntro = false
                     }
                     .padding(horizontal = 20.dp, vertical = 12.dp)
@@ -517,7 +528,7 @@ fun PlayerScreen(
                     )
                 }
             }
-            if (playerVisible && exoPlayer != null) {
+            if (playerVisible) {
                 var showSpeedMenu by remember { mutableStateOf(false) }
                 Box {
                     Box(
@@ -557,6 +568,37 @@ fun PlayerScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = !state.hosterFallbackNotice.isNullOrBlank(),
+            enter = fadeIn() + slideInVertically { -it / 2 },
+            exit = fadeOut() + slideOutVertically { -it / 2 },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                )
+        ) {
+            state.hosterFallbackNotice?.let { notice ->
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xDD1A1A1A))
+                        .clickable { vm.dismissHosterFallbackNotice() }
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        notice,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

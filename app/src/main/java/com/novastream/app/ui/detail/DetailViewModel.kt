@@ -1,6 +1,5 @@
 package com.novastream.app.ui.detail
 
-import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,11 +9,10 @@ import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +29,7 @@ data class DetailUiState(
     val error: String? = null,
     val inWatchlist: Boolean = false,
     val episodeProgress: Map<String, WatchProgress> = emptyMap(),
+    val progressBySeasonEpisode: Map<String, WatchProgress> = emptyMap(),
     val currentProgress: WatchProgress? = null,
     val metaCast: List<com.novastream.app.data.meta.MetaPerson> = emptyList(),
     val metaRating: Double? = null,
@@ -50,9 +49,9 @@ data class DetailUiState(
             val season = selectedSeason ?: return 0
             val seriesSlug = series?.id ?: return 0
             return season.episodes.count { ep ->
-                episodeProgress.values.any {
-                    it.slug == seriesSlug && it.season == season.number && it.episode == ep.number && it.isCompleted
-                }
+                progressBySeasonEpisode["${season.number}-${ep.number}"]?.let {
+                    it.slug == seriesSlug && it.isCompleted
+                } == true
             }
         }
 
@@ -66,9 +65,9 @@ data class DetailUiState(
             val seriesSlug = series?.id ?: return 0
             return seasons.sumOf { season ->
                 season.episodes.count { ep ->
-                    episodeProgress.values.any {
-                        it.slug == seriesSlug && it.season == season.number && it.episode == ep.number && it.isCompleted
-                    }
+                    progressBySeasonEpisode["${season.number}-${ep.number}"]?.let {
+                        it.slug == seriesSlug && it.isCompleted
+                    } == true
                 }
             }
         }
@@ -80,10 +79,8 @@ data class DetailUiState(
     fun progressFor(season: Int, episode: Int): WatchProgress? {
         val seriesSlug = series?.id ?: return null
         val pid = ActiveProvider.id
-        return episodeProgress.values.find {
+        return progressBySeasonEpisode["$season-$episode"]?.takeIf {
             it.slug == seriesSlug &&
-                it.season == season &&
-                it.episode == episode &&
                 (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
         }
     }
@@ -91,10 +88,10 @@ data class DetailUiState(
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
-    private val watchRepo: WatchRepository
+    private val watchRepo: WatchRepository,
+    private val providerController: ProviderController
 ) : ViewModel() {
 
     private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
@@ -106,8 +103,7 @@ class DetailViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            ProviderManager.activeProviderIdFlow(context).collect { providerId ->
-                ActiveProvider.setById(providerId)
+            providerController.activeProviderId.collect { providerId ->
                 val previous = loadedProviderId
                 if (previous != null && previous != providerId) {
                     _state.update {
@@ -130,6 +126,12 @@ class DetailViewModel @Inject constructor(
                 val progressMap = progressList
                     .filter { it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown" }
                     .associateBy { it.episodeKey }
+                val seasonEpisodeMap = progressList
+                    .filter {
+                        it.slug == slug &&
+                            (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
+                    }
+                    .associateBy { "${it.season}-${it.episode}" }
                 val current = progressList
                     .filter {
                         it.slug == slug &&
@@ -137,7 +139,13 @@ class DetailViewModel @Inject constructor(
                             !it.isCompleted
                     }
                     .maxByOrNull { it.updatedAt }
-                _state.update { it.copy(episodeProgress = progressMap, currentProgress = current) }
+                _state.update {
+                    it.copy(
+                        episodeProgress = progressMap,
+                        progressBySeasonEpisode = seasonEpisodeMap,
+                        currentProgress = current
+                    )
+                }
             }
         }
         load()

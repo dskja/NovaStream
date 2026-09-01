@@ -150,7 +150,11 @@ class SearchViewModel @Inject constructor(
                         }
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) {
+                    android.util.Log.w("SearchVM", "loadTrending failed", e)
+                }
+            }
         }
     }
 
