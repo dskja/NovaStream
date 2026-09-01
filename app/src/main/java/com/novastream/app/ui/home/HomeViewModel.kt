@@ -14,8 +14,11 @@ import com.novastream.app.data.provider.ContentLanguageGenres
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.util.ErrorMapper
 import com.novastream.app.util.ProviderLoadMetrics
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,6 +64,7 @@ data class HomeUiState(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
@@ -145,7 +149,13 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "provider flow error", e)
-                load(force = true)
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        isRefreshing = false,
+                        error = ErrorMapper.toUserMessage(e)
+                    )
+                }
             }
         }
     }

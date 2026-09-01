@@ -27,21 +27,6 @@ class WatchRepository @Inject constructor(
     private val progressDao = db.watchProgressDao()
     private val watchlistDao = db.watchlistDao()
 
-    companion object {
-        @Volatile
-        private var INSTANCE: WatchRepository? = null
-
-        fun get(context: android.content.Context): WatchRepository =
-            INSTANCE ?: synchronized(this) {
-                val appContext = context.applicationContext
-                val db = NovaStreamDatabase.get(appContext)
-                INSTANCE ?: WatchRepository(
-                    db,
-                    ProfileManager(appContext, db)
-                ).also { INSTANCE = it }
-            }
-    }
-
     private suspend fun activeProfileId(): String {
         profileManager.ensureDefaultProfile()
         return profileManager.getActiveProfile().profileId

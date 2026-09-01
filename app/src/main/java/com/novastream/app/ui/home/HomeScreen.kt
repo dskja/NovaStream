@@ -47,15 +47,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.ui.components.ContinueWatchingCard
 import com.novastream.app.ui.components.ProviderHealthBanner
 import com.novastream.app.ui.components.PremiumEmpty
-import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
@@ -299,18 +295,7 @@ fun HomeScreen(
                 }
             }
 
-            // Error State
-            if (state.error != null && state.popular.isEmpty()) {
-                item {
-                    PremiumError(
-                        message = state.error ?: stringResource(R.string.error_unknown),
-                        onRetry = vm::load,
-                        modifier = Modifier.fillParentMaxSize()
-                    )
-                }
-            }
-
-            // Empty catalog
+            // Empty catalog (no duplicate PremiumError — ProviderHealthBanner handles errors above)
             if (catalogEmpty) {
                 item {
                     PremiumEmpty(
@@ -383,7 +368,17 @@ fun HomeScreen(
                                     .width(160.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(Color.White.copy(alpha = 0.06f))
-                                    .clickable { onSeriesClick(ep.seriesSlug) }
+                                    .clickable {
+                                        onContinueWatchingClick(
+                                            ep.seriesSlug,
+                                            ep.season,
+                                            ep.episode,
+                                            ep.shortDisplay,
+                                            ep.seriesTitle,
+                                            ep.coverUrl,
+                                            false
+                                        )
+                                    }
                                     .padding(12.dp)
                             ) {
                                 Text(

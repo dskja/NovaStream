@@ -107,7 +107,7 @@ fun PlayerScreen(
     }
 
     val currentSource = state.currentSource
-    var showHosters by remember { mutableStateOf(true) }
+    var showHosters by remember { mutableStateOf(false) }
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
     var lastLoadedSourceKey by remember { mutableStateOf<String?>(null) }
@@ -207,7 +207,9 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                vm.onPlayerError(error.localizedMessage ?: context.getString(R.string.error_unknown))
+                vm.onPlayerError(
+                    com.novastream.app.util.ErrorMapper.toUserMessage(error)
+                )
             }
         }
     }

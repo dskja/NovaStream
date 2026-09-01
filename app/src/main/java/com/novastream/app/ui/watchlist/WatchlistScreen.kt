@@ -51,6 +51,7 @@ import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.tv.rememberInitialFocusRequester
 import com.novastream.app.ui.tv.tvFocusRing
 import com.novastream.app.ui.tv.tvFocusable
+import com.novastream.app.util.ErrorMapper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,7 +114,9 @@ class WatchlistViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
-                _state.update { it.copy(loading = false, error = context.getString(R.string.watchlist_error_loading)) }
+                _state.update {
+                    it.copy(loading = false, error = ErrorMapper.toUserMessage(e))
+                }
             }
         }
         viewModelScope.launch {

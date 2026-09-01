@@ -16,7 +16,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.R
 import com.novastream.app.data.db.ProfileEntity
-import com.novastream.app.profile.ProfileManager
 import kotlinx.coroutines.launch
 
 @Composable

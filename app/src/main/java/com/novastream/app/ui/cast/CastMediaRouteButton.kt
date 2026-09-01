@@ -1,8 +1,10 @@
 package com.novastream.app.ui.cast
 
+import android.view.ContextThemeWrapper
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.R as MediaRouterR
 import androidx.mediarouter.app.MediaRouteButton
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.novastream.app.cast.CastHelper
@@ -20,10 +22,10 @@ fun CastMediaRouteButton(
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            MediaRouteButton(context).apply {
+            val themed = ContextThemeWrapper(context, MediaRouterR.style.Theme_MediaRouter)
+            MediaRouteButton(themed).apply {
                 CastButtonFactory.setUpMediaRouteButton(context, this)
             }
-        },
-        update = { /* CastButtonFactory setup is one-time */ }
+        }
     )
 }

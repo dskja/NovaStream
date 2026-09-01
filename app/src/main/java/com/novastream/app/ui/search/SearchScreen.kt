@@ -74,6 +74,7 @@ data class SearchUiState(
     val loading: Boolean = false,
     val results: List<com.novastream.app.data.model.Series> = emptyList(),
     val error: String? = null,
+    val trendingError: String? = null,
     val recentSearches: List<String> = emptyList(),
     val trending: List<com.novastream.app.data.model.Series> = emptyList()
 )
@@ -119,6 +120,7 @@ class SearchViewModel @Inject constructor(
                                 results = emptyList(),
                                 trending = emptyList(),
                                 error = null,
+                                trendingError = null,
                                 loading = false
                             )
                         }
@@ -143,14 +145,19 @@ class SearchViewModel @Inject constructor(
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id == expected) {
                             val trending = res.data.trending.ifEmpty { res.data.popular }
-                            _state.update { it.copy(trending = trending.take(20)) }
+                            _state.update { it.copy(trending = trending.take(20), trendingError = null) }
                         }
                     }
                     else -> {
                         when (val popular = repo.loadPopular()) {
                             is NovaStreamRepository.RepoResult.Success -> {
                                 if (ActiveProvider.id == expected) {
-                                    _state.update { it.copy(trending = popular.data.take(20)) }
+                                    _state.update { it.copy(trending = popular.data.take(20), trendingError = null) }
+                                }
+                            }
+                            is NovaStreamRepository.RepoResult.Error -> {
+                                if (ActiveProvider.id == expected) {
+                                    _state.update { it.copy(trendingError = popular.message) }
                                 }
                             }
                             else -> {}
@@ -162,7 +169,7 @@ class SearchViewModel @Inject constructor(
                     android.util.Log.w("SearchVM", "loadTrending failed", e)
                 }
                 _state.update {
-                    it.copy(error = com.novastream.app.util.ErrorMapper.toUserMessage(e))
+                    it.copy(trendingError = com.novastream.app.util.ErrorMapper.toUserMessage(e))
                 }
             }
         }
@@ -251,7 +258,11 @@ fun SearchScreen(
     val useGlobal = globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE
     val displayResults = if (useGlobal) globalState.results else state.results
     val displayLoading = if (useGlobal) globalState.loading else state.loading
-    val displayError = if (useGlobal) globalState.error else state.error
+    val displayError = when {
+        state.query.isBlank() -> null
+        useGlobal -> globalState.error
+        else -> state.error
+    }
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
 
@@ -345,7 +356,11 @@ fun SearchScreen(
                     Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .clickable { vm.onQueryChange(""); focusManager.clearFocus() },
+                        .clickable {
+                            vm.onQueryChange("")
+                            if (useGlobal) globalVm.onQueryChange("")
+                            focusManager.clearFocus()
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -418,6 +433,14 @@ fun SearchScreen(
                                 }
                             }
                         }
+                        if (state.trendingError != null) {
+                            Text(
+                                state.trendingError ?: "",
+                                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                         // Trending section
                         if (state.trending.isNotEmpty()) {
                             SectionHeader(stringResource(R.string.search_trending), modifier = Modifier.padding(top = 8.dp))
@@ -437,7 +460,7 @@ fun SearchScreen(
                     }
                 }
                 displayResults.isEmpty() && state.query.isNotBlank() -> PremiumEmpty(
-                    if (ActiveProvider.isBurningSeries) {
+                    if (!useGlobal && ActiveProvider.isBurningSeries) {
                         stringResource(com.novastream.app.R.string.search_bs_blocked)
                     } else {
                         stringResource(com.novastream.app.R.string.search_no_results, state.query)
