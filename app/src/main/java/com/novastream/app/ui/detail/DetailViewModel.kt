@@ -57,7 +57,10 @@ data class DetailUiState(
     val loadedProviderId: String? = null,
     val providerMismatch: Boolean = false,
     val downloadMessage: String? = null,
-    val downloading: Boolean = false
+    val downloading: Boolean = false,
+    val casting: Boolean = false,
+    val castStreamUrl: String? = null,
+    val castStreamTitle: String? = null
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -525,5 +528,62 @@ class DetailViewModel @Inject constructor(
 
     fun clearDownloadMessage() {
         _state.update { it.copy(downloadMessage = null) }
+    }
+
+    fun castCurrentEpisode() {
+        val series = _state.value.series ?: return
+        val seasonObj = _state.value.selectedSeason
+        viewModelScope.launch {
+            _state.update { it.copy(casting = true, castStreamUrl = null, castStreamTitle = null) }
+            try {
+                val seasonNum = if (series.isMovie) 1 else seasonObj?.number ?: 1
+                var episode: Episode? = seasonObj?.episodes?.firstOrNull()
+                if (episode == null && !series.isMovie) {
+                    when (val epResult = repo.loadSeason(slug, seasonNum)) {
+                        is RepoResult.Success -> episode = epResult.data.firstOrNull()
+                        else -> {}
+                    }
+                }
+                if (episode == null && series.isMovie) {
+                    episode = Episode(number = 1, title = series.title, slug = slug, season = 1, hosters = emptyList())
+                }
+                val ep = episode ?: run {
+                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                    return@launch
+                }
+                when (val hostersResult = repo.loadHosters(ep)) {
+                    is RepoResult.Success -> {
+                        val hoster = hostersResult.data.firstOrNull() ?: run {
+                            _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                            return@launch
+                        }
+                        when (val sourcesResult = repo.resolveHoster(hoster)) {
+                            is RepoResult.Success -> {
+                                val source = sourcesResult.data.firstOrNull { it.isPlayable }
+                                if (source == null) {
+                                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                                    return@launch
+                                }
+                                _state.update {
+                                    it.copy(
+                                        casting = false,
+                                        castStreamUrl = com.novastream.app.util.MediaUrls.secureUrl(source.url),
+                                        castStreamTitle = "${series.title} – ${ep.title}"
+                                    )
+                                }
+                            }
+                            else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                        }
+                    }
+                    else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+                }
+            } catch (_: Exception) {
+                _state.update { it.copy(casting = false, downloadMessage = "detail_cast_failed") }
+            }
+        }
+    }
+
+    fun clearCastRequest() {
+        _state.update { it.copy(castStreamUrl = null, castStreamTitle = null) }
     }
 }

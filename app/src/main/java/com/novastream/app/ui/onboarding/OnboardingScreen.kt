@@ -234,7 +234,13 @@ fun OnboardingScreen(
                 Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(if (finishing || isSwitching) BgSurfaceElevated else PrimaryGradient)
+                    .then(
+                        if (finishing || isSwitching) {
+                            Modifier.background(BgSurfaceElevated)
+                        } else {
+                            Modifier.background(PrimaryGradient)
+                        }
+                    )
                     .tvFocusable(focusRequester = if (step == 0) initialFocus else null)
                     .tvFocusRing(cornerRadius = 24.dp)
                     .clickable(enabled = !finishing && !isSwitching) {

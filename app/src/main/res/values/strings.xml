@@ -125,6 +125,15 @@
     <string name="downloads_status_paused">Pausiert</string>
     <string name="downloads_status_completed">Abgeschlossen</string>
     <string name="downloads_status_failed">Fehlgeschlagen</string>
+    <string name="downloads_status_removed">Entfernt</string>
+    <string name="settings_categories">Kategorien</string>
+    <string name="settings_playback_sub">Autoplay, Hoster, Geschwindigkeit</string>
+    <string name="settings_design_sub">Farben, Performance, Animationen</string>
+    <string name="settings_advanced">Erweitert</string>
+    <string name="settings_advanced_sub">IPTV, Sync, Profile, Cast</string>
+    <string name="detail_cast">Auf TV senden</string>
+    <string name="detail_cast_started">Wiedergabe auf Chromecast gestartet</string>
+    <string name="detail_cast_failed">Cast fehlgeschlagen</string>
     <string name="settings_open_downloads">Downloads verwalten</string>
     <string name="settings_open_downloads_sub">Offline-Inhalte anzeigen und löschen</string>
     <string name="settings_provider_switching">Provider wird gewechselt…</string>

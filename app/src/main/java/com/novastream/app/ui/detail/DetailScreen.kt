@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -71,6 +72,23 @@ fun DetailScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val downloadMsg = state.downloadMessage
+    val castHelper = remember { com.novastream.app.cast.CastHelper.get(context) }
+    var castPlayer by remember { mutableStateOf<androidx.media3.cast.CastPlayer?>(null) }
+    val appSettings = remember { com.novastream.app.data.prefs.AppSettings(context) }
+    val castEnabled by appSettings.castEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(state.castStreamUrl, state.castStreamTitle) {
+        val url = state.castStreamUrl ?: return@LaunchedEffect
+        val title = state.castStreamTitle ?: "NovaStream"
+        if (castEnabled && castHelper.isAvailable) {
+            val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
+            cp?.let {
+                castHelper.loadOnCast(it, url, title)
+                snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_started))
+            }
+        }
+        vm.clearCastRequest()
+    }
 
     LaunchedEffect(downloadMsg) {
         downloadMsg?.let { key ->
@@ -78,6 +96,7 @@ fun DetailScreen(
                 "detail_download_started" -> context.getString(R.string.detail_download_started)
                 "detail_download_failed" -> context.getString(R.string.detail_download_failed)
                 "detail_download_no_source" -> context.getString(R.string.detail_download_no_source)
+                "detail_cast_failed" -> context.getString(R.string.detail_cast_failed)
                 else -> key
             }
             snackbarHostState.showSnackbar(text)
@@ -103,7 +122,10 @@ fun DetailScreen(
                 onMarkSeasonWatched = vm::markSeasonAsWatched,
                 onMarkSeasonUnwatched = vm::markSeasonAsUnwatched,
                 onRelatedClick = onRelatedClick,
-                onDownload = vm::downloadCurrentEpisode
+                onDownload = vm::downloadCurrentEpisode,
+                onCast = vm::castCurrentEpisode,
+                castEnabled = castEnabled && castHelper.isAvailable,
+                casting = state.casting
             )
         }
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -126,7 +148,10 @@ private fun DetailContent(
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
     onRelatedClick: (String) -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onCast: () -> Unit,
+    castEnabled: Boolean,
+    casting: Boolean
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -329,6 +354,29 @@ private fun DetailContent(
                                 tint = TextSecondary,
                                 modifier = Modifier.size(22.dp)
                             )
+                        }
+                    }
+                    if (castEnabled) {
+                        Box(
+                            Modifier
+                                .padding(start = 8.dp)
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(BgSurfaceElevated)
+                                .clickable(onClick = onCast, enabled = !casting)
+                                .focusable(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (casting) {
+                                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Primary)
+                            } else {
+                                Icon(
+                                    Icons.Default.Cast,
+                                    contentDescription = stringResource(R.string.detail_cast),
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                     Box(

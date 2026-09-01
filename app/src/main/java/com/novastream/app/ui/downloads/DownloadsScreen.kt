@@ -161,6 +161,18 @@ private fun DownloadRow(item: DownloadEntity, onRemove: () -> Unit) {
                 },
                 style = MaterialTheme.typography.labelSmall
             )
+            if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.QUEUED) {
+                val progress = item.progressPercent.coerceIn(0, 100) / 100f
+                if (progress > 0f) {
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = Primary,
+                        trackColor = BgSurfaceElevated
+                    )
+                }
+            }
         }
         IconButton(onClick = onRemove) {
             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.downloads_remove), tint = TextTertiary)
@@ -175,6 +187,7 @@ private fun statusLabel(status: DownloadStatus): String = when (status) {
     DownloadStatus.PAUSED -> stringResource(R.string.downloads_status_paused)
     DownloadStatus.COMPLETED -> stringResource(R.string.downloads_status_completed)
     DownloadStatus.FAILED -> stringResource(R.string.downloads_status_failed)
+    DownloadStatus.REMOVED -> stringResource(R.string.downloads_status_removed)
 }
 
 private fun formatBytes(bytes: Long): String {

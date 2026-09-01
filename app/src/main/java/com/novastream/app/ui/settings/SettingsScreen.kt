@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.DataSaverOn
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
@@ -372,7 +374,10 @@ class SettingsViewModel @Inject constructor(
 @Composable
 fun SettingsScreen(
     onOpenMarketplace: () -> Unit = {},
-    onOpenDownloads: () -> Unit = {}
+    onOpenDownloads: () -> Unit = {},
+    onOpenPlayback: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
+    onOpenAdvanced: () -> Unit = {}
 ) {
     val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -466,6 +471,34 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            SettingsSectionHeader(stringResource(R.string.settings_categories))
+            SettingsNavigationRow(
+                icon = Icons.Default.PlayCircle,
+                title = stringResource(R.string.settings_playback),
+                subtitle = stringResource(R.string.settings_playback_sub),
+                onClick = onOpenPlayback
+            )
+            SettingsNavigationRow(
+                icon = Icons.Default.Palette,
+                title = stringResource(R.string.settings_design),
+                subtitle = stringResource(R.string.settings_design_sub),
+                onClick = onOpenAppearance
+            )
+            SettingsNavigationRow(
+                icon = Icons.Default.Download,
+                title = stringResource(R.string.settings_open_downloads),
+                subtitle = stringResource(R.string.settings_open_downloads_sub),
+                onClick = onOpenDownloads
+            )
+            SettingsNavigationRow(
+                icon = Icons.Default.Stream,
+                title = stringResource(R.string.settings_advanced),
+                subtitle = stringResource(R.string.settings_advanced_sub),
+                onClick = onOpenAdvanced
+            )
+
+            Spacer(Modifier.height(8.dp))
 
             // Section: Streaming Provider
             SettingsSectionHeader(stringResource(R.string.settings_streaming_provider))

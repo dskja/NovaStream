@@ -35,8 +35,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class LiveTvUiState(
@@ -60,12 +61,20 @@ class LiveTvViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val enabled = appSettings.iptvEnabled.first()
-            _state.update { it.copy(iptvEnabled = enabled) }
-            if (enabled) {
-                loadChannels()
-                loadEpg()
-            } else _state.update { it.copy(loading = false) }
+            appSettings.iptvEnabled.collect { enabled ->
+                _state.update { it.copy(iptvEnabled = enabled) }
+                if (enabled && _state.value.groups.isEmpty()) {
+                    loadChannels()
+                    loadEpg()
+                }
+            }
+        }
+    }
+
+    fun refresh() {
+        if (_state.value.iptvEnabled) {
+            loadChannels()
+            loadEpg()
         }
     }
 
@@ -78,7 +87,7 @@ class LiveTvViewModel @Inject constructor(
                     _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
                     return@launch
                 }
-                val xml = URL(url).readText()
+                val xml = withContext(Dispatchers.IO) { URL(url).readText() }
                 _state.update { it.copy(epgLoading = false, epgPrograms = XmlTvEpgParser.parse(xml)) }
             } catch (e: Exception) {
                 _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
@@ -166,9 +175,7 @@ fun LiveTvScreen(
             } else if (uiState.error != null) {
                 Text(uiState.error!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
             } else {
-                val channels = if (uiState.searchQuery.isNotBlank()) uiState.searchResults
-                else uiState.groups.flatMap { it.channels }
-
+                val showSearch = uiState.searchQuery.isNotBlank()
                 LazyColumn(Modifier.fillMaxSize()) {
                     if (uiState.epgLoading) {
                         item {
@@ -179,12 +186,33 @@ fun LiveTvScreen(
                             )
                         }
                     }
-                    items(channels, key = { it.id }) { channel ->
-                        LiveChannelRow(
-                            channel = channel,
-                            epgTitle = viewModel.epgNow(channel)?.title,
-                            onClick = { onPlayChannel(channel) }
-                        )
+                    if (showSearch) {
+                        items(uiState.searchResults, key = { it.id }) { channel ->
+                            LiveChannelRow(
+                                channel = channel,
+                                epgTitle = viewModel.epgNow(channel)?.title,
+                                onClick = { onPlayChannel(channel) }
+                            )
+                        }
+                    } else {
+                        uiState.groups.forEach { group ->
+                            item {
+                                Text(
+                                    group.name,
+                                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            items(group.channels, key = { it.id }) { channel ->
+                                LiveChannelRow(
+                                    channel = channel,
+                                    epgTitle = viewModel.epgNow(channel)?.title,
+                                    onClick = { onPlayChannel(channel) }
+                                )
+                            }
+                        }
                     }
                 }
             }

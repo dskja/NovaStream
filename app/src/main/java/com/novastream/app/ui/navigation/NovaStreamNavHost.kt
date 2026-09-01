@@ -45,6 +45,9 @@ import com.novastream.app.ui.player.PlayerScreen
 import com.novastream.app.ui.provider.ProviderMarketplaceScreen
 import com.novastream.app.ui.search.SearchScreen
 import com.novastream.app.ui.settings.SettingsScreen
+import com.novastream.app.ui.settings.SettingsPlaybackScreen
+import com.novastream.app.ui.settings.SettingsAppearanceScreen
+import com.novastream.app.ui.settings.SettingsAdvancedScreen
 import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.live.LiveTvScreen
 import com.novastream.app.ui.watchlist.WatchlistScreen
@@ -61,7 +64,10 @@ object Routes {
     const val MARKETPLACE = "marketplace"
     const val DOWNLOADS = "downloads"
     const val DETAIL = "detail/{slug}"
-    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}"
+    const val SETTINGS_PLAYBACK = "settings/playback"
+    const val SETTINGS_APPEARANCE = "settings/appearance"
+    const val SETTINGS_ADVANCED = "settings/advanced"
+    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}&streamUrl={streamUrl}&isLive={isLive}"
 
     fun browse(section: String = "", genre: String? = null, filter: String? = null): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
@@ -76,13 +82,16 @@ object Routes {
         title: String,
         seriesTitle: String = "",
         coverUrl: String? = null,
-        isMovie: Boolean = false
+        isMovie: Boolean = false,
+        streamUrl: String? = null,
+        isLive: Boolean = false
     ): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
         val t = enc(title)
         val st = enc(seriesTitle)
         val cu = coverUrl?.let { enc(it) } ?: ""
-        return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie"
+        val su = streamUrl?.let { enc(it) } ?: ""
+        return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive"
     }
 
     /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
@@ -290,7 +299,31 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     },
                     onOpenDownloads = {
                         nav.navigate(Routes.DOWNLOADS) { launchSingleTop = true }
+                    },
+                    onOpenPlayback = {
+                        nav.navigate(Routes.SETTINGS_PLAYBACK) { launchSingleTop = true }
+                    },
+                    onOpenAppearance = {
+                        nav.navigate(Routes.SETTINGS_APPEARANCE) { launchSingleTop = true }
+                    },
+                    onOpenAdvanced = {
+                        nav.navigate(Routes.SETTINGS_ADVANCED) { launchSingleTop = true }
                     }
+                )
+            }
+
+            composable(Routes.SETTINGS_PLAYBACK) {
+                SettingsPlaybackScreen(onBack = { nav.popBackStack() })
+            }
+
+            composable(Routes.SETTINGS_APPEARANCE) {
+                SettingsAppearanceScreen(onBack = { nav.popBackStack() })
+            }
+
+            composable(Routes.SETTINGS_ADVANCED) {
+                SettingsAdvancedScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenDownloads = { nav.navigate(Routes.DOWNLOADS) { launchSingleTop = true } }
                 )
             }
 
@@ -344,7 +377,9 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     navArgument("title") { type = NavType.StringType; defaultValue = "" },
                     navArgument("seriesTitle") { type = NavType.StringType; defaultValue = "" },
                     navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" },
-                    navArgument("isMovie") { type = NavType.BoolType; defaultValue = false }
+                    navArgument("isMovie") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("streamUrl") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("isLive") { type = NavType.BoolType; defaultValue = false }
                 ),
                 enterTransition = {
                     androidx.compose.animation.slideInVertically(
@@ -407,7 +442,9 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                                 title = channel.name,
                                 seriesTitle = channel.group ?: "Live TV",
                                 coverUrl = channel.logoUrl,
-                                isMovie = true
+                                isMovie = false,
+                                streamUrl = channel.streamUrl,
+                                isLive = true
                             )
                         )
                     }

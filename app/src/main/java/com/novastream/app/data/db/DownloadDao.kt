@@ -28,6 +28,24 @@ interface DownloadDao {
     @Query("UPDATE downloads SET status = :status, updatedAt = :updatedAt WHERE downloadId = :id")
     suspend fun updateStatus(id: String, status: DownloadStatus, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("""
+        UPDATE downloads SET
+            status = :status,
+            bytesDownloaded = :bytesDownloaded,
+            contentLength = :contentLength,
+            errorMessage = :errorMessage,
+            updatedAt = :updatedAt
+        WHERE downloadId = :id
+    """)
+    suspend fun updateProgress(
+        id: String,
+        status: DownloadStatus,
+        bytesDownloaded: Long,
+        contentLength: Long,
+        errorMessage: String?,
+        updatedAt: Long = System.currentTimeMillis()
+    )
+
     @Query("DELETE FROM downloads WHERE downloadId = :id")
     suspend fun delete(id: String)
 

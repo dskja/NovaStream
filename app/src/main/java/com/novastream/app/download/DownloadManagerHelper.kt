@@ -21,6 +21,10 @@ import java.io.File
 import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Media3 DownloadManager wrapper (v12).
@@ -33,6 +37,7 @@ class DownloadManagerHelper @Inject constructor(
     db: NovaStreamDatabase
 ) {
     private val downloadDao: DownloadDao = db.downloadDao()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cacheDir = File(context.filesDir, "downloads_cache")
     private val databaseProvider = StandaloneDatabaseProvider(context)
 
@@ -53,6 +58,19 @@ class DownloadManagerHelper @Inject constructor(
             Executors.newFixedThreadPool(2)
         ).apply {
             maxParallelDownloads = 2
+            addListener(downloadListener)
+        }.also {
+            scope.launch { syncAllFromMedia3() }
+        }
+    }
+
+    private val downloadListener = object : DownloadManager.Listener {
+        override fun onDownloadChanged(
+            downloadManager: DownloadManager,
+            download: Download,
+            finalException: Exception?
+        ) {
+            scope.launch { syncDownload(download, finalException) }
         }
     }
 
@@ -70,9 +88,6 @@ class DownloadManagerHelper @Inject constructor(
         profileId: String = com.novastream.app.data.db.ProfileEntity.DEFAULT_ID
     ): String {
         require(source.isPlayable) { "Stream URL not playable" }
-        require(!source.url.contains(".m3u8") || source.isHls) {
-            "Only direct HLS/MP4 supported"
-        }
         val id = DownloadEntity.key(providerId, slug, season, episode)
         val secureUrl = com.novastream.app.util.MediaUrls.secureUrl(source.url)
         val entity = DownloadEntity(
@@ -114,6 +129,33 @@ class DownloadManagerHelper @Inject constructor(
     suspend fun getStorageUsedBytes(): Long = downloadDao.totalDownloadedBytes()
 
     suspend fun getDownloadCount(): Int = downloadDao.count()
+
+    private suspend fun syncAllFromMedia3() {
+        downloadManager.currentDownloads.forEach { syncDownload(it, null) }
+    }
+
+    private suspend fun syncDownload(download: Download, error: Exception?) {
+        val existing = downloadDao.getById(download.request.id) ?: return
+        val status = mapStatus(download.state)
+        downloadDao.updateProgress(
+            id = download.request.id,
+            status = status,
+            bytesDownloaded = download.bytesDownloaded,
+            contentLength = download.contentLength,
+            errorMessage = error?.localizedMessage,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    private fun mapStatus(state: Int): DownloadStatus = when (state) {
+        Download.STATE_QUEUED -> DownloadStatus.QUEUED
+        Download.STATE_DOWNLOADING -> DownloadStatus.DOWNLOADING
+        Download.STATE_COMPLETED -> DownloadStatus.COMPLETED
+        Download.STATE_FAILED -> DownloadStatus.FAILED
+        Download.STATE_STOPPED -> DownloadStatus.PAUSED
+        Download.STATE_REMOVING -> DownloadStatus.REMOVED
+        else -> DownloadStatus.QUEUED
+    }
 
     fun release() {
         runCatching { downloadManager.release() }

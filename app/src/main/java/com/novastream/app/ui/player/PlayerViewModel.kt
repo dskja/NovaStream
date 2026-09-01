@@ -51,7 +51,9 @@ data class PlayerUiState(
     val season: Int = 1,
     val episode: Int = 1,
     val isMovie: Boolean = false,
-    val adjacentEpisodesLoading: Boolean = false
+    val isLive: Boolean = false,
+    val adjacentEpisodesLoading: Boolean = false,
+    val isBuffering: Boolean = false
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(selectedSourceIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
@@ -108,6 +110,10 @@ class PlayerViewModel @Inject constructor(
         try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     }?.takeIf { it.isNotBlank() }
     private val isMovie: Boolean = savedStateHandle.get<Boolean>("isMovie") ?: false
+    private val isLive: Boolean = savedStateHandle.get<Boolean>("isLive") ?: false
+    private val directStreamUrl: String? = savedStateHandle.get<String>("streamUrl")?.let {
+        try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
+    }?.takeIf { it.isNotBlank() }
 
     private val _state = MutableStateFlow(PlayerUiState(
         episodeTitle = title,
@@ -115,7 +121,8 @@ class PlayerViewModel @Inject constructor(
         coverUrl = coverUrl,
         season = season,
         episode = episode,
-        isMovie = isMovie
+        isMovie = isMovie,
+        isLive = isLive
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
@@ -199,6 +206,27 @@ class PlayerViewModel @Inject constructor(
     private fun load() {
         _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
+            if (isLive && !directStreamUrl.isNullOrBlank()) {
+                val url = com.novastream.app.util.MediaUrls.secureUrl(directStreamUrl)
+                val source = StreamSource(
+                    hoster = "Live",
+                    url = url,
+                    mimeType = if (url.contains(".m3u8")) "application/x-mpegURL" else "video/mp4",
+                    isHls = url.contains(".m3u8")
+                )
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        hosters = listOf(HosterLink(name = "Live", redirectUrl = url, language = "Live", index = 0)),
+                        sources = listOf(source),
+                        selectedHosterIndex = 0,
+                        selectedSourceIndex = 0,
+                        error = null
+                    )
+                }
+                return@launch
+            }
+
             val saved = watchRepo.getProgress(slug, season, episode)
             if (saved != null && !saved.isCompleted && saved.durationMs > 0 && saved.positionMs < saved.durationMs) {
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
@@ -273,6 +301,14 @@ class PlayerViewModel @Inject constructor(
 
     fun dismissHosterFallbackNotice() {
         _state.update { it.copy(hosterFallbackNotice = null) }
+    }
+
+    fun setBuffering(buffering: Boolean) {
+        _state.update { it.copy(isBuffering = buffering) }
+    }
+
+    fun onPlayerError(message: String) {
+        _state.update { it.copy(error = message, loading = false, isBuffering = false) }
     }
 
     fun retry() {

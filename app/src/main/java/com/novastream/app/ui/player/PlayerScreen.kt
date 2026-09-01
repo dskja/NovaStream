@@ -171,14 +171,19 @@ fun PlayerScreen(
     val episodeEndListener = remember(vm) {
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                vm.setBuffering(playbackState == Player.STATE_BUFFERING)
                 if (playbackState == Player.STATE_READY && pendingResumeMs > 0L && !hasAppliedResumeSeek) {
                     exoPlayer.seekTo(pendingResumeMs)
                     hasAppliedResumeSeek = true
                 }
-                if (playbackState == Player.STATE_ENDED) {
+                if (playbackState == Player.STATE_ENDED && !state.isLive) {
                     vm.onEpisodeFinished()
                     showNextEpisodeOverlay = true
                 }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                vm.onPlayerError(error.localizedMessage ?: context.getString(R.string.error_unknown))
             }
         }
     }
@@ -264,8 +269,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(playerVisible) {
-        if (!playerVisible) return@LaunchedEffect
+    LaunchedEffect(playerVisible, state.isLive) {
+        if (!playerVisible || state.isLive) return@LaunchedEffect
         var lastSavedPos = 0L
         try {
             while (true) {
@@ -289,13 +294,15 @@ fun PlayerScreen(
         PlayerPlaybackController.attach(exoPlayer)
         onDispose {
             PlayerPlaybackController.detach(exoPlayer)
-            try {
-                val pos = exoPlayer.currentPosition
-                val dur = exoPlayer.duration
-                if (dur > 0 && pos > 0) {
-                    vm.saveProgressImmediate(pos, dur)
-                }
-            } catch (_: Exception) {}
+            if (!state.isLive) {
+                try {
+                    val pos = exoPlayer.currentPosition
+                    val dur = exoPlayer.duration
+                    if (dur > 0 && pos > 0) {
+                        vm.saveProgressImmediate(pos, dur)
+                    }
+                } catch (_: Exception) {}
+            }
             try { exoPlayer.removeListener(episodeEndListener) } catch (_: Exception) {}
             try { exoPlayer.release() } catch (_: Exception) {}
             playerVisible = false
@@ -374,6 +381,23 @@ fun PlayerScreen(
                 onRetry = { vm.retry() },
                 onTryAlternateHoster = { vm.tryAlternateHoster() }
             )
+        }
+
+        if (playerVisible && state.isBuffering && currentSource != null) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x99000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Primary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         if (playerVisible && state.loading && state.hosterSwitching) {
