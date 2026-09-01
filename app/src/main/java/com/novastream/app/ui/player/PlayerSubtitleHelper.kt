@@ -5,6 +5,7 @@ package com.novastream.app.ui.player
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.novastream.app.R
 import com.novastream.app.util.AppContext
 
