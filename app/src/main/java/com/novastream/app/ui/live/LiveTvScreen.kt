@@ -27,6 +27,7 @@ import com.novastream.app.data.iptv.IptvChannelGroup
 import com.novastream.app.data.iptv.IptvRegistry
 import com.novastream.app.data.iptv.EpgProgram
 import com.novastream.app.data.iptv.XmlTvEpgParser
+import com.novastream.app.data.prefs.AppSettings
 import java.net.URL
 import com.novastream.app.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
