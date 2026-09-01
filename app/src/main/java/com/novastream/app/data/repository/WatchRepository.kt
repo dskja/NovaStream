@@ -1,6 +1,5 @@
 package com.novastream.app.data.repository
 
-import android.content.Context
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
@@ -8,14 +7,18 @@ import com.novastream.app.data.provider.ActiveProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Repository für Watch-Progress und Watchlist.
  * Speichert lokal in Room – immer provider-scoped.
  */
-class WatchRepository private constructor(context: Context) {
+@Singleton
+class WatchRepository @Inject constructor(
+    db: NovaStreamDatabase
+) {
 
-    private val db = NovaStreamDatabase.get(context)
     private val progressDao = db.watchProgressDao()
     private val watchlistDao = db.watchlistDao()
 
@@ -23,9 +26,9 @@ class WatchRepository private constructor(context: Context) {
         @Volatile
         private var INSTANCE: WatchRepository? = null
 
-        fun get(context: Context): WatchRepository =
+        fun get(context: android.content.Context): WatchRepository =
             INSTANCE ?: synchronized(this) {
-                INSTANCE ?: WatchRepository(context.applicationContext).also { INSTANCE = it }
+                INSTANCE ?: WatchRepository(NovaStreamDatabase.get(context.applicationContext)).also { INSTANCE = it }
             }
     }
 
@@ -184,5 +187,19 @@ class WatchRepository private constructor(context: Context) {
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearWatchlist failed", e)
         }
+    }
+
+    suspend fun countUnknownProviderRows(): Int = try {
+        watchlistDao.countUnknownProvider() + progressDao.countUnknownProvider()
+    } catch (e: Exception) {
+        if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "countUnknownProviderRows failed", e)
+        0
+    }
+
+    suspend fun cleanupUnknownProviderRows(): Int = try {
+        watchlistDao.deleteUnknownProvider() + progressDao.deleteUnknownProvider()
+    } catch (e: Exception) {
+        if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "cleanupUnknownProviderRows failed", e)
+        0
     }
 }

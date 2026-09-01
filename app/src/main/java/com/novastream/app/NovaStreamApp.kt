@@ -6,16 +6,23 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.novastream.app.data.api.NetworkModule
+import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.util.VoeWebViewResolver
+import com.novastream.app.data.repository.NovaStreamRepository
+import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+@HiltAndroidApp
 class NovaStreamApp : Application(), ImageLoaderFactory {
+
+    @Inject lateinit var database: NovaStreamDatabase
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -39,15 +46,17 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         // Cleanup: Entferne abgeschlossene Episoden die älter als 30 Tage sind
         appScope.launch {
             try {
-                val db = com.novastream.app.data.db.NovaStreamDatabase.get(this@NovaStreamApp)
                 val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-                val count = db.watchProgressDao().deleteOldCompleted(cutoff)
+                val count = database.watchProgressDao().deleteOldCompleted(cutoff)
                 if (com.novastream.app.BuildConfig.DEBUG && count > 0) {
                     android.util.Log.i("NovaStreamApp", "Cleaned up $count old completed episodes")
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NovaStreamApp", "Cleanup failed", e)
             }
+        }
+        appScope.launch {
+            NovaStreamRepository.get(this@NovaStreamApp).purgeExpiredCache()
         }
     }
 

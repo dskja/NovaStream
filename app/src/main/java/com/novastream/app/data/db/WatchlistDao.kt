@@ -71,4 +71,10 @@ interface WatchlistDao {
 
     @Query("DELETE FROM watchlist")
     suspend fun clear()
+
+    @Query("SELECT COUNT(*) FROM watchlist WHERE providerId = 'unknown'")
+    suspend fun countUnknownProvider(): Int
+
+    @Query("DELETE FROM watchlist WHERE providerId = 'unknown'")
+    suspend fun deleteUnknownProvider(): Int
 }

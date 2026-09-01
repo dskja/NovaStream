@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.compose'
     id 'com.google.devtools.ksp'
+    id 'com.google.dagger.hilt.android'
 }
 
 android {
@@ -13,8 +14,8 @@ android {
         applicationId "com.novastream.app"
         minSdk 22
         targetSdk 36
-        versionCode 50
-        versionName "6.0"
+        versionCode 60
+        versionName "7.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary true }
     }
@@ -45,6 +46,9 @@ android {
     buildFeatures {
         compose true
         buildConfig true
+    }
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
     }
     // Split APKs by density for smaller download size
     splits {
@@ -125,6 +129,11 @@ dependencies {
     implementation 'androidx.room:room-runtime:2.6.1'
     implementation 'androidx.room:room-ktx:2.6.1'
     ksp 'androidx.room:room-compiler:2.6.1'
+
+    // Hilt DI
+    implementation 'com.google.dagger:hilt-android:2.52'
+    ksp 'com.google.dagger:hilt-compiler:2.52'
+    implementation 'androidx.hilt:hilt-navigation-compose:1.2.0'
 
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
 
