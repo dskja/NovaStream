@@ -66,13 +66,23 @@ open class ConfigurableSiteProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
-            val html = if (profile.searchMethod.equals("POST", true) && profile.searchPostField != null) {
-                postSearch(query.trim())
-            } else {
-                val path = profile.searchPath.replace("{query}", java.net.URLEncoder.encode(query.trim(), "UTF-8"))
-                fetch(profile.baseUrl.trimEnd('/') + path)
+            val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
+            val paths = buildList {
+                add(profile.searchPath.replace("{query}", encoded))
+                if (!profile.searchPath.contains("?s=")) add("/?s={query}".replace("{query}", encoded))
+                if (!profile.searchPath.contains("search?q=")) add("/search?q={query}".replace("{query}", encoded))
+            }.distinct()
+            var results = emptyList<Series>()
+            for (path in paths) {
+                val html = if (profile.searchMethod.equals("POST", true) && profile.searchPostField != null) {
+                    postSearch(query.trim())
+                } else {
+                    fetch(profile.baseUrl.trimEnd('/') + path)
+                }
+                results = UniversalHtmlScraper.parseSeriesList(html, profile)
+                if (results.isNotEmpty()) break
             }
-            UniversalHtmlScraper.parseSeriesList(html, profile)
+            results
         }.toResult()
     }
 
@@ -214,17 +224,8 @@ open class ConfigurableSiteProvider(
         return html
     }
 
-    private suspend fun fetchNetwork(url: String): String = withContext(Dispatchers.IO) {
-        val req = Request.Builder()
-            .url(url)
-            .header("User-Agent", NovaStreamConfig.USER_AGENT)
-            .header("Referer", profile.baseUrl + "/")
-            .header("Accept", "text/html,application/xhtml+xml,*/*")
-            .build()
-        NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-            if (resp.isSuccessful) resp.body?.string() ?: "" else ""
-        }
-    }
+    private suspend fun fetchNetwork(url: String): String =
+        ProviderHttp.fetch(url, referer = profile.baseUrl + "/", webViewFallback = true)
 
     private suspend fun postSearch(query: String): String = withContext(Dispatchers.IO) {
         val field = profile.searchPostField ?: return@withContext ""

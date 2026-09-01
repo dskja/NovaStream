@@ -1,22 +1,18 @@
 package com.novastream.app.data.provider
 
-import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.HosterResolver
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.regex.Pattern
 
 /**
- * Provider für MegaKino.ms.
+ * Provider für MegaKino (rotierende Mirror-Domains).
  * MegaKino bietet Filme und Serien mit deutschen Untertiteln/Dubbing.
  * Unterstützt von AniWorld-Downloader.
  *
@@ -37,20 +33,44 @@ class MegaKinoProvider(
     override val supportsMovies: Boolean = true
 ) : StreamingProvider {
 
-    private val hosterResolver = HosterResolver(baseUrl = baseUrl)
+    companion object {
+        /** Entry mirrors — resolved to first working base at runtime. */
+        private val MIRROR_ENTRIES = listOf(
+            "https://megakino.ms",
+            "https://megakino6.com",
+            "https://megakino8.com",
+            "https://megakino2.com",
+            "https://megakino.how",
+            "https://megakino.fi"
+        )
+    }
+
+    @Volatile
+    private var resolvedBaseUrl: String? = null
+
+    private val hosterResolver get() = HosterResolver(baseUrl = activeBaseUrl())
+
+    private suspend fun activeBaseUrl(): String {
+        resolvedBaseUrl?.let { return it }
+        ProviderHttp.resolveWorkingBase(MIRROR_ENTRIES, contentNeedle = "/title/", webViewFallback = true)
+            ?.let { resolvedBaseUrl = it }
+        return resolvedBaseUrl ?: baseUrl.trimEnd('/')
+    }
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        parseMegaKinoSeriesList(fetchUrl(baseUrl))
+        val base = activeBaseUrl()
+        parseMegaKinoSeriesList(fetchUrl(base))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/filme")
-        val list = if (html.isNotBlank()) parseMegaKinoSeriesList(html) else parseMegaKinoSeriesList(fetchUrl(baseUrl))
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/filme")
+        val list = if (html.isNotBlank()) parseMegaKinoSeriesList(html) else parseMegaKinoSeriesList(fetchUrl(base))
         list.map { it.copy(isMovie = true, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -60,9 +80,19 @@ class MegaKinoProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
+            val base = activeBaseUrl()
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-            val html = fetchUrl("$baseUrl/search?query=$encoded")
-            parseMegaKinoSeriesList(html)
+            val paths = listOf(
+                "$base/search?query=$encoded",
+                "$base/?s=$encoded",
+                "$base/suche/$encoded"
+            )
+            var results = emptyList<Series>()
+            for (url in paths) {
+                results = parseMegaKinoSeriesList(fetchUrl(url))
+                if (results.isNotEmpty()) break
+            }
+            results
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -70,7 +100,8 @@ class MegaKinoProvider(
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        val html = fetchUrl("$baseUrl/title/$slug")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/title/$slug")
         parseMegaKinoDetail(html, slug)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -78,7 +109,8 @@ class MegaKinoProvider(
     )
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
-        val html = fetchUrl("$baseUrl/title/$slug/staffel/$season")
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/title/$slug/staffel/$season")
         parseMegaKinoEpisodes(html, slug, season)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -86,12 +118,13 @@ class MegaKinoProvider(
     )
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
+        val base = activeBaseUrl()
         val url = if (episode.episodeUrl.startsWith("http")) {
             episode.episodeUrl
         } else if (episode.episodeUrl.startsWith("/")) {
-            baseUrl + episode.episodeUrl
+            base + episode.episodeUrl
         } else {
-            "$baseUrl/title/${episode.slug}/staffel/${episode.season}/episode/${episode.number}"
+            "$base/title/${episode.slug}/staffel/${episode.season}/episode/${episode.number}"
         }
         val html = fetchUrl(url)
         parseMegaKinoHosters(html)
@@ -108,19 +141,21 @@ class MegaKinoProvider(
     )
 
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+        val base = activeBaseUrl()
         val path = when {
             page <= 0 -> "/"
             else -> "/?page=${page + 1}"
         }
-        parseMegaKinoSeriesList(fetchUrl(baseUrl + path))
+        parseMegaKinoSeriesList(fetchUrl(base + path))
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
     suspend fun loadLatestEpisodes(): StreamingProvider.ProviderResult<List<com.novastream.app.data.model.LatestEpisode>> = runCatching {
-        val html = fetchUrl(baseUrl)
-        val doc = Jsoup.parse(html, baseUrl)
+        val base = activeBaseUrl()
+        val html = fetchUrl(base)
+        val doc = Jsoup.parse(html, base)
         val results = mutableListOf<com.novastream.app.data.model.LatestEpisode>()
         for (a in doc.select("a[href*=/title/]")) {
             val href = a.absUrl("href")
@@ -146,20 +181,8 @@ class MegaKinoProvider(
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
-    private suspend fun fetchUrl(url: String): String {
-        return withContext(Dispatchers.IO) {
-            val req = Request.Builder()
-                .url(url)
-                .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-                .header("Referer", baseUrl + "/")
-                .header("Accept", "text/html,application/xhtml+xml,*/*")
-                .build()
-            NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) resp.body?.string() ?: ""
-                else ""
-            }
-        }
-    }
+    private suspend fun fetchUrl(url: String): String =
+        ProviderHttp.fetch(url, referer = activeBaseUrl() + "/", webViewFallback = true)
 
     /** Parst eine Liste von Serien/Filmen. */
     private fun parseMegaKinoSeriesList(html: String): List<Series> {

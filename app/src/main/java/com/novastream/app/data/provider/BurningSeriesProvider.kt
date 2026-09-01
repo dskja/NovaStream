@@ -1,22 +1,18 @@
 package com.novastream.app.data.provider
 
-import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.HosterResolver
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.util.regex.Pattern
 
 /**
- * Provider für Burning Series (bs.to / burningseries.cx).
+ * Provider für Burning Series (burningseries.cx — ehemals bs.to).
  * Eine der ältesten deutschen Streaming-Seiten mit 7000+ Serien.
  *
  * URL-Schema:
@@ -27,13 +23,13 @@ import java.util.regex.Pattern
  *
  * Hoster: VOE, Streamtape, Vivo, Vidoza, Filemoon, Doodstream
  *
- * Hinweis: bs.to hat reCAPTCHA-Schutz. Bei aktivem Captcha schlägt das Scraping fehl.
- * Der User sollte VPN nutzen und ggf. WebView-basierte Lösung verwenden.
+ * Hinweis: burningseries.cx hat reCAPTCHA-Schutz. Bei aktivem Captcha schlägt OkHttp fehl;
+ * WebView-Fallback wird automatisch genutzt.
  */
 class BurningSeriesProvider(
     override val id: String = "burningseries",
     override val displayName: String = "Burning Series",
-    override val baseUrl: String = "https://bs.to",
+    override val baseUrl: String = "https://burningseries.cx",
     override val supportsSeries: Boolean = true
 ) : StreamingProvider {
 
@@ -42,8 +38,8 @@ class BurningSeriesProvider(
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/andelselect")
-        val finalHtml = if (html.isBlank()) fetchUrl(baseUrl) else html
+        val html = fetchUrlWithCaptcha("$baseUrl/andelselect")
+        val finalHtml = if (html.isBlank() || ProviderHttp.isChallenge(html)) fetchUrlWithCaptcha(baseUrl) else html
         parseBsSeriesList(finalHtml)
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -55,16 +51,16 @@ class BurningSeriesProvider(
         return runCatching {
             val q = query.trim()
             val encoded = java.net.URLEncoder.encode(q, "UTF-8")
-            // bs.to Varianten
             val paths = listOf(
                 "$baseUrl/suche/$encoded",
                 "$baseUrl/search?q=$encoded",
                 "$baseUrl/search?term=$encoded",
+                "$baseUrl/andelselect",
                 "$baseUrl/andere-serien"
             )
             var results = emptyList<Series>()
             for (url in paths) {
-                val html = fetchUrl(url)
+                val html = fetchUrlWithCaptcha(url)
                 results = parseBsSeriesList(html)
                 if (results.isNotEmpty() && url.contains("andere-serien")) {
                     // Client-side Filter auf Alphabet-Liste
@@ -142,34 +138,19 @@ class BurningSeriesProvider(
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
-    /** Lädt HTML; bei Captcha/leerem OkHttp-Ergebnis WebView-Fallback (Session wiederverwenden). */
+    /** Lädt HTML; bei Captcha/leerem OkHttp-Ergebnis WebView-Fallback. */
     private suspend fun fetchUrlWithCaptcha(url: String): String {
-        val http = fetchUrl(url)
-        if (http.isNotBlank() && !looksLikeCaptcha(http)) {
-            return http
-        }
+        val http = ProviderHttp.fetch(url, referer = baseUrl + "/", webViewFallback = false)
+        if (http.isNotBlank() && !ProviderHttp.isChallenge(http)) return http
         val web = com.novastream.app.util.CaptchaWebViewFetcher.fetchHtml(url)
         return web.ifBlank { http }
     }
 
-    private fun looksLikeCaptcha(html: String): Boolean =
-        html.contains("captcha", ignoreCase = true) || html.contains("recaptcha", ignoreCase = true)
+    private fun looksLikeCaptcha(html: String): Boolean = ProviderHttp.isChallenge(html)
 
-    /** Lädt eine absolute URL via OkHttp. */
-    private suspend fun fetchUrl(url: String): String {
-        return withContext(Dispatchers.IO) {
-            val req = Request.Builder()
-                .url(url)
-                .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-                .header("Referer", baseUrl + "/")
-                .header("Accept", "text/html,application/xhtml+xml,*/*")
-                .build()
-            NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) resp.body?.string() ?: ""
-                else ""
-            }
-        }
-    }
+    /** Lädt eine absolute URL via shared [ProviderHttp]. */
+    private suspend fun fetchUrl(url: String): String =
+        ProviderHttp.fetch(url, referer = baseUrl + "/", webViewFallback = true)
 
     /** Parst eine Liste von Serien (Startseite, Suche). */
     private fun parseBsSeriesList(html: String): List<Series> {

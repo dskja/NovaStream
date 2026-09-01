@@ -4,6 +4,9 @@ import com.novastream.app.data.model.NovaStreamConfig
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.Dns
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -11,6 +14,7 @@ import okhttp3.dnsoverhttps.DnsOverHttps
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -69,9 +73,19 @@ object NetworkModule {
         maxRequestsPerHost = 6
     }
 
+    /** Session cookies — helps Cloudflare / DDoS-Guard challenges across redirect chains. */
+    private val cookieJar: CookieJar = object : CookieJar {
+        private val store = ConcurrentHashMap<String, List<Cookie>>()
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            if (cookies.isNotEmpty()) store[url.host] = cookies
+        }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> = store[url.host].orEmpty()
+    }
+
     private fun baseClientBuilder(): OkHttpClient.Builder =
         OkHttpClient.Builder()
             .dns(dohDns)
+            .cookieJar(cookieJar)
             .dispatcher(buildDispatcher())
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(retryInterceptor)

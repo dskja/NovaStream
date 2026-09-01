@@ -286,24 +286,16 @@ class AniWorldProvider(
     )
 
     private suspend fun fetchUrl(url: String): String {
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            repeat(3) { attempt ->
-                val req = okhttp3.Request.Builder()
-                    .url(url)
-                    .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-                    .header("Referer", baseUrl + "/")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .build()
-                val body = com.novastream.app.data.api.NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) resp.body?.string() ?: "" else ""
-                }
-                val blocked = body.contains("ddos-guard", ignoreCase = true) ||
-                    body.contains("checking your browser", ignoreCase = true)
-                if (body.isNotBlank() && !blocked) return@withContext body
-                if (attempt < 2) kotlinx.coroutines.delay(1500L * (attempt + 1))
-            }
-            ""
+        repeat(3) { attempt ->
+            val body = ProviderHttp.fetch(
+                url,
+                referer = baseUrl + "/",
+                webViewFallback = attempt >= 1
+            )
+            if (body.isNotBlank() && !ProviderHttp.isChallenge(body)) return body
+            if (attempt < 2) kotlinx.coroutines.delay(1500L * (attempt + 1))
         }
+        return ""
     }
 
     private fun parseAniWorldDetail(html: String, slug: String): Pair<Series, List<Season>> {

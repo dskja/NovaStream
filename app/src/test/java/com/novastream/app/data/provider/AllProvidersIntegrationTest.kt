@@ -8,6 +8,7 @@ import com.novastream.app.util.VoeWebViewResolver
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,6 +34,10 @@ class AllProvidersIntegrationTest {
 
     @Test
     fun allProviders_fullSmokeReport() = runBlocking {
+        assumeTrue(
+            "Set NOVASTREAM_LIVE_PROVIDER_TEST=1 to run live provider smoke tests",
+            System.getenv("NOVASTREAM_LIVE_PROVIDER_TEST") == "1"
+        )
         val results = mutableListOf<ProviderSmokeResult>()
         for (provider in ProviderManager.providers) {
             results += runProviderSmoke(provider)

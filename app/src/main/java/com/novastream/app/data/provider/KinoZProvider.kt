@@ -156,18 +156,8 @@ class KinoZProvider(
 
     // ─── Networking ─────────────────────────────────────────────────────────
 
-    private suspend fun fetchUrl(url: String): String = withContext(Dispatchers.IO) {
-        val req = Request.Builder()
-            .url(url)
-            .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-            .header("Referer", "$baseUrl/")
-            .header("Accept", "text/html,application/xhtml+xml,application/json,*/*")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-        NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-            if (resp.isSuccessful) resp.body?.string() ?: "" else ""
-        }
-    }
+    private suspend fun fetchUrl(url: String): String =
+        ProviderHttp.fetch(url, referer = "$baseUrl/", webViewFallback = true)
 
     private suspend fun fetchDetailPage(slug: String): String {
         val key = normalizeSlug(slug)

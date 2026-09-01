@@ -42,7 +42,7 @@ class StreamKisteProvider(
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/serien")
+        val html = fetchUrl("$baseUrl/serien").ifBlank { fetchUrl(baseUrl) }
         parseStreamKisteSeriesList(html).map { it.copy(isMovie = false, providerId = id) }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
@@ -61,8 +61,24 @@ class StreamKisteProvider(
         if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
         return runCatching {
             val encoded = java.net.URLEncoder.encode(query.trim(), "UTF-8")
-            val html = fetchUrl("$baseUrl/search?q=$encoded")
-            parseStreamKisteSeriesList(html)
+            val paths = listOf(
+                "$baseUrl/?s=$encoded",
+                "$baseUrl/search?q=$encoded"
+            )
+            var results = emptyList<Series>()
+            for (url in paths) {
+                val html = fetchUrl(url)
+                results = parseStreamKisteSeriesList(html)
+                if (results.isNotEmpty()) break
+            }
+            if (results.isEmpty()) {
+                val home = parseStreamKisteSeriesList(fetchUrl("$baseUrl/serien"))
+                val needle = query.trim().lowercase()
+                results = home.filter {
+                    it.title.lowercase().contains(needle) || it.id.contains(needle.replace(' ', '-'))
+                }
+            }
+            results
         }.fold(
             onSuccess = { StreamingProvider.ProviderResult.Success(it) },
             onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
@@ -155,20 +171,8 @@ class StreamKisteProvider(
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
-    private suspend fun fetchUrl(url: String): String {
-        return withContext(Dispatchers.IO) {
-            val req = Request.Builder()
-                .url(url)
-                .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-                .header("Referer", baseUrl + "/")
-                .header("Accept", "text/html,application/xhtml+xml,*/*")
-                .build()
-            NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) resp.body?.string() ?: ""
-                else ""
-            }
-        }
-    }
+    private suspend fun fetchUrl(url: String): String =
+        ProviderHttp.fetch(url, referer = baseUrl + "/", webViewFallback = true)
 
     /** Parst eine Liste von Serien/Filmen. */
     private fun parseStreamKisteSeriesList(html: String): List<Series> {

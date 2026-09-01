@@ -14,8 +14,8 @@ android {
         applicationId "com.novastream.app"
         minSdk 22
         targetSdk 36
-        versionCode 81
-        versionName "8.1"
+        versionCode 82
+        versionName "8.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary true }
     }
@@ -66,6 +66,13 @@ android {
     }
     lint {
         disable 'UnsafeOptInUsageError'
+    }
+    testOptions {
+        unitTests.all {
+            filter {
+                excludeTestsMatching "com.novastream.app.data.provider.AllProvidersIntegrationTest"
+            }
+        }
     }
 }
 
