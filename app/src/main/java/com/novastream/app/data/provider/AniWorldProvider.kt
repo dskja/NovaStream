@@ -9,9 +9,6 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.AjaxSearchClient
 import com.novastream.app.util.HosterResolver
 import com.novastream.app.util.MediaUrls
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -160,25 +157,9 @@ class AniWorldProvider(
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
     )
 
-    /** Alphabet-Katalog – liefert hunderte Einträge statt nur Homepage (~200). */
-    override suspend fun loadExtendedCatalog(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        coroutineScope {
-            // Bewusst parallel in Chunks: voller A–Z + 0–9 Katalog
-            val letters = ('A'..'Z').map { it.toString() } + ('0'..'9').map { it.toString() }
-            val all = linkedMapOf<String, Series>()
-            letters.chunked(4).forEach { chunk ->
-                chunk.map { letter ->
-                    async { loadByLetterInternal(letter) }
-                }.awaitAll().forEach { list ->
-                    list.forEach { s -> all.putIfAbsent(s.id, s) }
-                }
-            }
-            tagAll(all.values.toList())
-        }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    /** Alphabet-Katalog bleibt paginiert über loadCatalogPage – kein voller A–Z-Scrape auf Home. */
+    override suspend fun loadExtendedCatalog(): StreamingProvider.ProviderResult<List<Series>> =
+        StreamingProvider.ProviderResult.Success(emptyList())
 
     suspend fun loadByLetter(letter: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
         tagAll(loadByLetterInternal(letter))

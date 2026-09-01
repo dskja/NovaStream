@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.ui.components.ContinueWatchingCard
+import com.novastream.app.ui.components.ProviderHealthBanner
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SectionHeader
@@ -94,6 +95,9 @@ fun HomeScreen(
             } catch (_: Exception) {}
         }
     }
+
+    val showShimmer = state.loading && !state.reduceMotion
+    val shimmerAnimate = !state.reduceMotion
 
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
@@ -155,12 +159,31 @@ fun HomeScreen(
             }
         }
 
+        if (state.showProviderHealthWarning || state.error != null) {
+            item {
+                ProviderHealthBanner(
+                    providerName = activeProviderName,
+                    loadDurationMs = state.lastLoadDurationMs,
+                    error = state.error,
+                    onRetry = { vm.refresh() }
+                )
+            }
+        }
+
         // Hero Banner Karussell
             item {
-                if (state.loading && state.hero.isEmpty()) {
+                if (showShimmer && state.hero.isEmpty()) {
                     ShimmerBox(
                         Modifier.fillMaxWidth().height(280.dp),
-                        cornerRadius = 0
+                        cornerRadius = 0,
+                        animate = shimmerAnimate
+                    )
+                } else if (state.loading && state.hero.isEmpty() && state.reduceMotion) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                            .background(BgCard)
                     )
                 } else if (state.hero.isNotEmpty()) {
                     HeroCarousel(
@@ -228,17 +251,17 @@ fun HomeScreen(
             }
 
             // Loading State
-            if (state.loading && state.popular.isEmpty()) {
+            if (showShimmer && state.popular.isEmpty()) {
                 item {
                     Spacer(Modifier.height(24.dp))
                     SectionHeader("Beliebt")
-                    ShimmerRow()
+                    ShimmerRow(animate = shimmerAnimate)
                     Spacer(Modifier.height(24.dp))
                     SectionHeader("Neu hinzugefügt")
-                    ShimmerRow()
+                    ShimmerRow(animate = shimmerAnimate)
                     Spacer(Modifier.height(24.dp))
                     SectionHeader("Angesagt")
-                    ShimmerRow()
+                    ShimmerRow(animate = shimmerAnimate)
                 }
             }
 

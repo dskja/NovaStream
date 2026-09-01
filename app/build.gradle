@@ -14,8 +14,8 @@ android {
         applicationId "com.novastream.app"
         minSdk 22
         targetSdk 36
-        versionCode 60
-        versionName "7.0"
+        versionCode 80
+        versionName "8.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary true }
     }
@@ -138,6 +138,9 @@ dependencies {
     ksp 'com.google.dagger:hilt-compiler:2.52'
     implementation 'androidx.hilt:hilt-navigation-compose:1.2.0'
 
+    // Background cache maintenance
+    implementation 'androidx.work:work-runtime-ktx:2.10.0'
+
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
 
     // Debug
@@ -146,4 +149,8 @@ dependencies {
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
+    testImplementation 'androidx.test:core:1.6.1'
+    testImplementation 'androidx.arch.core:core-testing:2.2.0'
+    testImplementation 'androidx.room:room-testing:2.6.1'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
 }

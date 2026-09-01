@@ -52,7 +52,7 @@ object UniversalHtmlScraper {
 
     fun parseDetail(html: String, profile: SiteProfile, slug: String): Pair<Series, List<Season>> {
         if (html.isBlank()) {
-            return Series(id = slug, title = slugToTitle(slug), detailUrl = toDetailUrl("", profile, slug)) to emptyList()
+            throw IllegalStateException("Leere Antwort vom Server")
         }
         val doc = Jsoup.parse(html, profile.baseUrl)
         val title = doc.selectFirst(profile.detailTitleSelector)?.text()?.trim()

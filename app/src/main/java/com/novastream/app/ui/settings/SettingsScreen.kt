@@ -1,6 +1,6 @@
 package com.novastream.app.ui.settings
 
-import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -55,12 +55,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.novastream.app.R
+import com.novastream.app.data.prefs.AppSettings
+import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import com.novastream.app.util.ProviderLoadMetrics
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.rememberInitialFocusRequester
 import com.novastream.app.ui.tv.tvFocusIfNeeded
@@ -84,6 +92,8 @@ data class SettingsUiState(
     val preferredLanguage: String = "Deutsch",
     val dataSaverMode: Boolean = false,
     val reduceMotion: Boolean = false,
+    val performanceMode: Boolean = false,
+    val providerLoadAveragesMs: Map<String, Long> = emptyMap(),
     val message: String? = null,
     val updateChecking: Boolean = false,
     val updateInfo: com.novastream.app.util.UpdateChecker.UpdateInfo? = null,
@@ -95,9 +105,13 @@ data class SettingsUiState(
 private val PREFERRED_HOSTERS = listOf("VOE", "Streamtape", "Doodstream", "Filemoon", "Vidoza", "Vidmoly", "Mixdrop")
 private val PREFERRED_LANGUAGES = listOf("Deutsch", "Englisch", "Ger-Sub", "Eng-Sub")
 
-class SettingsViewModel(application: Application) : AndroidViewModel(application) {
-    private val watchRepo = WatchRepository.get(application)
-    private val appSettings = com.novastream.app.data.prefs.AppSettings(application)
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val watchRepo: WatchRepository,
+    private val appSettings: AppSettings,
+    private val providerController: ProviderController
+) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
@@ -105,7 +119,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     init {
         viewModelScope.launch {
             watchRepo.watchlist().collect { list ->
-                val pid = com.novastream.app.data.provider.ActiveProvider.id
+                val pid = ActiveProvider.id
                 val scoped = list.filter { it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown" }
                 _state.update { it.copy(watchlistCount = scoped.size) }
             }
@@ -115,20 +129,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _state.update { it.copy(continueWatchingCount = list.count { !it.isCompleted }) }
             }
         }
-        // Load available providers
         _state.update {
             it.copy(
-                availableProviders = com.novastream.app.data.provider.ProviderManager.getProviderInfos(),
-                activeProviderId = com.novastream.app.data.provider.ActiveProvider.id
+                availableProviders = ProviderManager.getProviderInfos(),
+                activeProviderId = ActiveProvider.id
             )
         }
-        // Watch active provider changes (nur UI Update - ActiveProvider wird von NovaStreamApp gesetzt)
         viewModelScope.launch {
-            com.novastream.app.data.provider.ProviderManager.activeProviderIdFlow(application).collect { providerId ->
+            providerController.activeProviderId.collect { providerId ->
                 _state.update { it.copy(activeProviderId = providerId) }
             }
         }
-        // App Settings flows
         viewModelScope.launch {
             appSettings.autoplayNext.collect { v -> _state.update { it.copy(autoplayNext = v) } }
         }
@@ -153,6 +164,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             appSettings.reduceMotion.collect { v -> _state.update { it.copy(reduceMotion = v) } }
         }
+        viewModelScope.launch {
+            appSettings.performanceMode.collect { v -> _state.update { it.copy(performanceMode = v) } }
+        }
+        _state.update { it.copy(providerLoadAveragesMs = ProviderLoadMetrics.snapshotAverages()) }
         viewModelScope.launch {
             val prompted = appSettings.unknownProviderCleanupPrompted.first()
             val unknownCount = watchRepo.countUnknownProviderRows()
@@ -206,9 +221,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     updateChecked = true,
                     updateInfo = info,
                     message = when {
-                        info == null -> getApplication<Application>().getString(R.string.settings_update_check_failed)
-                        info.isNewer -> getApplication<Application>().getString(R.string.settings_update_available, info.latestVersion)
-                        else -> getApplication<Application>().getString(R.string.settings_up_to_date, info.currentVersion)
+                        info == null -> context.getString(R.string.settings_update_check_failed)
+                        info.isNewer -> context.getString(R.string.settings_update_available, info.latestVersion)
+                        else -> context.getString(R.string.settings_up_to_date, info.currentVersion)
                     }
                 )
             }
@@ -217,22 +232,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun clearContinueWatching() {
         viewModelScope.launch {
-            watchRepo.clearAllProgress()
-            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_continue_cleared)) }
+            watchRepo.clearProgressForProvider()
+            _state.update { it.copy(message = context.getString(R.string.settings_continue_cleared)) }
         }
     }
 
     fun clearWatchlist() {
         viewModelScope.launch {
-            watchRepo.clearWatchlist()
-            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_watchlist_cleared)) }
+            watchRepo.clearWatchlistForProvider()
+            _state.update { it.copy(message = context.getString(R.string.settings_watchlist_cleared)) }
         }
     }
 
     fun clearCompleted() {
         viewModelScope.launch {
             watchRepo.removeCompleted()
-            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_completed_cleared)) }
+            _state.update { it.copy(message = context.getString(R.string.settings_completed_cleared)) }
         }
     }
 
@@ -241,19 +256,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun showUrlError() {
-        _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_url_error)) }
+        _state.update { it.copy(message = context.getString(R.string.settings_url_error)) }
     }
 
     fun setProvider(providerId: String) {
         viewModelScope.launch {
-            val provider = com.novastream.app.data.provider.ProviderManager.getProviderOrNull(providerId)
+            val provider = ProviderManager.getProviderOrNull(providerId)
             if (provider == null) {
-                _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_provider_not_found)) }
+                _state.update { it.copy(message = context.getString(R.string.settings_provider_not_found)) }
                 return@launch
             }
-            com.novastream.app.data.provider.ProviderManager.setActiveProvider(getApplication(), providerId)
-            com.novastream.app.data.provider.ActiveProvider.setById(providerId)
-            _state.update { it.copy(message = getApplication<Application>().getString(R.string.settings_provider_switched, provider.displayName)) }
+            providerController.setActiveProvider(providerId)
+            _state.update { it.copy(message = context.getString(R.string.settings_provider_switched, provider.displayName)) }
         }
     }
 
@@ -288,17 +302,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setReduceMotion(enabled: Boolean) {
         viewModelScope.launch { appSettings.setReduceMotion(enabled) }
     }
+
+    fun setPerformanceMode(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setPerformanceMode(enabled) }
+    }
+
+    fun refreshProviderLoadMetrics() {
+        _state.update { it.copy(providerLoadAveragesMs = ProviderLoadMetrics.snapshotAverages()) }
+    }
 }
 
 @Composable
 fun SettingsScreen() {
-    val vm: SettingsViewModel = viewModel()
+    val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingActionTitle by remember { mutableStateOf("") }
+    var pendingProviderId by remember { mutableStateOf<String?>(null) }
+    var pendingProviderName by remember { mutableStateOf("") }
     val initialFocus = rememberInitialFocusRequester()
+
+    LaunchedEffect(Unit) {
+        vm.refreshProviderLoadMetrics()
+    }
 
     LaunchedEffect(state.message) {
         state.message?.let {
@@ -384,7 +412,11 @@ fun SettingsScreen() {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable { vm.setProvider(providerInfo.id) }
+                        .clickable {
+                            if (isSelected) return@clickable
+                            pendingProviderId = providerInfo.id
+                            pendingProviderName = providerInfo.displayName
+                        }
                         .tvFocusIfNeeded(
                             cornerRadius = 12.dp,
                             focusRequester = if (index == 0) initialFocus else null
@@ -448,7 +480,10 @@ fun SettingsScreen() {
             Spacer(Modifier.height(8.dp))
 
             SettingsSectionHeader(stringResource(R.string.settings_provider_capabilities))
-            ProviderCapabilityMatrix(state.availableProviders)
+            ProviderCapabilityMatrix(
+                providers = state.availableProviders,
+                loadAveragesMs = state.providerLoadAveragesMs
+            )
 
             Spacer(Modifier.height(8.dp))
 
@@ -631,6 +666,39 @@ fun SettingsScreen() {
 
             // Section: Design
             SettingsSectionHeader(stringResource(R.string.settings_design))
+
+            // Performance mode toggle
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(BgSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Speed, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_performance_mode_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_performance_mode_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                }
+                Switch(
+                    checked = state.performanceMode,
+                    onCheckedChange = { vm.setPerformanceMode(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Primary,
+                        checkedTrackColor = Primary.copy(alpha = 0.3f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = BgSurfaceElevated
+                    )
+                )
+            }
 
             // Reduce motion toggle
             Row(
@@ -1017,6 +1085,40 @@ fun SettingsScreen() {
         )
     }
 
+    // Provider switch confirmation
+    if (pendingProviderId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingProviderId = null },
+            title = {
+                Text(stringResource(R.string.settings_provider_switch_title), color = TextPrimary, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_provider_switch_message, pendingProviderName),
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingProviderId?.let { vm.setProvider(it) }
+                        pendingProviderId = null
+                    }
+                ) {
+                    Text(stringResource(R.string.confirm), color = Primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingProviderId = null }) {
+                    Text(stringResource(R.string.cancel), color = TextTertiary)
+                }
+            },
+            containerColor = BgSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
+    }
+
     // Confirmation Dialog for destructive actions
     if (pendingAction != null) {
         AlertDialog(
@@ -1074,7 +1176,8 @@ private fun TechBadge(label: String) {
 
 @Composable
 private fun ProviderCapabilityMatrix(
-    providers: List<com.novastream.app.data.provider.ProviderInfo>
+    providers: List<com.novastream.app.data.provider.ProviderInfo>,
+    loadAveragesMs: Map<String, Long> = emptyMap()
 ) {
     Column(
         Modifier
@@ -1116,8 +1219,17 @@ private fun ProviderCapabilityMatrix(
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center
             )
+            Text(
+                stringResource(R.string.settings_capability_load_time),
+                Modifier.weight(0.7f),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextTertiary,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
         }
         providers.forEach { provider ->
+            val avgMs = loadAveragesMs[provider.id]
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -1151,6 +1263,21 @@ private fun ProviderCapabilityMatrix(
                     Modifier.weight(0.8f),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (provider.capabilities.supportsLatestEpisodes) Primary else TextTertiary,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    when {
+                        avgMs == null -> "—"
+                        avgMs < 1000 -> "${avgMs}ms"
+                        else -> "${avgMs / 1000}s"
+                    },
+                    Modifier.weight(0.7f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        avgMs == null -> TextTertiary
+                        avgMs > 5_000 -> Primary
+                        else -> TextSecondary
+                    },
                     textAlign = TextAlign.Center
                 )
             }

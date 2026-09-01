@@ -21,8 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.novastream.app.ui.components.ContinueWatchingCard
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
@@ -34,7 +34,7 @@ fun ContinueWatchingScreen(
     onBack: () -> Unit,
     onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit
 ) {
-    val vm: ContinueWatchingViewModel = viewModel()
+    val vm: ContinueWatchingViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
 
     Column(

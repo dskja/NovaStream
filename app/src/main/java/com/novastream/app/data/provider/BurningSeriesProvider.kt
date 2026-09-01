@@ -142,15 +142,18 @@ class BurningSeriesProvider(
 
     // ─── HTML Parsing ───────────────────────────────────────────────────────
 
-    /** Lädt HTML; bei Captcha/leerem OkHttp-Ergebnis WebView-Fallback. */
+    /** Lädt HTML; bei Captcha/leerem OkHttp-Ergebnis WebView-Fallback (Session wiederverwenden). */
     private suspend fun fetchUrlWithCaptcha(url: String): String {
         val http = fetchUrl(url)
-        if (http.isNotBlank() && !http.contains("captcha", ignoreCase = true) && !http.contains("recaptcha", ignoreCase = true)) {
+        if (http.isNotBlank() && !looksLikeCaptcha(http)) {
             return http
         }
         val web = com.novastream.app.util.CaptchaWebViewFetcher.fetchHtml(url)
         return web.ifBlank { http }
     }
+
+    private fun looksLikeCaptcha(html: String): Boolean =
+        html.contains("captcha", ignoreCase = true) || html.contains("recaptcha", ignoreCase = true)
 
     /** Lädt eine absolute URL via OkHttp. */
     private suspend fun fetchUrl(url: String): String {

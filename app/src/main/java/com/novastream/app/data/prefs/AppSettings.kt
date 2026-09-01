@@ -34,6 +34,7 @@ class AppSettings(private val context: Context) {
         val DEFAULT_SEASON = intPreferencesKey("default_season")
         val DATA_SAVER_MODE = booleanPreferencesKey("data_saver_mode")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
+        val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
     }
 
     // ─── Flows ──────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ class AppSettings(private val context: Context) {
     val defaultSeason: Flow<Int> = context.dataStore.data.map { it[DEFAULT_SEASON] ?: 1 }
     val dataSaverMode: Flow<Boolean> = context.dataStore.data.map { it[DATA_SAVER_MODE] ?: false }
     val reduceMotion: Flow<Boolean> = context.dataStore.data.map { it[REDUCE_MOTION] ?: false }
+    val performanceMode: Flow<Boolean> = context.dataStore.data.map { it[PERFORMANCE_MODE] ?: false }
 
     // ─── Setters ────────────────────────────────────────────────────
 
@@ -95,5 +97,9 @@ class AppSettings(private val context: Context) {
 
     suspend fun setReduceMotion(enabled: Boolean) {
         context.dataStore.edit { it[REDUCE_MOTION] = enabled }
+    }
+
+    suspend fun setPerformanceMode(enabled: Boolean) {
+        context.dataStore.edit { it[PERFORMANCE_MODE] = enabled }
     }
 }

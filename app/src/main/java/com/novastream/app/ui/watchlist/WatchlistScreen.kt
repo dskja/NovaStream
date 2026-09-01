@@ -1,6 +1,7 @@
 package com.novastream.app.ui.watchlist
 
-import android.app.Application
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -28,13 +29,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.novastream.app.data.db.WatchlistItem
+import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SeriesPosterCard
@@ -71,9 +75,11 @@ enum class SortOption(val label: String) {
     TITLE_DESC("Titel Z-A")
 }
 
-class WatchlistViewModel(application: Application) : AndroidViewModel(application) {
-    private val watchRepo = WatchRepository.get(application)
-    private val context = application.applicationContext
+@HiltViewModel
+class WatchlistViewModel @Inject constructor(
+    private val watchRepo: WatchRepository,
+    private val providerController: ProviderController
+) : ViewModel() {
 
     private val _state = MutableStateFlow(WatchlistUiState())
     val state: StateFlow<WatchlistUiState> = _state.asStateFlow()
@@ -82,7 +88,7 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { items ->
-                    val pid = com.novastream.app.data.provider.ActiveProvider.id
+                    val pid = ActiveProvider.id
                     val filtered = filterByProvider(items, _state.value.providerFilter, pid)
                     val sorted = sortItems(filtered, _state.value.sortOption)
                     _state.update {
@@ -101,7 +107,7 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progressList ->
-                    val pid = com.novastream.app.data.provider.ActiveProvider.id
+                    val pid = ActiveProvider.id
                     val slugs = progressList
                         .filter {
                             !it.isCompleted &&
@@ -143,7 +149,7 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setProviderFilter(filter: WatchlistProviderFilter) {
-        val pid = com.novastream.app.data.provider.ActiveProvider.id
+        val pid = ActiveProvider.id
         val filtered = filterByProvider(_state.value.allItems, filter, pid)
         val sorted = sortItems(filtered, _state.value.sortOption)
         _state.update { it.copy(providerFilter = filter, items = sorted) }
@@ -151,9 +157,8 @@ class WatchlistViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun switchToProvider(providerId: String) {
         viewModelScope.launch {
-            val provider = ProviderManager.getProviderOrNull(providerId) ?: return@launch
-            ProviderManager.setActiveProvider(context, providerId)
-            com.novastream.app.data.provider.ActiveProvider.setById(providerId)
+            if (ProviderManager.getProviderOrNull(providerId) == null) return@launch
+            providerController.setActiveProvider(providerId)
             setProviderFilter(WatchlistProviderFilter.CURRENT)
         }
     }
@@ -189,7 +194,7 @@ private fun providerDisplayName(providerId: String): String {
 fun WatchlistScreen(
     onSeriesClick: (String) -> Unit
 ) {
-    val vm: WatchlistViewModel = viewModel()
+    val vm: WatchlistViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val isTv = remember { TvUtils.isTvDevice(context) }
@@ -197,6 +202,7 @@ fun WatchlistScreen(
     val initialFocus = rememberInitialFocusRequester()
     var pendingRemove by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<WatchlistItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showUnknownProviderDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.loading, state.items) {
         if (!state.loading && state.items.isNotEmpty()) {
@@ -220,6 +226,27 @@ fun WatchlistScreen(
             dismissButton = {
                 TextButton(onClick = { pendingRemove = null }) {
                     Text("Abbrechen", color = TextTertiary)
+                }
+            },
+            containerColor = BgSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
+    }
+
+    if (showUnknownProviderDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnknownProviderDialog = false },
+            title = { Text("Unbekannter Provider", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Für diesen Eintrag ist kein Provider mehr verfügbar. Du kannst ihn entfernen oder in der Listenansicht „Alle“ anzeigen.",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showUnknownProviderDialog = false }) {
+                    Text("OK", color = Primary, fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = BgSurface,
@@ -396,7 +423,14 @@ fun WatchlistScreen(
                                             if (isTv) Modifier.tvFocusable().tvFocusRing(cornerRadius = 6.dp)
                                             else Modifier
                                         )
-                                        .clickable { vm.switchToProvider(item.providerId.ifBlank { "unknown" }) }
+                                        .clickable {
+                                            val pid = item.providerId.ifBlank { "unknown" }
+                                            if (pid == "unknown" || ProviderManager.getProviderOrNull(pid) == null) {
+                                                showUnknownProviderDialog = true
+                                            } else {
+                                                vm.switchToProvider(pid)
+                                            }
+                                        }
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(

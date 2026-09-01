@@ -3,7 +3,10 @@ package com.novastream.app.util
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.NovaStreamConfig
 import com.novastream.app.data.model.Series
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.Request
@@ -25,17 +28,20 @@ object AjaxSearchClient {
         val q = query.trim()
         if (q.isBlank()) return@withContext emptyList()
 
-        // 1) Klassisches AJAX-JSON (AniWorld / ältere s.to-Spiegel)
-        for (path in listOf("/ajax/search", "/ajax/seriesSearch")) {
-            val json = postForm("$baseUrl$path", mapOf("keyword" to q))
-                ?: get("$baseUrl$path?keyword=${enc(q)}")
-            if (!json.isNullOrBlank() && json.trimStart().startsWith("[")) {
-                val parsed = parseJsonResults(json, baseUrl, linkHint, isAnime)
-                if (parsed.isNotEmpty()) return@withContext parsed
-            }
+        val ajaxProbes = listOf("/ajax/search", "/ajax/seriesSearch").flatMap { path ->
+            listOf<suspend () -> List<Series>>(
+                {
+                    val json = postForm("$baseUrl$path", mapOf("keyword" to q))
+                    parseJsonIfValid(json, baseUrl, linkHint, isAnime)
+                },
+                {
+                    val json = get("$baseUrl$path?keyword=${enc(q)}")
+                    parseJsonIfValid(json, baseUrl, linkHint, isAnime)
+                }
+            )
         }
+        firstSuccessful(ajaxProbes)?.let { return@withContext it }
 
-        // 2) HTML-Suche (serienstream.to /suche, aniworld Varianten)
         val htmlPaths = buildList {
             add("/suche?term=${enc(q)}")
             add("/suche?q=${enc(q)}")
@@ -47,17 +53,57 @@ object AjaxSearchClient {
                 add("/anime/list?search=${enc(q)}")
             }
         }
-        for (path in htmlPaths) {
-            val html = get("$baseUrl$path") ?: continue
-            if (html.isBlank() || html.contains("DDoS-Guard", ignoreCase = true)) continue
-            if (html.trimStart().startsWith("[")) {
-                val parsed = parseJsonResults(html, baseUrl, linkHint, isAnime)
-                if (parsed.isNotEmpty()) return@withContext parsed
+        val htmlProbes = htmlPaths.map { path ->
+            suspend fun loadPath(): List<Series> {
+                val html = get("$baseUrl$path") ?: return emptyList()
+                if (html.isBlank() || html.contains("DDoS-Guard", ignoreCase = true)) {
+                    return emptyList()
+                }
+                return if (html.trimStart().startsWith("[")) {
+                    parseJsonIfValid(html, baseUrl, linkHint, isAnime)
+                } else {
+                    parseHtmlResults(html, baseUrl, linkHint, isAnime)
+                }
             }
-            val parsed = parseHtmlResults(html, baseUrl, linkHint, isAnime)
-            if (parsed.isNotEmpty()) return@withContext parsed
+            ::loadPath
         }
-        emptyList()
+        firstSuccessful(htmlProbes).orEmpty()
+    }
+
+    /** Parallel path probing: returns the first probe that yields a non-empty list. */
+    internal suspend fun firstSuccessful(
+        probes: List<suspend () -> List<Series>>
+    ): List<Series>? = coroutineScope {
+        if (probes.isEmpty()) return@coroutineScope null
+        val winner = CompletableDeferred<List<Series>?>()
+        val jobs = probes.map { probe ->
+            launch {
+                if (winner.isCompleted) return@launch
+                val result = try {
+                    probe()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                if (result.isNotEmpty()) {
+                    winner.complete(result)
+                }
+            }
+        }
+        jobs.forEach { it.join() }
+        if (!winner.isCompleted) {
+            winner.complete(null)
+        }
+        winner.await()
+    }
+
+    private fun parseJsonIfValid(
+        json: String?,
+        baseUrl: String,
+        linkHint: String?,
+        isAnime: Boolean
+    ): List<Series> {
+        if (json.isNullOrBlank() || !json.trimStart().startsWith("[")) return emptyList()
+        return parseJsonResults(json, baseUrl, linkHint, isAnime)
     }
 
     private fun parseJsonResults(

@@ -74,6 +74,7 @@ fun PlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(Unit) {
+        PlayerPlaybackController.registerPlayerScreen()
         val originalOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
@@ -91,7 +92,7 @@ fun PlayerScreen(
             if (originalSystemBarsBehavior != null) {
                 controller?.systemBarsBehavior = originalSystemBarsBehavior
             }
-            PlaybackForegroundService.stop(context)
+            PlayerPlaybackController.unregisterPlayerScreen(context)
         }
     }
 
@@ -102,6 +103,18 @@ fun PlayerScreen(
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
     var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
     var showSkipIntro by remember { mutableStateOf(false) }
+    var notificationReady by remember {
+        mutableStateOf(com.novastream.app.util.hasNotificationPermission(context))
+    }
+    var pendingForegroundTitle by remember { mutableStateOf<String?>(null) }
+
+    com.novastream.app.util.RememberPlaybackNotificationPermission {
+        notificationReady = true
+        pendingForegroundTitle?.let { title ->
+            PlayerPlaybackController.startForeground(context, title)
+            pendingForegroundTitle = null
+        }
+    }
 
     fun enterPipIfSupported() {
         if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -149,12 +162,6 @@ fun PlayerScreen(
         val src = currentSource ?: return@LaunchedEffect
         val url = src.url
         if (url.isBlank()) {
-            exoPlayer?.let { old ->
-                try {
-                    old.removeListener(episodeEndListener)
-                    old.release()
-                } catch (_: Exception) {}
-            }
             exoPlayer = null
             lastLoadedUrl = null
             return@LaunchedEffect
@@ -162,14 +169,6 @@ fun PlayerScreen(
 
         val sourceKey = "$url|${src.subtitleUrl.orEmpty()}|${state.dataSaverMode}"
         if (sourceKey == lastLoadedUrl && exoPlayer != null) return@LaunchedEffect
-
-        exoPlayer?.let { old ->
-            try {
-                old.removeListener(episodeEndListener)
-                old.release()
-            } catch (_: Exception) {}
-        }
-        exoPlayer = null
 
         val trackSelector = createPlayerTrackSelector(context, state.dataSaverMode)
 
@@ -216,7 +215,11 @@ fun PlayerScreen(
         } catch (_: Exception) {}
 
         val playbackTitle = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
-        PlaybackForegroundService.start(context, playbackTitle)
+        if (notificationReady || com.novastream.app.util.hasNotificationPermission(context)) {
+            PlayerPlaybackController.startForeground(context, playbackTitle)
+        } else {
+            pendingForegroundTitle = playbackTitle
+        }
     }
 
     LaunchedEffect(state.playbackSpeed, exoPlayer) {
@@ -251,10 +254,14 @@ fun PlayerScreen(
         } catch (_: kotlinx.coroutines.CancellationException) {}
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer) {
+        val player = exoPlayer
+        if (player != null) {
+            PlayerPlaybackController.attach(player)
+        }
         onDispose {
-            val player = exoPlayer
             if (player != null) {
+                PlayerPlaybackController.detach(player)
                 try {
                     val pos = player.currentPosition
                     val dur = player.duration
@@ -265,7 +272,6 @@ fun PlayerScreen(
                 try { player.removeListener(episodeEndListener) } catch (_: Exception) {}
                 try { player.release() } catch (_: Exception) {}
             }
-            exoPlayer = null
             playerVisible = false
             showHosters = false
             lastLoadedUrl = null

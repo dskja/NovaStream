@@ -1,6 +1,5 @@
 package com.novastream.app.ui.home
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
@@ -10,11 +9,11 @@ import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
-import com.novastream.app.data.provider.ProviderManager
+import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.util.ProviderLoadMetrics
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -48,21 +47,25 @@ data class HomeUiState(
     val continueWatching: List<WatchProgress> = emptyList(),
     val watchlist: List<WatchlistItem> = emptyList(),
     val reduceMotion: Boolean = false,
+    val performanceMode: Boolean = false,
+    val lastLoadDurationMs: Long? = null,
+    val showProviderHealthWarning: Boolean = false,
     val error: String? = null
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
-    private val appSettings: AppSettings
+    private val appSettings: AppSettings,
+    private val providerController: ProviderController
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
     private var loadJob: Job? = null
+    private var genreJob: Job? = null
     private var activeProviderId: String? = null
 
     init {
@@ -107,12 +110,18 @@ class HomeViewModel @Inject constructor(
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "reduceMotion flow error", e)
             }
         }
-        // Kritisch: erst DataStore abwarten, ActiveProvider setzen, dann laden.
-        // Verhindert SerienStream-Leaks bei AniWorld & Co.
         viewModelScope.launch {
             try {
-                ProviderManager.activeProviderIdFlow(context).collect { providerId ->
-                    ActiveProvider.setById(providerId)
+                appSettings.performanceMode.collect { enabled ->
+                    _state.update { it.copy(performanceMode = enabled) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "performanceMode flow error", e)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                providerController.activeProviderId.collect { providerId ->
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId
                         clearCatalogForProviderSwitch(providerId)
@@ -121,7 +130,6 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "provider flow error", e)
-                ActiveProvider.setById(ProviderManager.defaultProviderId)
                 load(force = true)
             }
         }
@@ -129,6 +137,10 @@ class HomeViewModel @Inject constructor(
 
     private fun clearCatalogForProviderSwitch(providerId: String) {
         loadJob?.cancel()
+        genreJob?.cancel()
+        viewModelScope.launch {
+            repo.clearCacheForProvider(providerId)
+        }
         val provider = ActiveProvider.get()
         _state.update {
             it.copy(
@@ -150,7 +162,9 @@ class HomeViewModel @Inject constructor(
                 comedy = emptyList(),
                 drama = emptyList(),
                 scifi = emptyList(),
-                latestEpisodes = emptyList()
+                latestEpisodes = emptyList(),
+                lastLoadDurationMs = null,
+                showProviderHealthWarning = false
             )
         }
     }
@@ -158,6 +172,7 @@ class HomeViewModel @Inject constructor(
     fun load(force: Boolean = false) {
         if (!force && loadJob?.isActive == true) return
         loadJob?.cancel()
+        genreJob?.cancel()
         val expectedProvider = ActiveProvider.id
         _state.update {
             it.copy(
@@ -171,51 +186,31 @@ class HomeViewModel @Inject constructor(
             )
         }
         loadJob = viewModelScope.launch {
+            val startedAt = System.currentTimeMillis()
             try {
                 coroutineScope {
                     val provider = ActiveProvider.get()
                     if (provider.id != expectedProvider) return@coroutineScope
 
                     val catalogDef = async { repo.loadHomeCatalog() }
-                    val popularDef = async { repo.loadPopular() }
-                    val newestDef = async { repo.loadNewest() }
-                    val moviesDef = async {
-                        if (provider.supportsMovies) repo.loadMovies() else null
-                    }
-                    val extendedDef = async { repo.loadExtendedCatalog() }
-                    val genres = provider.availableGenres.take(4)
-                    val genreDefs = genres.map { g ->
-                        g to async { repo.loadGenre(g.slug) }
-                    }
                     val latestDef = async { repo.loadLatestEpisodes() }
 
                     when (val catalogRes = catalogDef.await()) {
                         is NovaStreamRepository.RepoResult.Success -> {
                             if (ActiveProvider.id != expectedProvider) return@coroutineScope
                             val catalog = catalogRes.data
-                            val extended = extendedDef.await().ok()
-                            val popular = popularDef.await().ok()
-                                .ifEmpty { catalog.popular.ifEmpty { catalog.all.take(24) } }
-                            val newest = newestDef.await().ok()
-                                .ifEmpty { catalog.newest.ifEmpty { catalog.all.drop(8).take(24) } }
-                            val movies = moviesDef.await()?.ok().orEmpty()
-                                .ifEmpty { catalog.all.filter { it.isMovie } }
-                            val genreRows = genreDefs.mapNotNull { (genre, def) ->
-                                val list = def.await().ok()
-                                if (list.isEmpty()) null else genre to list
-                            }
-                            // Legacy fields for HomeScreen rows that still use them
-                            val action = genreRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()
-                            val comedy = genreRows.find { it.first.slug.contains("comedy", true) || it.first.slug.contains("komödie", true) }?.second.orEmpty()
-                            val drama = genreRows.find { it.first.slug.contains("drama", true) }?.second.orEmpty()
-                            val scifi = genreRows.find {
-                                it.first.slug.contains("science", true) || it.first.slug.contains("fantasy", true)
-                            }?.second.orEmpty()
                             val latest = latestDef.await().okList()
 
-                            val merged = (catalog.flattened() + popular + newest + movies + extended +
-                                genreRows.flatMap { it.second }).distinctBy { it.id }
+                            val popular = catalog.popular.ifEmpty { catalog.all.take(24) }
+                            val newest = catalog.newest.ifEmpty { catalog.all.drop(8).take(24) }
+                            val movies = catalog.all.filter { it.isMovie }
+                            val trending = catalog.trending.ifEmpty {
+                                catalog.topShows.ifEmpty { popular.take(20) }
+                            }
+                            val merged = catalog.flattened().distinctBy { it.id }
 
+                            val durationMs = System.currentTimeMillis() - startedAt
+                            ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
                             _state.update {
                                 it.copy(
                                     loading = false,
@@ -225,52 +220,37 @@ class HomeViewModel @Inject constructor(
                                     catalogHint = provider.catalogHint,
                                     uniqueTitleCount = merged.size,
                                     hero = catalog.hero.ifEmpty { merged.take(8) },
-                                    popular = popular.ifEmpty { extended.take(24) },
+                                    popular = popular,
                                     newest = newest,
-                                    trending = catalog.trending.ifEmpty {
-                                        catalog.topShows.ifEmpty { popular.take(20) }
-                                    },
+                                    trending = trending,
                                     movies = movies,
-                                    genreRows = genreRows,
-                                    action = action,
-                                    comedy = comedy,
-                                    drama = drama,
-                                    scifi = scifi,
+                                    genreRows = emptyList(),
+                                    action = emptyList(),
+                                    comedy = emptyList(),
+                                    drama = emptyList(),
+                                    scifi = emptyList(),
                                     latestEpisodes = latest.ifEmpty { catalog.latestEpisodes },
+                                    lastLoadDurationMs = durationMs,
+                                    showProviderHealthWarning = ProviderLoadMetrics.shouldShowHealthWarning(durationMs, false),
                                     error = null
                                 )
+                            }
+                            if (!_state.value.performanceMode) {
+                                loadGenreRowsDeferred(provider, expectedProvider)
                             }
                         }
                         is NovaStreamRepository.RepoResult.Error -> {
                             if (ActiveProvider.id != expectedProvider) return@coroutineScope
-                            when (val home = repo.loadHome()) {
-                                is NovaStreamRepository.RepoResult.Success -> {
-                                    val series = home.data
-                                    val movies = moviesDef.await()?.ok().orEmpty()
-                                        .ifEmpty { series.filter { it.isMovie } }
-                                    _state.update {
-                                        it.copy(
-                                            loading = false,
-                                            isRefreshing = false,
-                                            uniqueTitleCount = (series + movies).distinctBy { s -> s.id }.size,
-                                            hero = series.take(8),
-                                            popular = series.take(20),
-                                            newest = series.drop(20).take(20),
-                                            trending = series.drop(40).take(20),
-                                            movies = movies,
-                                            genreRows = emptyList(),
-                                            action = emptyList(),
-                                            comedy = emptyList(),
-                                            drama = emptyList(),
-                                            scifi = emptyList(),
-                                            error = null
-                                        )
-                                    }
-                                }
-                                is NovaStreamRepository.RepoResult.Error ->
-                                    _state.update {
-                                        it.copy(loading = false, isRefreshing = false, error = home.message)
-                                    }
+                            val durationMs = System.currentTimeMillis() - startedAt
+                            ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
+                            _state.update {
+                                it.copy(
+                                    loading = false,
+                                    isRefreshing = false,
+                                    error = catalogRes.message,
+                                    lastLoadDurationMs = durationMs,
+                                    showProviderHealthWarning = true
+                                )
                             }
                         }
                     }
@@ -278,13 +258,60 @@ class HomeViewModel @Inject constructor(
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "load error", e)
+                val durationMs = System.currentTimeMillis() - startedAt
+                ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
                 _state.update {
                     it.copy(
                         loading = false,
                         isRefreshing = false,
-                        error = com.novastream.app.util.ErrorMapper.toUserMessage(e)
+                        error = com.novastream.app.util.ErrorMapper.toUserMessage(e),
+                        lastLoadDurationMs = durationMs,
+                        showProviderHealthWarning = true
                     )
                 }
+            }
+        }
+    }
+
+    private fun loadGenreRowsDeferred(
+        provider: com.novastream.app.data.provider.StreamingProvider,
+        expectedProvider: String
+    ) {
+        genreJob?.cancel()
+        genreJob = viewModelScope.launch {
+            try {
+                val genres = provider.availableGenres.take(2)
+                if (genres.isEmpty()) return@launch
+                val genreRows = genres.mapNotNull { genre ->
+                    when (val res = repo.loadGenre(genre.slug)) {
+                        is NovaStreamRepository.RepoResult.Success -> {
+                            val list = res.data.filter { it.belongsToActiveProvider() || it.providerId == null }
+                            if (list.isEmpty()) null else genre to list
+                        }
+                        else -> null
+                    }
+                }
+                if (ActiveProvider.id != expectedProvider) return@launch
+                val action = genreRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()
+                val comedy = genreRows.find {
+                    it.first.slug.contains("comedy", true) || it.first.slug.contains("komödie", true)
+                }?.second.orEmpty()
+                val drama = genreRows.find { it.first.slug.contains("drama", true) }?.second.orEmpty()
+                val scifi = genreRows.find {
+                    it.first.slug.contains("science", true) || it.first.slug.contains("fantasy", true)
+                }?.second.orEmpty()
+                _state.update {
+                    it.copy(
+                        genreRows = genreRows,
+                        action = action,
+                        comedy = comedy,
+                        drama = drama,
+                        scifi = scifi
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("HomeVM", "genre rows failed", e)
             }
         }
     }
@@ -297,10 +324,6 @@ class HomeViewModel @Inject constructor(
     fun removeContinueWatching(episodeKey: String) {
         viewModelScope.launch { watchRepo.removeProgress(episodeKey) }
     }
-
-    private fun NovaStreamRepository.RepoResult<List<Series>>.ok(): List<Series> =
-        (this as? NovaStreamRepository.RepoResult.Success)?.data.orEmpty()
-            .filter { it.belongsToActiveProvider() || it.providerId == null }
 
     private fun NovaStreamRepository.RepoResult<List<LatestEpisode>>.okList(): List<LatestEpisode> =
         (this as? NovaStreamRepository.RepoResult.Success)?.data.orEmpty()

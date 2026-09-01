@@ -25,4 +25,10 @@ interface CatalogCacheDao {
 
     @Query("DELETE FROM catalog_cache")
     suspend fun deleteAll()
+
+    @Query("SELECT COALESCE(SUM(LENGTH(payload)), 0) FROM catalog_cache")
+    suspend fun totalPayloadBytes(): Long
+
+    @Query("SELECT * FROM catalog_cache ORDER BY cachedAt ASC")
+    suspend fun listByOldest(): List<CatalogCacheEntry>
 }

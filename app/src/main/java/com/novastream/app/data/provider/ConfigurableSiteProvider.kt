@@ -24,6 +24,16 @@ open class ConfigurableSiteProvider(
     private val profile: SiteProfile
 ) : StreamingProvider {
 
+    companion object {
+        private const val FETCH_CACHE_SIZE = 8
+        private const val FETCH_CACHE_TTL_MS = 5L * 60 * 1000
+
+        private val fetchCache = object : LinkedHashMap<String, Pair<Long, String>>(FETCH_CACHE_SIZE, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
+                size > FETCH_CACHE_SIZE
+        }
+    }
+
     override val id: String get() = profile.id
     override val displayName: String get() = profile.displayName
     override val baseUrl: String get() = profile.baseUrl
@@ -37,7 +47,8 @@ open class ConfigurableSiteProvider(
     private val hosterResolver = HosterResolver(baseUrl = profile.baseUrl)
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        UniversalHtmlScraper.parseSeriesList(fetch(profile.baseUrl + profile.homePath), profile)
+        val homeUrl = profile.baseUrl + profile.homePath
+        UniversalHtmlScraper.parseSeriesList(fetchCached(homeUrl), profile)
     }.toResult()
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
@@ -184,7 +195,23 @@ open class ConfigurableSiteProvider(
         return cleaned.takeIf { it.all { c -> c.isDigit() } && it.isNotBlank() }
     }
 
-    protected suspend fun fetch(url: String): String = withContext(Dispatchers.IO) {
+    protected suspend fun fetch(url: String): String = fetchCached(url)
+
+    private suspend fun fetchCached(url: String): String {
+        synchronized(fetchCache) {
+            fetchCache[url]?.let { (cachedAt, html) ->
+                if (System.currentTimeMillis() - cachedAt < FETCH_CACHE_TTL_MS) return html
+                fetchCache.remove(url)
+            }
+        }
+        val html = fetchNetwork(url)
+        synchronized(fetchCache) {
+            fetchCache[url] = System.currentTimeMillis() to html
+        }
+        return html
+    }
+
+    private suspend fun fetchNetwork(url: String): String = withContext(Dispatchers.IO) {
         val req = Request.Builder()
             .url(url)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)

@@ -1,10 +1,36 @@
 # NovaStream
 
 <p align="center">
-  <strong>High-End Android Streaming Client · Multi-Provider · Hilt DI · i18n · v7.0</strong>
+  <strong>High-End Android Streaming Client · Multi-Provider · Hilt DI · i18n · v8.0</strong>
 </p>
 
 ---
+
+## Highlights (v8.0)
+
+| Feature | v7 | v8 |
+|---------|:--:|:--:|
+| Parallel AJAX path probing (`async`/`select`) | — | ✓ |
+| Burning Series captcha session reuse | — | ✓ |
+| Provider health banner (slow load / errors) | — | ✓ |
+| Performance mode (fewer parallel home loads) | — | ✓ |
+| Provider switch confirmation dialog | — | ✓ |
+| POST_NOTIFICATIONS before playback FGS | — | ✓ |
+| Reduce motion disables shimmer placeholders | partial | ✓ |
+| Request coalescing for home catalog | — | ✓ |
+| Provider matrix with avg load times | — | ✓ |
+| 40+ unit tests | partial | ✓ |
+
+### v8 performance
+
+NovaStream v8 focuses on perceived speed and resilience:
+
+- **Parallel search paths** — `AjaxSearchClient` probes AJAX and HTML endpoints concurrently and uses the first successful response.
+- **Request coalescing** — duplicate in-flight home catalog requests share one network round-trip via `RequestCoalescer`.
+- **Performance mode** — Settings → Performance mode skips extended genre/latest parallel loads on Home for slower devices or VPN setups.
+- **Provider health** — Home shows a banner when the last catalog load took >5s or failed; Settings shows average load time per provider.
+- **Burning Series** — WebView captcha sessions are reused for catalog pagination instead of opening a fresh WebView every time.
+- **Reduce motion** — disables hero auto-scroll and replaces animated shimmer skeletons with static placeholders.
 
 ## Highlights (v7.0)
 
@@ -52,7 +78,7 @@ res/
 | Free Catalog | ✓ | ✓ | ✓ |
 | FMHY sites (Cinezo, HydraHD, …) | varies | ✓ | — |
 
-See **Settings → Provider-Fähigkeiten** for the live matrix in the app.
+See **Settings → Provider-Fähigkeiten** for the live matrix in the app (including average load times after v8).
 
 ## Build
 
@@ -72,16 +98,22 @@ See **Settings → Provider-Fähigkeiten** for the live matrix in the app.
 Push to `main`, pull requests, and manual **Actions → Build APK** runs CI.
 
 - Artifacts: `NovaStream-debug-apk`, `NovaStream-release-apk`
-- Tag `v7.0.0` creates a GitHub Release with APKs
+- Tag `v8.0.0` creates a GitHub Release with APKs
 
 ```bash
-git tag v7.0.0
-git push origin v7.0.0
+git tag v8.0.0
+git push origin v8.0.0
 ```
 
-## Tests (v7)
+## Tests (v8)
 
-- `UniversalHtmlScraperTest` — fixture HTML for SerienStream, StreamKiste, Cinezo
+- `UniversalHtmlScraperTest` — fixture HTML for SerienStream, StreamKiste, Cinezo, Burning Series
+- `AjaxSearchClientTest` — slug parsing + parallel first-success probing
+- `RequestCoalescerTest` — concurrent deduplication
+- `ProviderLoadMetricsTest` / `HomeViewModelLoadTest` — health banner thresholds
+- `BrowseViewModelPaginationTest` — page merge + has-more logic
+- `WatchRepositoryProviderScopeTest` — provider-scoped watchlist/progress (Robolectric + in-memory Room)
+- `CatalogCacheEvictionTest` — TTL expiry and purge
 - `ProviderCapabilitiesTest` — pagination / movies / latest flags per provider
 - `BrowseViewModelTest` — content filter (all / series / movies)
 
@@ -98,11 +130,6 @@ Settings → App-Updates for manual checks and APK download.
 - Internet
 - HLS/MP4 codec support
 
-## Disclaimer
-
-Inoffizieller Client zu Bildungszwecken. Nutzung auf eigene Verantwortung.
-Quellen-Websites sind nicht affiliated.
-
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

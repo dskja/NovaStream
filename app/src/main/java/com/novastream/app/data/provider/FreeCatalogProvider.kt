@@ -8,6 +8,8 @@ import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.util.EmbedStreamResolver
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * AAA Katalog-Provider auf Basis von TVMaze (komplett kostenlos, kein API-Key).
@@ -35,9 +37,11 @@ class FreeCatalogProvider(
     )
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val schedule = FreeMetaService.schedule("US")
-        val page = FreeMetaService.catalogPage(0)
-        (schedule + page).distinctBy { it.id }.map { mapShow(it) }
+        coroutineScope {
+            val scheduleDef = async { FreeMetaService.schedule("US") }
+            val catalogDef = async { FreeMetaService.catalogPage(0) }
+            (scheduleDef.await() + catalogDef.await()).distinctBy { it.id }.map { mapShow(it) }
+        }
     }.fold(
         onSuccess = { StreamingProvider.ProviderResult.Success(it) },
         onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }

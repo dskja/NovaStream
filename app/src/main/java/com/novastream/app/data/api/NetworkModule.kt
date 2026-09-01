@@ -1,6 +1,8 @@
 package com.novastream.app.data.api
 
 import com.novastream.app.data.model.NovaStreamConfig
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
@@ -38,7 +40,7 @@ object NetworkModule {
                 else HttpLoggingInterceptor.Level.NONE
     }
 
-    /** Retry-Interceptor: wiederholt fehlgeschlagene Requests bis zu 2 Mal. */
+    /** Retry-Interceptor: wiederholt fehlgeschlagene Requests bis zu 2 Mal (ohne blockierendes Sleep). */
     private val retryInterceptor = Interceptor { chain ->
         var attempt = 0
         var lastException: Exception? = null
@@ -56,12 +58,28 @@ object NetworkModule {
                 }
             }
             attempt++
-            if (attempt < 3) {
-                try { Thread.sleep(500L * attempt) } catch (_: InterruptedException) {}
-            }
         }
         throw lastException ?: java.io.IOException("Max retries exceeded")
     }
+
+    private fun buildDispatcher(): Dispatcher = Dispatcher().apply {
+        maxRequestsPerHost = 6
+    }
+
+    private fun baseClientBuilder(): OkHttpClient.Builder =
+        OkHttpClient.Builder()
+            .dns(dohDns)
+            .dispatcher(buildDispatcher())
+            .addInterceptor(userAgentInterceptor)
+            .addInterceptor(retryInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(NovaStreamConfig.CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .readTimeout(NovaStreamConfig.READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .writeTimeout(NovaStreamConfig.WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .callTimeout(45, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
 
     /**
      * DNS-over-HTTPS via Cloudflare (1.1.1.1) mit Google (8.8.8.8) Fallback.
@@ -132,19 +150,15 @@ object NetworkModule {
     }
 
     val okHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .dns(dohDns)
-            .addInterceptor(userAgentInterceptor)
-            .addInterceptor(retryInterceptor)
-            .addInterceptor(loggingInterceptor)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .connectTimeout(NovaStreamConfig.CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .readTimeout(NovaStreamConfig.READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .writeTimeout(NovaStreamConfig.WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            .callTimeout(45, TimeUnit.SECONDS)  // Total call timeout - prevents infinite hangs
-            .connectionPool(okhttp3.ConnectionPool(5, 5, TimeUnit.MINUTES))  // 5 connections, 5 min keep-alive
-            .retryOnConnectionFailure(true)
+        baseClientBuilder()
+            .connectionPool(ConnectionPool(20, 5, TimeUnit.MINUTES))
+            .build()
+    }
+
+    /** Separater Client für Coil-Bilder mit eigenem Connection-Pool. */
+    val imageOkHttpClient: OkHttpClient by lazy {
+        baseClientBuilder()
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .build()
     }
 
