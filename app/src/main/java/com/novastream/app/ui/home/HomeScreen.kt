@@ -106,9 +106,7 @@ fun HomeScreen(
 
     val showShimmer = state.loading && !state.reduceMotion
     val shimmerAnimate = !state.reduceMotion
-    val iptvEnabled by remember {
-        com.novastream.app.data.prefs.AppSettings(context).iptvEnabled
-    }.collectAsStateWithLifecycle(initialValue = false)
+    val iptvEnabled = state.iptvEnabled
 
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,

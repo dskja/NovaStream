@@ -17,6 +17,7 @@ import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.util.ProviderLoadMetrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 data class HomeUiState(
     val loading: Boolean = false,
@@ -51,6 +53,7 @@ data class HomeUiState(
     val watchlist: List<WatchlistItem> = emptyList(),
     val reduceMotion: Boolean = false,
     val performanceMode: Boolean = false,
+    val iptvEnabled: Boolean = false,
     val lastLoadDurationMs: Long? = null,
     val showProviderHealthWarning: Boolean = false,
     val error: String? = null
@@ -124,6 +127,15 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
+                appSettings.iptvEnabled.collect { enabled ->
+                    _state.update { it.copy(iptvEnabled = enabled) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "iptvEnabled flow error", e)
+            }
+        }
+        viewModelScope.launch {
+            try {
                 providerController.activeProviderId.collect { providerId ->
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId
@@ -192,22 +204,36 @@ class HomeViewModel @Inject constructor(
                     val provider = ActiveProvider.get()
                     if (provider.id != expectedProvider) return@coroutineScope
 
+                    val performanceMode = _state.value.performanceMode
                     val catalogDef = async { repo.loadHomeCatalog() }
-                    val latestDef = async { repo.loadLatestEpisodes() }
+                    val latestDef = if (performanceMode) {
+                        null
+                    } else {
+                        async { repo.loadLatestEpisodes() }
+                    }
 
                     when (val catalogRes = catalogDef.await()) {
                         is NovaStreamRepository.RepoResult.Success -> {
                             if (ActiveProvider.id != expectedProvider) return@coroutineScope
                             val catalog = catalogRes.data
-                            val latest = latestDef.await().okList()
-
-                            val popular = catalog.popular.ifEmpty { catalog.all.take(24) }
-                            val newest = catalog.newest.ifEmpty { catalog.all.drop(8).take(24) }
-                            val movies = catalog.all.filter { it.isMovie }
-                            val trending = catalog.trending.ifEmpty {
-                                catalog.topShows.ifEmpty { popular.take(20) }
+                            val processed = withContext(Dispatchers.Default) {
+                                val popular = catalog.popular.ifEmpty { catalog.all.take(24) }
+                                val newest = catalog.newest.ifEmpty { catalog.all.drop(8).take(24) }
+                                val movies = catalog.all.filter { it.isMovie }
+                                val trending = catalog.trending.ifEmpty {
+                                    catalog.topShows.ifEmpty { popular.take(20) }
+                                }
+                                val merged = catalog.flattened().distinctBy { it.id }
+                                ProcessedCatalog(
+                                    popular = popular,
+                                    newest = newest,
+                                    movies = movies,
+                                    trending = trending,
+                                    merged = merged,
+                                    hero = catalog.hero.ifEmpty { merged.take(8) },
+                                    fallbackLatest = catalog.latestEpisodes
+                                )
                             }
-                            val merged = catalog.flattened().distinctBy { it.id }
 
                             val durationMs = System.currentTimeMillis() - startedAt
                             ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
@@ -218,25 +244,34 @@ class HomeViewModel @Inject constructor(
                                     providerId = expectedProvider,
                                     providerName = provider.displayName,
                                     catalogHint = provider.catalogHint,
-                                    uniqueTitleCount = merged.size,
-                                    hero = catalog.hero.ifEmpty { merged.take(8) },
-                                    popular = popular,
-                                    newest = newest,
-                                    trending = trending,
-                                    movies = movies,
+                                    uniqueTitleCount = processed.merged.size,
+                                    hero = processed.hero,
+                                    popular = processed.popular,
+                                    newest = processed.newest,
+                                    trending = processed.trending,
+                                    movies = processed.movies,
                                     genreRows = emptyList(),
                                     action = emptyList(),
                                     comedy = emptyList(),
                                     drama = emptyList(),
                                     scifi = emptyList(),
-                                    latestEpisodes = latest.ifEmpty { catalog.latestEpisodes },
+                                    latestEpisodes = processed.fallbackLatest,
                                     lastLoadDurationMs = durationMs,
                                     showProviderHealthWarning = ProviderLoadMetrics.shouldShowHealthWarning(durationMs, false),
                                     error = null
                                 )
                             }
-                            if (!_state.value.performanceMode) {
+                            if (!performanceMode) {
                                 loadGenreRowsDeferred(provider, expectedProvider)
+                            }
+                            latestDef?.let { deferred ->
+                                launch {
+                                    val latest = deferred.await().okList()
+                                    if (ActiveProvider.id != expectedProvider) return@launch
+                                    if (latest.isNotEmpty()) {
+                                        _state.update { it.copy(latestEpisodes = latest) }
+                                    }
+                                }
                             }
                         }
                         is NovaStreamRepository.RepoResult.Error -> {
@@ -333,3 +368,13 @@ class HomeViewModel @Inject constructor(
     private fun NovaStreamRepository.RepoResult<List<LatestEpisode>>.okList(): List<LatestEpisode> =
         (this as? NovaStreamRepository.RepoResult.Success)?.data.orEmpty()
 }
+
+private data class ProcessedCatalog(
+    val popular: List<com.novastream.app.data.model.Series>,
+    val newest: List<com.novastream.app.data.model.Series>,
+    val movies: List<com.novastream.app.data.model.Series>,
+    val trending: List<com.novastream.app.data.model.Series>,
+    val merged: List<com.novastream.app.data.model.Series>,
+    val hero: List<com.novastream.app.data.model.Series>,
+    val fallbackLatest: List<LatestEpisode>
+)
