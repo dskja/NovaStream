@@ -74,6 +74,33 @@
     <string name="settings_update_check_failed">Update-Check fehlgeschlagen oder keine Releases</string>
     <string name="settings_update_available">Update verfügbar: v%1$s</string>
     <string name="settings_up_to_date">Du bist auf dem neuesten Stand (v%1$s)</string>
+    <string name="settings_update_checking">Prüfe auf Updates…</string>
+    <string name="settings_update_search">Nach Updates suchen</string>
+    <string name="settings_update_current">Aktuell: v%1$s</string>
+    <string name="settings_update_github_releases">GitHub Releases · %1$s</string>
+    <string name="settings_update_download_apk">APK laden</string>
+    <string name="settings_update_open_release">Release öffnen</string>
+    <string name="settings_update_changelog">Changelog</string>
+    <string name="settings_about_tagline">Ein moderner Android Streaming-Client mit Continue Watching, Watchlist, Multi-Hoster Support und DNS-over-HTTPS.</string>
+    <string name="settings_source_code">Quellcode</string>
+    <string name="settings_report_bug">Fehler melden</string>
+    <string name="settings_report_bug_sub">Issue auf GitHub erstellen</string>
+    <string name="settings_star_repo">Sterne vergeben</string>
+    <string name="settings_star_repo_sub">Repo auf GitHub bewerten</string>
+    <string name="settings_license">Lizenz</string>
+    <string name="settings_license_sub">MIT License – ansehen</string>
+    <string name="settings_privacy">Datenschutz</string>
+    <string name="settings_privacy_sub">Keine Daten werden gesammelt</string>
+    <string name="settings_developer">Entwickler</string>
+    <string name="settings_github_profile">GitHub Profil</string>
+    <string name="settings_made_with">Made with </string>
+    <string name="settings_client_disclaimer">NovaStream ist ein inoffizieller Client.\nNur für Bildungszwecke. Verwendung auf eigene Verantwortung.</string>
+    <string name="settings_version_build_fmt">Version %1$s · Build %2$d</string>
+    <string name="settings_unknown_cleanup_title">Alte Einträge bereinigen?</string>
+    <string name="settings_unknown_cleanup_message">%1$d Watchlist- oder Fortschritts-Einträge stammen von vor dem Provider-Update (providerId „unknown“). Möchtest du sie entfernen?</string>
+    <string name="settings_unknown_cleanup_removed">%1$d Einträge mit unbekanntem Provider entfernt</string>
+    <string name="settings_unknown_cleanup_none">Keine unbekannten Provider-Einträge gefunden</string>
+    <string name="settings_keep">Behalten</string>
 
     <!-- Provider v9 -->
     <string name="provider_content_series">Serien</string>

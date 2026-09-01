@@ -224,9 +224,9 @@ class SettingsViewModel @Inject constructor(
                     showUnknownProviderCleanup = false,
                     unknownProviderRowCount = 0,
                     message = if (removed > 0) {
-                        "$removed Einträge mit unbekanntem Provider entfernt"
+                        context.getString(R.string.settings_unknown_cleanup_removed, removed)
                     } else {
-                        "Keine unbekannten Provider-Einträge gefunden"
+                        context.getString(R.string.settings_unknown_cleanup_none)
                     }
                 )
             }
@@ -556,7 +556,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
 
             // Section: Updates
-            SettingsSectionHeader("App-Updates")
+            SettingsSectionHeader(stringResource(R.string.settings_updates))
             val update = state.updateInfo
             Box(
                 Modifier
@@ -582,17 +582,26 @@ fun SettingsScreen(
                         Column(Modifier.weight(1f)) {
                             Text(
                                 when {
-                                    state.updateChecking -> "Prüfe auf Updates…"
-                                    update?.isNewer == true -> "Update verfügbar: v${update.latestVersion}"
-                                    update != null -> "Aktuell: v${update.currentVersion}"
-                                    else -> "Nach Updates suchen"
+                                    state.updateChecking -> stringResource(R.string.settings_update_checking)
+                                    update?.isNewer == true -> stringResource(
+                                        R.string.settings_update_available,
+                                        update.latestVersion
+                                    )
+                                    update != null -> stringResource(
+                                        R.string.settings_update_current,
+                                        update.currentVersion
+                                    )
+                                    else -> stringResource(R.string.settings_update_search)
                                 },
                                 color = TextPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 15.sp
                             )
                             Text(
-                                "GitHub Releases · ${com.novastream.app.util.UpdateChecker.GITHUB_REPO}",
+                                stringResource(
+                                    R.string.settings_update_github_releases,
+                                    com.novastream.app.util.UpdateChecker.GITHUB_REPO
+                                ),
                                 color = TextTertiary,
                                 fontSize = 12.sp
                             )
@@ -612,7 +621,13 @@ fun SettingsScreen(
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary)
                             ) {
-                                Text(if (update.downloadUrl != null) "APK laden" else "Release öffnen")
+                                Text(
+                                    if (update.downloadUrl != null) {
+                                        stringResource(R.string.settings_update_download_apk)
+                                    } else {
+                                        stringResource(R.string.settings_update_open_release)
+                                    }
+                                )
                             }
                             OutlinedButton(onClick = {
                                 try {
@@ -626,7 +641,7 @@ fun SettingsScreen(
                                     vm.showUrlError()
                                 }
                             }) {
-                                Text("Changelog")
+                                Text(stringResource(R.string.settings_update_changelog))
                             }
                         }
                         update.releaseNotes?.take(280)?.let { notes ->
@@ -640,7 +655,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
 
             // Section: Über NovaStream
-            SettingsSectionHeader("Über NovaStream")
+            SettingsSectionHeader(stringResource(R.string.settings_about))
 
             // Premium App Info Card
             Box(
@@ -708,7 +723,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(16.dp))
                     // Description
                     Text(
-                        "Ein moderner Android Streaming-Client mit Continue Watching, Watchlist, Multi-Hoster Support und DNS-over-HTTPS.",
+                        stringResource(R.string.settings_about_tagline),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                         lineHeight = 20.sp
@@ -733,43 +748,42 @@ fun SettingsScreen(
             // Clickable Links
             ClickableSettingsItem(
                 icon = Icons.Default.Code,
-                title = "Quellcode",
+                title = stringResource(R.string.settings_source_code),
                 subtitle = "github.com/dskja/NovaStream",
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.BugReport,
-                title = "Fehler melden",
-                subtitle = "Issue auf GitHub erstellen",
+                title = stringResource(R.string.settings_report_bug),
+                subtitle = stringResource(R.string.settings_report_bug_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream/issues/new") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Star,
-                title = "Sterne vergeben",
-                subtitle = "Repo auf GitHub bewerten",
+                title = stringResource(R.string.settings_star_repo),
+                subtitle = stringResource(R.string.settings_star_repo_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Gavel,
-                title = "Lizenz",
-                subtitle = "MIT License - ansehen",
+                title = stringResource(R.string.settings_license),
+                subtitle = stringResource(R.string.settings_license_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream/blob/main/LICENSE") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Security,
-                title = "Datenschutz",
-                subtitle = "Keine Daten werden gesammelt",
+                title = stringResource(R.string.settings_privacy),
+                subtitle = stringResource(R.string.settings_privacy_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream#privacy") { vm.showUrlError() } }
             )
 
             Spacer(Modifier.height(24.dp))
 
-            // Section: Entwickler
-            SettingsSectionHeader("Entwickler")
+            SettingsSectionHeader(stringResource(R.string.settings_developer))
             ClickableSettingsItem(
                 icon = Icons.Default.Code,
                 title = "dskja",
-                subtitle = "GitHub Profil",
+                subtitle = stringResource(R.string.settings_github_profile),
                 onClick = { openUrl(context, "https://github.com/dskja") { vm.showUrlError() } }
             )
 
@@ -781,20 +795,24 @@ fun SettingsScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Made with ", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.settings_made_with), color = TextTertiary, style = MaterialTheme.typography.bodySmall)
                     Icon(Icons.Default.Favorite, null, tint = Primary, modifier = Modifier.size(12.dp))
                     Text(" by dskja", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "NovaStream ist ein inoffizieller Client.\nNur für Bildungszwecke. Verwendung auf eigene Verantwortung.",
+                    stringResource(R.string.settings_client_disclaimer),
                     color = TextTertiary,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version ${com.novastream.app.BuildConfig.VERSION_NAME} · Build ${com.novastream.app.BuildConfig.VERSION_CODE}",
+                    stringResource(
+                        R.string.settings_version_build_fmt,
+                        com.novastream.app.BuildConfig.VERSION_NAME,
+                        com.novastream.app.BuildConfig.VERSION_CODE
+                    ),
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )
@@ -815,22 +833,22 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { vm.dismissUnknownProviderCleanup() },
             title = {
-                Text("Alte Einträge bereinigen?", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_unknown_cleanup_title), color = TextPrimary, fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
-                    "${state.unknownProviderRowCount} Watchlist- oder Fortschritts-Einträge stammen von vor dem Provider-Update (providerId „unknown“). Möchtest du sie entfernen?",
+                    stringResource(R.string.settings_unknown_cleanup_message, state.unknownProviderRowCount),
                     color = TextSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { vm.cleanupUnknownProviderRows() }) {
-                    Text("Entfernen", color = Primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.confirm), color = Primary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { vm.dismissUnknownProviderCleanup() }) {
-                    Text("Behalten", color = TextTertiary)
+                    Text(stringResource(R.string.settings_keep), color = TextTertiary)
                 }
             },
             containerColor = BgSurface,
