@@ -232,14 +232,14 @@ class SettingsViewModel @Inject constructor(
 
     fun clearContinueWatching() {
         viewModelScope.launch {
-            watchRepo.clearAllProgress()
+            watchRepo.clearProgressForProvider()
             _state.update { it.copy(message = context.getString(R.string.settings_continue_cleared)) }
         }
     }
 
     fun clearWatchlist() {
         viewModelScope.launch {
-            watchRepo.clearWatchlist()
+            watchRepo.clearWatchlistForProvider()
             _state.update { it.copy(message = context.getString(R.string.settings_watchlist_cleared)) }
         }
     }

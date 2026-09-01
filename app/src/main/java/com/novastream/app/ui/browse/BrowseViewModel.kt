@@ -175,7 +175,7 @@ class BrowseViewModel @Inject constructor(
             val result = when (section) {
                 "popular" -> repo.loadPopular()
                 "newest" -> repo.loadNewest()
-                "trending" -> repo.loadHomeCatalog().mapCatalog { it.trending.ifEmpty { it.popular } }
+                "trending" -> repo.loadPopular()
                 "movies" -> repo.loadMovies()
                 "genre" -> {
                     val slug = _state.value.selectedGenre
@@ -257,17 +257,13 @@ class BrowseViewModel @Inject constructor(
             when (result) {
                 is NovaStreamRepository.RepoResult.Success -> {
                     val beforeSize = if (reset) 0 else allItems.size
-                    val merged = if (reset) {
-                        result.data
-                    } else {
-                        (allItems + result.data).distinctBy { it.id }
-                    }
+                    val merged = mergePagedItems(allItems, result.data, reset)
                     allItems = merged
                     val grew = merged.size > beforeSize
                     publishItems(
                         reset = reset,
                         page = nextPage,
-                        hasMore = grew && result.data.isNotEmpty() && _state.value.supportsPagination
+                        hasMore = grew && computeHasMore(result.data, _state.value.supportsPagination)
                     )
                 }
                 is NovaStreamRepository.RepoResult.Error -> {
@@ -318,6 +314,21 @@ class BrowseViewModel @Inject constructor(
     }
 
     companion object {
+        internal fun mergePagedItems(
+            existing: List<Series>,
+            newPage: List<Series>,
+            reset: Boolean
+        ): List<Series> = if (reset) {
+            newPage
+        } else {
+            (existing + newPage).distinctBy { it.id }
+        }
+
+        internal fun computeHasMore(
+            pageItems: List<Series>,
+            supportsPagination: Boolean
+        ): Boolean = pageItems.isNotEmpty() && supportsPagination
+
         private fun parseContentFilter(raw: String?): BrowseContentFilter = when (raw?.lowercase()) {
             "movies", "movie", "filme" -> BrowseContentFilter.MOVIES
             "series", "serien" -> BrowseContentFilter.SERIES

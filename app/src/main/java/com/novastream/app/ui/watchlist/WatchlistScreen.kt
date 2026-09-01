@@ -202,6 +202,7 @@ fun WatchlistScreen(
     val initialFocus = rememberInitialFocusRequester()
     var pendingRemove by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<WatchlistItem?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showUnknownProviderDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.loading, state.items) {
         if (!state.loading && state.items.isNotEmpty()) {
@@ -225,6 +226,27 @@ fun WatchlistScreen(
             dismissButton = {
                 TextButton(onClick = { pendingRemove = null }) {
                     Text("Abbrechen", color = TextTertiary)
+                }
+            },
+            containerColor = BgSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary
+        )
+    }
+
+    if (showUnknownProviderDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnknownProviderDialog = false },
+            title = { Text("Unbekannter Provider", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Für diesen Eintrag ist kein Provider mehr verfügbar. Du kannst ihn entfernen oder in der Listenansicht „Alle“ anzeigen.",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showUnknownProviderDialog = false }) {
+                    Text("OK", color = Primary, fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = BgSurface,
@@ -401,7 +423,14 @@ fun WatchlistScreen(
                                             if (isTv) Modifier.tvFocusable().tvFocusRing(cornerRadius = 6.dp)
                                             else Modifier
                                         )
-                                        .clickable { vm.switchToProvider(item.providerId.ifBlank { "unknown" }) }
+                                        .clickable {
+                                            val pid = item.providerId.ifBlank { "unknown" }
+                                            if (pid == "unknown" || ProviderManager.getProviderOrNull(pid) == null) {
+                                                showUnknownProviderDialog = true
+                                            } else {
+                                                vm.switchToProvider(pid)
+                                            }
+                                        }
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(

@@ -1,5 +1,6 @@
 package com.novastream.app.ui.detail
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,9 +10,11 @@ import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +37,9 @@ data class DetailUiState(
     val metaNetwork: String? = null,
     val imdbId: String? = null,
     val trailerUrl: String? = null,
-    val relatedTitles: List<Series> = emptyList()
+    val relatedTitles: List<Series> = emptyList(),
+    val loadedProviderId: String? = null,
+    val providerMismatch: Boolean = false
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -86,6 +91,7 @@ data class DetailUiState(
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository
@@ -96,7 +102,21 @@ class DetailViewModel @Inject constructor(
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
+    private var loadedProviderId: String? = null
+
     init {
+        viewModelScope.launch {
+            ProviderManager.activeProviderIdFlow(context).collect { providerId ->
+                ActiveProvider.setById(providerId)
+                val previous = loadedProviderId
+                if (previous != null && previous != providerId) {
+                    _state.update {
+                        it.copy(providerMismatch = true, loading = true, error = null)
+                    }
+                    load()
+                }
+            }
+        }
         // Watch watchlist state
         viewModelScope.launch {
             watchRepo.isInWatchlist(slug).collect { inList ->
@@ -126,16 +146,28 @@ class DetailViewModel @Inject constructor(
     fun retry() = load()
 
     private fun load() {
+        val expectedProvider = ActiveProvider.id
         viewModelScope.launch {
             try {
                 when (val res = repo.loadSeriesDetail(slug)) {
                     is NovaStreamRepository.RepoResult.Success -> {
+                        if (ActiveProvider.id != expectedProvider) return@launch
                         val (series, seasons) = res.data
+                        loadedProviderId = expectedProvider
                         _state.update {
-                            it.copy(loading = false, series = series, seasons = seasons, error = null)
+                            it.copy(
+                                loading = false,
+                                series = series,
+                                seasons = seasons,
+                                error = null,
+                                loadedProviderId = expectedProvider,
+                                providerMismatch = false
+                            )
                         }
-                        enrichMetadata(series)
                         loadRelatedTitles(series)
+                        viewModelScope.launch {
+                            enrichMetadata(series)
+                        }
                         val firstWithEps = seasons.indexOfFirst { it.episodes.isNotEmpty() }
                         if (firstWithEps >= 0) {
                             _state.update { it.copy(selectedSeasonIndex = firstWithEps) }
@@ -144,12 +176,21 @@ class DetailViewModel @Inject constructor(
                             loadSeasonEpisodes(seasons.first().number)
                         }
                     }
-                    is NovaStreamRepository.RepoResult.Error ->
-                        _state.update { it.copy(loading = false, error = res.message) }
+                    is NovaStreamRepository.RepoResult.Error -> {
+                        if (ActiveProvider.id != expectedProvider) return@launch
+                        _state.update { it.copy(loading = false, error = res.message, providerMismatch = false) }
+                    }
                 }
             } catch (e: Exception) {
+                if (ActiveProvider.id != expectedProvider) return@launch
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "load error", e)
-                _state.update { it.copy(loading = false, error = com.novastream.app.util.ErrorMapper.toUserMessage(e)) }
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        error = com.novastream.app.util.ErrorMapper.toUserMessage(e),
+                        providerMismatch = false
+                    )
+                }
             }
         }
     }
@@ -321,20 +362,26 @@ class DetailViewModel @Inject constructor(
     private fun loadRelatedTitles(series: Series) {
         viewModelScope.launch {
             try {
-                val genre = series.genres.firstOrNull() ?: return@launch
-                val provider = ActiveProvider.get()
-                val genreSlug = provider.availableGenres
-                    .firstOrNull { g ->
-                        g.name.equals(genre, ignoreCase = true) ||
-                            g.slug.equals(genre, ignoreCase = true) ||
-                            genre.contains(g.name, ignoreCase = true)
+                val genre = series.genres.firstOrNull()?.lowercase() ?: return@launch
+                val related = when (val res = repo.loadHomeCatalog()) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        res.data.all
+                            .asSequence()
+                            .filter { it.id != series.id }
+                            .filter { candidate ->
+                                candidate.genres.any { g ->
+                                    g.equals(genre, ignoreCase = true) ||
+                                        genre.contains(g, ignoreCase = true) ||
+                                        g.contains(genre, ignoreCase = true)
+                                }
+                            }
+                            .ifEmpty {
+                                res.data.popular.asSequence().filter { it.id != series.id }
+                            }
+                            .distinctBy { it.id }
+                            .take(20)
+                            .toList()
                     }
-                    ?.slug
-                    ?: genre.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
-
-                val related = when (val res = repo.loadGenre(genreSlug)) {
-                    is NovaStreamRepository.RepoResult.Success ->
-                        res.data.filter { it.id != series.id }.distinctBy { it.id }.take(20)
                     else -> emptyList()
                 }
                 if (related.isNotEmpty()) {

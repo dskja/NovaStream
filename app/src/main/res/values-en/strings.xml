@@ -20,8 +20,8 @@
     <string name="active">Active</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
-    <string name="provider_health_slow">%1$s is responding slowly (%2$d s). Content may be incomplete.</string>
-    <string name="provider_health_generic">%1$s reported loading issues.</string>
+    <string name="provider_health_slow">%1$s is responding slowly (%2$d s). Try VPN or another provider.</string>
+    <string name="provider_health_generic">%1$s is reporting connection issues.</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -32,7 +32,7 @@
     <string name="settings_capability_movies">Movies</string>
     <string name="settings_capability_pagination">Pagination</string>
     <string name="settings_capability_latest">Latest episodes</string>
-    <string name="settings_capability_load_time">Load time</string>
+    <string name="settings_capability_load_time">Avg load</string>
     <string name="settings_playback">Playback</string>
     <string name="settings_autoplay_title">Autoplay next episode</string>
     <string name="settings_autoplay_subtitle">Automatically play the next episode</string>
@@ -49,9 +49,9 @@
     <string name="settings_reduce_motion_title">Reduce motion</string>
     <string name="settings_reduce_motion_subtitle">Disables automatic hero carousel</string>
     <string name="settings_performance_mode_title">Performance mode</string>
-    <string name="settings_performance_mode_subtitle">Fewer parallel catalog requests for slower devices</string>
+    <string name="settings_performance_mode_subtitle">Fewer parallel catalog loads on the home screen</string>
     <string name="settings_provider_switch_title">Switch provider?</string>
-    <string name="settings_provider_switch_message">Switch to %1$s? The catalog will reload.</string>
+    <string name="settings_provider_switch_message">Catalog and watchlist will switch to %1$s. Continue?</string>
     <string name="settings_design">Design</string>
     <string name="settings_dynamic_color_title">Dynamic color</string>
     <string name="settings_dynamic_color_subtitle">Material You – adapt colors to wallpaper (Android 12+)</string>
@@ -74,11 +74,4 @@
     <string name="settings_update_check_failed">Update check failed or no releases found</string>
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_up_to_date">You are up to date (v%1$s)</string>
-    <string name="settings_performance_mode_title">Performance mode</string>
-    <string name="settings_performance_mode_subtitle">Fewer parallel catalog loads on the home screen</string>
-    <string name="settings_provider_switch_title">Switch provider?</string>
-    <string name="settings_provider_switch_message">Catalog and watchlist will switch to %1$s. Continue?</string>
-    <string name="settings_capability_load_time">Avg load</string>
-    <string name="provider_health_slow">%1$s is responding slowly (%2$d s). Try VPN or another provider.</string>
-    <string name="provider_health_generic">%1$s is reporting connection issues.</string>
 </resources>

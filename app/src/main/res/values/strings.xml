@@ -20,8 +20,8 @@
     <string name="active">Aktiv</string>
     <string name="yes">Ja</string>
     <string name="no">Nein</string>
-    <string name="provider_health_slow">%1$s antwortet langsam (%2$d s). Inhalte können unvollständig sein.</string>
-    <string name="provider_health_generic">%1$s meldet Probleme beim Laden.</string>
+    <string name="provider_health_slow">%1$s reagiert langsam (%2$d s). VPN oder anderen Provider versuchen.</string>
+    <string name="provider_health_generic">%1$s meldet Verbindungsprobleme.</string>
 
     <!-- Settings -->
     <string name="settings_title">Einstellungen</string>
@@ -32,7 +32,7 @@
     <string name="settings_capability_movies">Filme</string>
     <string name="settings_capability_pagination">Pagination</string>
     <string name="settings_capability_latest">Neueste Episoden</string>
-    <string name="settings_capability_load_time">Ladezeit</string>
+    <string name="settings_capability_load_time">Ø Ladezeit</string>
     <string name="settings_playback">Wiedergabe</string>
     <string name="settings_autoplay_title">Autoplay nächste Folge</string>
     <string name="settings_autoplay_subtitle">Nächste Episode automatisch abspielen</string>
@@ -49,9 +49,9 @@
     <string name="settings_reduce_motion_title">Bewegung reduzieren</string>
     <string name="settings_reduce_motion_subtitle">Deaktiviert automatisches Hero-Karussell</string>
     <string name="settings_performance_mode_title">Performance-Modus</string>
-    <string name="settings_performance_mode_subtitle">Weniger parallele Katalog-Requests für schwächere Geräte</string>
+    <string name="settings_performance_mode_subtitle">Weniger parallele Katalog-Ladevorgänge auf dem Startbildschirm</string>
     <string name="settings_provider_switch_title">Provider wechseln?</string>
-    <string name="settings_provider_switch_message">Zu %1$s wechseln? Der Katalog wird neu geladen.</string>
+    <string name="settings_provider_switch_message">Katalog und Watchlist werden auf %1$s umgestellt. Fortfahren?</string>
     <string name="settings_design">Design</string>
     <string name="settings_dynamic_color_title">Dynamic Color</string>
     <string name="settings_dynamic_color_subtitle">Material You - Farben an Wallpaper anpassen (Android 12+)</string>
@@ -74,11 +74,4 @@
     <string name="settings_update_check_failed">Update-Check fehlgeschlagen oder keine Releases</string>
     <string name="settings_update_available">Update verfügbar: v%1$s</string>
     <string name="settings_up_to_date">Du bist auf dem neuesten Stand (v%1$s)</string>
-    <string name="settings_performance_mode_title">Performance-Modus</string>
-    <string name="settings_performance_mode_subtitle">Weniger parallele Katalog-Ladevorgänge auf dem Startbildschirm</string>
-    <string name="settings_provider_switch_title">Provider wechseln?</string>
-    <string name="settings_provider_switch_message">Katalog und Watchlist werden auf %1$s umgestellt. Fortfahren?</string>
-    <string name="settings_capability_load_time">Ø Ladezeit</string>
-    <string name="provider_health_slow">%1$s reagiert langsam (%2$d s). VPN oder anderen Provider versuchen.</string>
-    <string name="provider_health_generic">%1$s meldet Verbindungsprobleme.</string>
 </resources>

@@ -119,6 +119,23 @@ private fun DetailContent(
     LazyColumn(
         Modifier.fillMaxSize().background(BgPure)
     ) {
+        if (state.providerMismatch && state.loading) {
+            item {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(Primary.copy(alpha = 0.15f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        "Provider gewechselt – Inhalte werden neu geladen…",
+                        color = Primary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
         // Backdrop Hero
         item {
             Box(
