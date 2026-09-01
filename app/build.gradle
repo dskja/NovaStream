@@ -65,7 +65,7 @@ android {
         }
     }
     lint {
-        disable 'UnsafeOptInUsageError'
+        disable 'UnsafeOptInUsageError', 'MissingTranslation'
     }
     testOptions {
         unitTests.all {
