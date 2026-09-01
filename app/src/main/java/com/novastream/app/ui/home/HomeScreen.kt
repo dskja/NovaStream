@@ -118,7 +118,8 @@ fun HomeScreen(
         LazyColumn(
             Modifier
                 .fillMaxSize()
-                .background(BgPure)
+                .background(BgPure),
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             // Provider Badge - zeigt aktiven Provider
         item {

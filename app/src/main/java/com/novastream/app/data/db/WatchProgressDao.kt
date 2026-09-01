@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WatchProgressDao {
 
+    @Query("SELECT * FROM watch_progress WHERE profileId = :profileId ORDER BY updatedAt DESC LIMIT 50")
+    fun getAllForProfile(profileId: String): Flow<List<WatchProgress>>
+
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC LIMIT 50")
     fun getAll(): Flow<List<WatchProgress>>
 
@@ -21,8 +24,8 @@ interface WatchProgressDao {
     @Query("SELECT * FROM watch_progress WHERE slug = :slug ORDER BY season ASC, episode ASC")
     suspend fun getBySlug(slug: String): List<WatchProgress>
 
-    @Query("SELECT * FROM watch_progress WHERE slug = :slug AND providerId = :providerId ORDER BY updatedAt DESC LIMIT 1")
-    suspend fun getLatestForSlug(slug: String, providerId: String): WatchProgress?
+    @Query("SELECT * FROM watch_progress WHERE slug = :slug AND providerId = :providerId AND profileId = :profileId ORDER BY updatedAt DESC LIMIT 1")
+    suspend fun getLatestForSlug(slug: String, providerId: String, profileId: String): WatchProgress?
 
     @Query("SELECT * FROM watch_progress ORDER BY updatedAt DESC LIMIT :limit")
     fun getRecent(limit: Int): Flow<List<WatchProgress>>
@@ -36,8 +39,11 @@ interface WatchProgressDao {
     @Query("DELETE FROM watch_progress WHERE episodeKey = :key")
     suspend fun delete(key: String)
 
-    @Query("DELETE FROM watch_progress WHERE slug = :slug AND providerId = :providerId")
-    suspend fun deleteBySlug(slug: String, providerId: String)
+    @Query("DELETE FROM watch_progress WHERE slug = :slug AND providerId = :providerId AND profileId = :profileId")
+    suspend fun deleteBySlug(slug: String, providerId: String, profileId: String)
+
+    @Query("DELETE FROM watch_progress WHERE providerId = :providerId AND profileId = :profileId")
+    suspend fun clearForProfile(providerId: String, profileId: String)
 
     @Query("DELETE FROM watch_progress WHERE providerId = :providerId")
     suspend fun clearForProvider(providerId: String)
@@ -69,9 +75,9 @@ interface WatchProgressDao {
     @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9 AND updatedAt < :cutoffTimestamp")
     suspend fun deleteOldCompleted(cutoffTimestamp: Long): Int
 
-    @Query("SELECT COUNT(*) FROM watch_progress WHERE providerId = 'unknown'")
-    suspend fun countUnknownProvider(): Int
+    @Query("SELECT COUNT(*) FROM watch_progress WHERE providerId = 'unknown' AND profileId = :profileId")
+    suspend fun countUnknownProvider(profileId: String): Int
 
-    @Query("DELETE FROM watch_progress WHERE providerId = 'unknown'")
-    suspend fun deleteUnknownProvider(): Int
+    @Query("DELETE FROM watch_progress WHERE providerId = 'unknown' AND profileId = :profileId")
+    suspend fun deleteUnknownProvider(profileId: String): Int
 }

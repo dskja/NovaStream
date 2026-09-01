@@ -1,22 +1,28 @@
 package com.novastream.app.data.repository
 
 import com.novastream.app.data.db.NovaStreamDatabase
+import com.novastream.app.data.db.ProfileEntity
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.profile.ProfileManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Repository für Watch-Progress und Watchlist.
- * Speichert lokal in Room – immer provider-scoped.
+ * Speichert lokal in Room – provider- und profil-scoped.
  */
 @Singleton
+@OptIn(ExperimentalCoroutinesApi::class)
 class WatchRepository @Inject constructor(
-    db: NovaStreamDatabase
+    db: NovaStreamDatabase,
+    private val profileManager: ProfileManager
 ) {
 
     private val progressDao = db.watchProgressDao()
@@ -28,12 +34,24 @@ class WatchRepository @Inject constructor(
 
         fun get(context: android.content.Context): WatchRepository =
             INSTANCE ?: synchronized(this) {
-                INSTANCE ?: WatchRepository(NovaStreamDatabase.get(context.applicationContext)).also { INSTANCE = it }
+                val appContext = context.applicationContext
+                val db = NovaStreamDatabase.get(appContext)
+                INSTANCE ?: WatchRepository(
+                    db,
+                    ProfileManager(appContext, db)
+                ).also { INSTANCE = it }
             }
     }
 
-    fun watchProgress(): Flow<List<WatchProgress>> = progressDao.getAll()
-        .catch { emit(emptyList()) }
+    private suspend fun activeProfileId(): String {
+        profileManager.ensureDefaultProfile()
+        return profileManager.getActiveProfile().profileId
+    }
+
+    fun watchProgress(): Flow<List<WatchProgress>> =
+        profileManager.activeProfileId()
+            .flatMapLatest { profileId -> progressDao.getAllForProfile(profileId) }
+            .catch { emit(emptyList()) }
 
     fun watchProgressForActiveProvider(): Flow<List<WatchProgress>> =
         watchProgress().map { list ->
@@ -54,10 +72,12 @@ class WatchRepository @Inject constructor(
         providerId: String = ActiveProvider.id
     ) {
         try {
-            val key = WatchProgress.key(providerId, slug, season, episode)
+            val profileId = activeProfileId()
+            val key = WatchProgress.key(profileId, providerId, slug, season, episode)
             progressDao.upsert(
                 WatchProgress(
                     episodeKey = key,
+                    profileId = profileId,
                     providerId = providerId,
                     slug = slug,
                     seriesTitle = seriesTitle,
@@ -78,14 +98,17 @@ class WatchRepository @Inject constructor(
     }
 
     suspend fun getProgress(slug: String, season: Int, episode: Int): WatchProgress? {
+        val profileId = activeProfileId()
         val pid = ActiveProvider.id
-        return progressDao.get(WatchProgress.key(pid, slug, season, episode))
+        return progressDao.get(WatchProgress.key(profileId, pid, slug, season, episode))
     }
 
     suspend fun getProgressBySlug(slug: String): List<WatchProgress> = try {
+        val profileId = activeProfileId()
         val pid = ActiveProvider.id
         progressDao.getBySlug(slug).filter {
-            it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown"
+            it.profileId == profileId &&
+                (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
         }
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "getProgressBySlug failed", e)
@@ -93,7 +116,7 @@ class WatchRepository @Inject constructor(
     }
 
     suspend fun getLatestProgress(slug: String): WatchProgress? = try {
-        progressDao.getLatestForSlug(slug, ActiveProvider.id)
+        progressDao.getLatestForSlug(slug, ActiveProvider.id, activeProfileId())
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "getLatestProgress failed", e)
         null
@@ -107,9 +130,18 @@ class WatchRepository @Inject constructor(
         }
     }
 
+    suspend fun removeProgressForEpisode(
+        slug: String,
+        season: Int,
+        episode: Int,
+        providerId: String = ActiveProvider.id
+    ) {
+        removeProgress(WatchProgress.key(activeProfileId(), providerId, slug, season, episode))
+    }
+
     suspend fun removeProgressBySlug(slug: String) {
         try {
-            progressDao.deleteBySlug(slug, ActiveProvider.id)
+            progressDao.deleteBySlug(slug, ActiveProvider.id, activeProfileId())
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeProgressBySlug failed", e)
         }
@@ -125,7 +157,7 @@ class WatchRepository @Inject constructor(
 
     suspend fun clearProgressForProvider(providerId: String = ActiveProvider.id) {
         try {
-            progressDao.clearForProvider(providerId)
+            progressDao.clearForProfile(providerId, activeProfileId())
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearProgressForProvider failed", e)
         }
@@ -133,11 +165,16 @@ class WatchRepository @Inject constructor(
 
     suspend fun clearAllProgress() = clearProgressForProvider(ActiveProvider.id)
 
-    fun watchlist(): Flow<List<WatchlistItem>> = watchlistDao.getAll()
-        .catch { emit(emptyList()) }
+    fun watchlist(): Flow<List<WatchlistItem>> =
+        profileManager.activeProfileId()
+            .flatMapLatest { profileId -> watchlistDao.getAllForProfile(profileId) }
+            .catch { emit(emptyList()) }
 
     fun isInWatchlist(slug: String): Flow<Boolean> =
-        watchlistDao.isInWatchlistForProvider(ActiveProvider.id, slug)
+        profileManager.activeProfileId()
+            .flatMapLatest { profileId ->
+                watchlistDao.isInWatchlistForProfile(profileId, ActiveProvider.id, slug)
+            }
 
     suspend fun addToWatchlist(
         slug: String,
@@ -147,9 +184,11 @@ class WatchRepository @Inject constructor(
         providerId: String = ActiveProvider.id
     ) {
         try {
+            val profileId = activeProfileId()
             watchlistDao.add(
                 WatchlistItem(
-                    itemKey = WatchlistItem.key(providerId, slug),
+                    itemKey = WatchlistItem.key(profileId, providerId, slug),
+                    profileId = profileId,
                     providerId = providerId,
                     slug = slug,
                     title = title,
@@ -164,8 +203,9 @@ class WatchRepository @Inject constructor(
 
     suspend fun removeFromWatchlist(slug: String) {
         try {
-            watchlistDao.removeForProvider(ActiveProvider.id, slug)
-            watchlistDao.removeKey(WatchlistItem.key("unknown", slug))
+            val profileId = activeProfileId()
+            watchlistDao.removeForProfile(profileId, ActiveProvider.id, slug)
+            watchlistDao.removeKey(WatchlistItem.key(profileId, "unknown", slug))
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeFromWatchlist failed", e)
         }
@@ -173,14 +213,14 @@ class WatchRepository @Inject constructor(
 
     suspend fun removeAllFromWatchlist(slugs: List<String>) {
         try {
-            watchlistDao.removeAll(slugs, ActiveProvider.id)
+            watchlistDao.removeAllForProfile(slugs, ActiveProvider.id, activeProfileId())
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeAllFromWatchlist failed", e)
         }
     }
 
     suspend fun containsInWatchlist(slug: String): Boolean = try {
-        watchlistDao.containsForProvider(ActiveProvider.id, slug)
+        watchlistDao.containsForProfile(activeProfileId(), ActiveProvider.id, slug)
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "containsInWatchlist failed", e)
         false
@@ -188,7 +228,7 @@ class WatchRepository @Inject constructor(
 
     suspend fun clearWatchlistForProvider(providerId: String = ActiveProvider.id) {
         try {
-            watchlistDao.clearForProvider(providerId)
+            watchlistDao.clearForProfile(providerId, activeProfileId())
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "clearWatchlistForProvider failed", e)
         }
@@ -197,14 +237,16 @@ class WatchRepository @Inject constructor(
     suspend fun clearWatchlist() = clearWatchlistForProvider(ActiveProvider.id)
 
     suspend fun countUnknownProviderRows(): Int = try {
-        watchlistDao.countUnknownProvider() + progressDao.countUnknownProvider()
+        val profileId = activeProfileId()
+        watchlistDao.countUnknownProvider(profileId) + progressDao.countUnknownProvider(profileId)
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "countUnknownProviderRows failed", e)
         0
     }
 
     suspend fun cleanupUnknownProviderRows(): Int = try {
-        watchlistDao.deleteUnknownProvider() + progressDao.deleteUnknownProvider()
+        val profileId = activeProfileId()
+        watchlistDao.deleteUnknownProvider(profileId) + progressDao.deleteUnknownProvider(profileId)
     } catch (e: Exception) {
         if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "cleanupUnknownProviderRows failed", e)
         0

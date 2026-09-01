@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WatchlistDao {
 
+    @Query("SELECT * FROM watchlist WHERE profileId = :profileId ORDER BY addedAt DESC")
+    fun getAllForProfile(profileId: String): Flow<List<WatchlistItem>>
+
     @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
     fun getAll(): Flow<List<WatchlistItem>>
 
@@ -37,11 +40,17 @@ interface WatchlistDao {
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
     fun isInWatchlistBySlug(slug: String): Flow<Boolean>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE profileId = :profileId AND providerId = :providerId AND slug = :slug)")
+    fun isInWatchlistForProfile(profileId: String, providerId: String, slug: String): Flow<Boolean>
+
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE providerId = :providerId AND slug = :slug)")
     fun isInWatchlistForProvider(providerId: String, slug: String): Flow<Boolean>
 
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE slug = :slug)")
     suspend fun containsSlug(slug: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE profileId = :profileId AND providerId = :providerId AND slug = :slug)")
+    suspend fun containsForProfile(profileId: String, providerId: String, slug: String): Boolean
 
     @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE providerId = :providerId AND slug = :slug)")
     suspend fun containsForProvider(providerId: String, slug: String): Boolean
@@ -62,12 +71,22 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist WHERE itemKey = :itemKey")
     suspend fun removeKey(itemKey: String)
 
+    @Query("DELETE FROM watchlist WHERE profileId = :profileId AND providerId = :providerId AND slug = :slug")
+    suspend fun removeForProfile(profileId: String, providerId: String, slug: String)
+
     @Query("DELETE FROM watchlist WHERE providerId = :providerId AND slug = :slug")
     suspend fun removeForProvider(providerId: String, slug: String)
+
+    @Query("DELETE FROM watchlist WHERE slug IN (:slugs) AND providerId = :providerId AND profileId = :profileId")
+    @Transaction
+    suspend fun removeAllForProfile(slugs: List<String>, providerId: String, profileId: String)
 
     @Query("DELETE FROM watchlist WHERE slug IN (:slugs) AND providerId = :providerId")
     @Transaction
     suspend fun removeAll(slugs: List<String>, providerId: String)
+
+    @Query("DELETE FROM watchlist WHERE providerId = :providerId AND profileId = :profileId")
+    suspend fun clearForProfile(providerId: String, profileId: String)
 
     @Query("DELETE FROM watchlist WHERE providerId = :providerId")
     suspend fun clearForProvider(providerId: String)
@@ -81,9 +100,9 @@ interface WatchlistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: WatchlistItem)
 
-    @Query("SELECT COUNT(*) FROM watchlist WHERE providerId = 'unknown'")
-    suspend fun countUnknownProvider(): Int
+    @Query("SELECT COUNT(*) FROM watchlist WHERE providerId = 'unknown' AND profileId = :profileId")
+    suspend fun countUnknownProvider(profileId: String): Int
 
-    @Query("DELETE FROM watchlist WHERE providerId = 'unknown'")
-    suspend fun deleteUnknownProvider(): Int
+    @Query("DELETE FROM watchlist WHERE providerId = 'unknown' AND profileId = :profileId")
+    suspend fun deleteUnknownProvider(profileId: String): Int
 }

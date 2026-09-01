@@ -16,12 +16,14 @@ import com.novastream.app.data.provider.ProviderUrls
     indices = [
         Index(value = ["addedAt"]),
         Index(value = ["providerId"]),
-        Index(value = ["slug"])
+        Index(value = ["slug"]),
+        Index(value = ["profileId"])
     ]
 )
 data class WatchlistItem(
     @PrimaryKey
-    val itemKey: String,             // "{providerId}|{slug}"
+    val itemKey: String,             // "{profileId}|{providerId}|{slug}"
+    val profileId: String = ProfileEntity.DEFAULT_ID,
     val providerId: String = "",
     val slug: String,
     val title: String,
@@ -58,6 +60,7 @@ data class WatchlistItem(
         }
 
     companion object {
-        fun key(providerId: String, slug: String): String = "$providerId|$slug"
+        fun key(profileId: String, providerId: String, slug: String): String =
+            "$profileId|$providerId|$slug"
     }
 }
