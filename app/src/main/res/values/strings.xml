@@ -101,6 +101,15 @@
     <string name="settings_unknown_cleanup_removed">%1$d Einträge mit unbekanntem Provider entfernt</string>
     <string name="settings_unknown_cleanup_none">Keine unbekannten Provider-Einträge gefunden</string>
     <string name="settings_keep">Behalten</string>
+    <string name="section_see_all">Alle anzeigen</string>
+    <string name="error_search_failed">Suche fehlgeschlagen</string>
+    <string name="detail_cast_no_device">Kein Cast-Gerät verbunden</string>
+    <string name="downloads_episode_fmt">%1$s · S%2$d E%3$d</string>
+    <string name="downloads_play">Abspielen</string>
+    <string name="downloads_retry">Erneut versuchen</string>
+    <string name="downloads_progress_fmt">%1$d%%</string>
+    <string name="live_tv_search_empty">Keine Kanäle für diese Suche</string>
+    <string name="player_subtitle_track_fmt">Untertitel %1$d</string>
 
     <!-- Provider v9 -->
     <string name="provider_content_series">Serien</string>

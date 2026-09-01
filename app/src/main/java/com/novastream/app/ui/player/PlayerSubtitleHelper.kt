@@ -5,7 +5,8 @@ package com.novastream.app.ui.player
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.novastream.app.R
+import com.novastream.app.util.AppContext
 
 data class SubtitleTrackOption(
     val groupIndex: Int,
@@ -21,9 +22,10 @@ internal fun collectSubtitleTracks(player: Player): List<SubtitleTrackOption> {
         for (trackIndex in 0 until group.length) {
             val format = group.getTrackFormat(trackIndex)
             val language = format.language?.takeIf { it.isNotBlank() && it != "und" }
+            val fallbackLabel = AppContext.get().getString(R.string.player_subtitle_track_fmt, trackIndex + 1)
             val label = format.label?.takeIf { it.isNotBlank() }
                 ?: language?.uppercase()
-                ?: "Untertitel ${trackIndex + 1}"
+                ?: fallbackLabel
             tracks += SubtitleTrackOption(
                 groupIndex = groupIndex,
                 trackIndex = trackIndex,

@@ -399,4 +399,13 @@ Tylko do celów edukacyjnych. Używasz na własne ryzyko.</string>
     <string name="settings_unknown_cleanup_removed">Usunięto %1$d wpisów z nieznanym dostawcą</string>
     <string name="settings_unknown_cleanup_none">Nie znaleziono wpisów z nieznanym dostawcą</string>
     <string name="settings_keep">Zachowaj</string>
+    <string name="section_see_all">Zobacz wszystko</string>
+    <string name="error_search_failed">Wyszukiwanie nie powiodło się</string>
+    <string name="detail_cast_no_device">Brak podłączonego urządzenia Cast</string>
+    <string name="downloads_episode_fmt">%1$s · S%2$d E%3$d</string>
+    <string name="downloads_play">Odtwórz</string>
+    <string name="downloads_retry">Ponów</string>
+    <string name="downloads_progress_fmt">%1$d%%</string>
+    <string name="live_tv_search_empty">Brak kanałów pasujących do wyszukiwania</string>
+    <string name="player_subtitle_track_fmt">Napisy %1$d</string>
 </resources>

@@ -328,7 +328,23 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             }
 
             composable(Routes.DOWNLOADS) {
-                com.novastream.app.ui.downloads.DownloadsScreen(onBack = { nav.popBackStack() })
+                com.novastream.app.ui.downloads.DownloadsScreen(
+                    onBack = { nav.popBackStack() },
+                    onPlay = { item ->
+                        nav.navigate(
+                            Routes.player(
+                                slug = item.slug,
+                                season = item.season,
+                                episode = item.episode,
+                                title = item.episodeTitle,
+                                seriesTitle = item.title,
+                                coverUrl = item.coverUrl,
+                                isMovie = false,
+                                streamUrl = item.streamUrl
+                            )
+                        )
+                    }
+                )
             }
 
             composable(Routes.MARKETPLACE) {
@@ -440,7 +456,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                                 season = 1,
                                 episode = 1,
                                 title = channel.name,
-                                seriesTitle = channel.group ?: "Live TV",
+                                seriesTitle = channel.group ?: context.getString(R.string.live_tv_title),
                                 coverUrl = channel.logoUrl,
                                 isMovie = false,
                                 streamUrl = channel.streamUrl,

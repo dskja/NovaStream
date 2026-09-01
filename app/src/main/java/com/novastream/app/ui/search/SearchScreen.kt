@@ -398,7 +398,12 @@ fun SearchScreen(
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
-                                        .clickable { vm.onQueryChange(search) }
+                                        .clickable {
+                                            vm.onQueryChange(search)
+                                            if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) {
+                                                globalVm.onQueryChange(search)
+                                            }
+                                        }
                                         .padding(horizontal = 20.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

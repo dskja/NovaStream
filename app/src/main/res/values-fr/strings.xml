@@ -399,4 +399,13 @@
     <string name="settings_unknown_cleanup_removed">%1$d entr√©es avec provider inconnu supprim√©es</string>
     <string name="settings_unknown_cleanup_none">Aucune entr√©e provider inconnue trouv√©e</string>
     <string name="settings_keep">Garder</string>
+    <string name="section_see_all">Voir tout</string>
+    <string name="error_search_failed">…chec de la recherche</string>
+    <string name="detail_cast_no_device">Aucun appareil Cast connectÈ</string>
+    <string name="downloads_episode_fmt">%1$s ∑ S%2$d E%3$d</string>
+    <string name="downloads_play">Lire</string>
+    <string name="downloads_retry">RÈessayer</string>
+    <string name="downloads_progress_fmt">%1$d%%</string>
+    <string name="live_tv_search_empty">Aucune chaÓne ne correspond ‡ cette recherche</string>
+    <string name="player_subtitle_track_fmt">Sous-titre %1$d</string>
 </resources>

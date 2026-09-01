@@ -90,7 +90,7 @@ fun BrowseScreen(
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minPoster),
                 state = gridState,
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 80.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxSize()

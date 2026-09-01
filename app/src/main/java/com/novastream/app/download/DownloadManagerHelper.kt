@@ -121,6 +121,30 @@ class DownloadManagerHelper @Inject constructor(
         return id
     }
 
+    suspend fun retryDownload(entity: DownloadEntity) {
+        downloadManager.removeDownload(entity.downloadId)
+        val request = DownloadRequest.Builder(entity.downloadId, android.net.Uri.parse(entity.streamUrl))
+            .setMimeType(entity.mimeType)
+            .setCustomCacheKey(entity.downloadId)
+            .build()
+        downloadDao.upsert(
+            entity.copy(
+                status = DownloadStatus.QUEUED,
+                bytesDownloaded = 0L,
+                contentLength = 0L,
+                errorMessage = null,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        downloadManager.addDownload(request)
+        Media3DownloadService.sendAddDownload(
+            context,
+            DownloadForegroundService::class.java,
+            request,
+            false
+        )
+    }
+
     suspend fun removeDownload(id: String) {
         downloadManager.removeDownload(id)
         downloadDao.delete(id)

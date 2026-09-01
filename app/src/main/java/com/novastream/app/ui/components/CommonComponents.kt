@@ -465,7 +465,7 @@ fun SectionHeader(
         Spacer(Modifier.weight(1f))
         if (onSeeAll != null) {
             Text(
-                text = "Alle anzeigen",
+                text = stringResource(R.string.section_see_all),
                 color = Primary,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,

@@ -8,6 +8,7 @@ import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderLanguageManager
 import com.novastream.app.data.provider.StreamingProvider
+import com.novastream.app.util.ErrorMapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -92,7 +93,7 @@ class GlobalSearchViewModel @Inject constructor(
                 }
                 _state.update { it.copy(loading = false, results = aggregated, error = null) }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: "Search failed") }
+                _state.update { it.copy(loading = false, error = ErrorMapper.toUserMessage(context, e)) }
             }
         }
     }

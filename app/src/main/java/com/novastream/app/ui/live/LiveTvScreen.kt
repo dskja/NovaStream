@@ -30,6 +30,7 @@ import com.novastream.app.data.iptv.XmlTvEpgParser
 import com.novastream.app.data.prefs.AppSettings
 import java.net.URL
 import com.novastream.app.ui.navigation.Routes
+import com.novastream.app.util.ErrorMapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,7 +110,7 @@ class LiveTvViewModel @Inject constructor(
                 val groups = providers.flatMap { it.loadChannelGroups() }
                 _state.update { it.copy(loading = false, groups = groups) }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message) }
+                _state.update { it.copy(loading = false, error = ErrorMapper.toUserMessage(e)) }
             }
         }
     }
@@ -174,7 +175,21 @@ fun LiveTvScreen(
                     CircularProgressIndicator()
                 }
             } else if (uiState.error != null) {
-                Text(uiState.error!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+                Column(
+                    Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        uiState.error ?: stringResource(R.string.error_unknown),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = viewModel::refresh) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
             } else {
                 val showSearch = uiState.searchQuery.isNotBlank()
                 LazyColumn(Modifier.fillMaxSize()) {
@@ -188,12 +203,27 @@ fun LiveTvScreen(
                         }
                     }
                     if (showSearch) {
-                        items(uiState.searchResults, key = { it.id }) { channel ->
-                            LiveChannelRow(
-                                channel = channel,
-                                epgTitle = viewModel.epgNow(channel)?.title,
-                                onClick = { onPlayChannel(channel) }
-                            )
+                        if (uiState.searchResults.isEmpty()) {
+                            item {
+                                Box(
+                                    Modifier.fillMaxWidth().padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        stringResource(R.string.live_tv_search_empty),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        } else {
+                            items(uiState.searchResults, key = { it.id }) { channel ->
+                                LiveChannelRow(
+                                    channel = channel,
+                                    epgTitle = viewModel.epgNow(channel)?.title,
+                                    onClick = { onPlayChannel(channel) }
+                                )
+                            }
                         }
                     } else {
                         uiState.groups.forEach { group ->

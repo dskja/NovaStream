@@ -8,7 +8,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +40,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
 data class DownloadsUiState(
@@ -47,6 +50,7 @@ data class DownloadsUiState(
     val storageBytes: Long = 0L
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val downloadHelper: DownloadManagerHelper,
@@ -59,16 +63,21 @@ class DownloadsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             profileManager.ensureDefaultProfile()
-            val profileId = profileManager.getActiveProfile().profileId
-            downloadHelper.observeDownloads(profileId).collect { items ->
-                val bytes = downloadHelper.getStorageUsedBytes()
-                _state.update { it.copy(loading = false, items = items, storageBytes = bytes) }
-            }
+            profileManager.activeProfileId()
+                .flatMapLatest { profileId -> downloadHelper.observeDownloads(profileId) }
+                .collect { items ->
+                    val bytes = downloadHelper.getStorageUsedBytes()
+                    _state.update { it.copy(loading = false, items = items, storageBytes = bytes) }
+                }
         }
     }
 
     fun removeDownload(id: String) {
         viewModelScope.launch { downloadHelper.removeDownload(id) }
+    }
+
+    fun retryDownload(item: DownloadEntity) {
+        viewModelScope.launch { downloadHelper.retryDownload(item) }
     }
 
     fun refresh() {
@@ -81,7 +90,8 @@ class DownloadsViewModel @Inject constructor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onPlay: (DownloadEntity) -> Unit = {}
 ) {
     val vm: DownloadsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -117,7 +127,12 @@ fun DownloadsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(state.items, key = { it.downloadId }) { item ->
-                    DownloadRow(item = item, onRemove = { vm.removeDownload(item.downloadId) })
+                    DownloadRow(
+                        item = item,
+                        onPlay = { onPlay(item) },
+                        onRetry = { vm.retryDownload(item) },
+                        onRemove = { vm.removeDownload(item.downloadId) }
+                    )
                 }
             }
         }
@@ -125,7 +140,12 @@ fun DownloadsScreen(
 }
 
 @Composable
-private fun DownloadRow(item: DownloadEntity, onRemove: () -> Unit) {
+private fun DownloadRow(
+    item: DownloadEntity,
+    onPlay: () -> Unit,
+    onRetry: () -> Unit,
+    onRemove: () -> Unit
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -146,14 +166,25 @@ private fun DownloadRow(item: DownloadEntity, onRemove: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(item.title, color = TextPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "${item.episodeTitle} · S${item.season} E${item.episode}",
+                stringResource(R.string.downloads_episode_fmt, item.episodeTitle, item.season, item.episode),
                 color = TextSecondary,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            val statusText = when (item.status) {
+                DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> {
+                    val pct = item.progressPercent.coerceIn(0, 100)
+                    if (pct > 0) {
+                        "${statusLabel(item.status)} · ${stringResource(R.string.downloads_progress_fmt, pct)}"
+                    } else {
+                        statusLabel(item.status)
+                    }
+                }
+                else -> statusLabel(item.status)
+            }
             Text(
-                statusLabel(item.status),
+                statusText,
                 color = when (item.status) {
                     DownloadStatus.COMPLETED -> Primary
                     DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
@@ -172,6 +203,15 @@ private fun DownloadRow(item: DownloadEntity, onRemove: () -> Unit) {
                         trackColor = BgSurfaceElevated
                     )
                 }
+            }
+        }
+        if (item.status == DownloadStatus.COMPLETED) {
+            IconButton(onClick = onPlay) {
+                Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.downloads_play), tint = Primary)
+            }
+        } else if (item.status == DownloadStatus.FAILED) {
+            IconButton(onClick = onRetry) {
+                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.downloads_retry), tint = Primary)
             }
         }
         IconButton(onClick = onRemove) {
