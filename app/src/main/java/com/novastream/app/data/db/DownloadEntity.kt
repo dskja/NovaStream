@@ -43,8 +43,8 @@ data class DownloadEntity(
         else ((bytesDownloaded * 100) / contentLength).toInt().coerceIn(0, 100)
 
     companion object {
-        fun key(providerId: String, slug: String, season: Int, episode: Int): String =
-            "$providerId|$slug|S$season|E$episode"
+        fun key(profileId: String, providerId: String, slug: String, season: Int, episode: Int): String =
+            "$profileId|$providerId|$slug|S$season|E$episode"
     }
 }
 

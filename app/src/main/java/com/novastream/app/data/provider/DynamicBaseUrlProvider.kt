@@ -7,7 +7,7 @@ import kotlinx.coroutines.sync.Mutex
  */
 interface DynamicBaseUrlProvider {
     val defaultBaseUrl: String
-    val changeUrlMutex: Mutex get() = Mutex()
+    val changeUrlMutex: Mutex
 
     suspend fun resolveBaseUrl(forceRefresh: Boolean = false): String
 }

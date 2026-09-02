@@ -29,16 +29,27 @@ object ProviderHttp {
     fun isChallenge(html: String): Boolean {
         if (html.isBlank()) return true
         val lower = html.lowercase()
-        if (html.length < 400) {
-            if (lower.contains("just a moment") || lower.contains("checking your browser")) return true
+        val hasCatalogSignals = lower.contains("/serie") ||
+            lower.contains("/stream/") ||
+            lower.contains("/title/") ||
+            lower.contains("/movie") ||
+            lower.contains("/anime/") ||
+            lower.contains("<article") ||
+            lower.contains("og:title")
+        if (hasCatalogSignals && html.length > 1_500) return false
+        if (html.length < 500) {
+            return lower.contains("just a moment") ||
+                lower.contains("checking your browser") ||
+                lower.contains("cf-challenge") ||
+                lower.contains("challenge-platform") ||
+                lower.contains("attention required") ||
+                lower.contains("ddos-guard")
         }
-        return lower.contains("cf-challenge") ||
-            lower.contains("challenge-platform") ||
-            lower.contains("recaptcha") ||
-            lower.contains("captcha") ||
-            lower.contains("ddos-guard") && html.length < 2_000 && !lower.contains("/serie") ||
-            lower.contains("attention required") ||
-            lower.contains("enable javascript")
+        if (html.length < 2_500) {
+            return (lower.contains("cf-challenge") || lower.contains("challenge-platform")) &&
+                !hasCatalogSignals
+        }
+        return false
     }
 
     /** Fetch HTML with optional in-memory cache. */
@@ -62,12 +73,17 @@ object ProviderHttp {
             html = CaptchaWebViewFetcher.fetchHtml(url)
         }
 
-        if (useCache && html.isNotBlank()) {
+        if (useCache && html.isNotBlank() && !isChallenge(html)) {
             cacheMutex.withLock {
                 cache[url] = System.currentTimeMillis() to html
             }
         }
         return html
+    }
+
+    /** Clears the shared HTTP response cache (e.g. on provider/mirror switch). */
+    suspend fun clearCache() {
+        cacheMutex.withLock { cache.clear() }
     }
 
     /** Try multiple entry URLs; returns first base URL whose home page looks valid. */

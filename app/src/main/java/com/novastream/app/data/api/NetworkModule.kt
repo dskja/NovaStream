@@ -1,6 +1,7 @@
 package com.novastream.app.data.api
 
 import com.novastream.app.data.model.NovaStreamConfig
+import com.novastream.app.util.MediaUrls
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.Dns
@@ -23,6 +24,22 @@ import java.util.concurrent.atomic.AtomicReference
  * Nutzt DNS-over-HTTPS (Cloudflare 1.1.1.1 + Google 8.8.8.8 Fallback) um ISP-DNS-Blockaden zu umgehen.
  */
 object NetworkModule {
+
+    /** Upgrade http→https only for hosts that are not cleartext-allowed in network security config. */
+    private val httpsUpgradeInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url
+        if (url.scheme == "http") {
+            val host = url.host
+            if (!MediaUrls.isCleartextAllowedHost(host)) {
+                val upgraded = request.newBuilder()
+                    .url(url.newBuilder().scheme("https").build())
+                    .build()
+                return@Interceptor chain.proceed(upgraded)
+            }
+        }
+        chain.proceed(request)
+    }
 
     private val userAgentInterceptor = Interceptor { chain ->
         val original = chain.request()
@@ -62,9 +79,6 @@ object NetworkModule {
                 }
             }
             attempt++
-            if (attempt < 3) {
-                Thread.sleep(250L * attempt)
-            }
         }
         throw lastException ?: java.io.IOException("Max retries exceeded")
     }
@@ -87,6 +101,7 @@ object NetworkModule {
             .dns(dohDns)
             .cookieJar(cookieJar)
             .dispatcher(buildDispatcher())
+            .addInterceptor(httpsUpgradeInterceptor)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(retryInterceptor)
             .addInterceptor(loggingInterceptor)

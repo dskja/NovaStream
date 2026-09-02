@@ -14,12 +14,14 @@ import androidx.room.PrimaryKey
         Index(value = ["slug", "season", "episode"]),
         Index(value = ["updatedAt"]),
         Index(value = ["slug"]),
-        Index(value = ["providerId"])
+        Index(value = ["providerId"]),
+        Index(value = ["profileId"])
     ]
 )
 data class WatchProgress(
     @PrimaryKey
     val episodeKey: String,
+    val profileId: String = ProfileEntity.DEFAULT_ID,
     val providerId: String = "",
     val slug: String,
     val seriesTitle: String,
@@ -55,7 +57,7 @@ data class WatchProgress(
         else "S${season}E${episode} - $episodeTitle"
 
     companion object {
-        fun key(providerId: String, slug: String, season: Int, episode: Int): String =
-            "$providerId|$slug-$season-$episode"
+        fun key(profileId: String, providerId: String, slug: String, season: Int, episode: Int): String =
+            "$profileId|$providerId|$slug-$season-$episode"
     }
 }

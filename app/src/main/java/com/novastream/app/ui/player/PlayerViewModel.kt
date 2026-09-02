@@ -9,8 +9,15 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.download.DownloadManagerHelper
 import android.content.Context
 import com.novastream.app.R
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.novastream.app.util.AppContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -51,7 +58,9 @@ data class PlayerUiState(
     val season: Int = 1,
     val episode: Int = 1,
     val isMovie: Boolean = false,
-    val adjacentEpisodesLoading: Boolean = false
+    val isLive: Boolean = false,
+    val adjacentEpisodesLoading: Boolean = false,
+    val isBuffering: Boolean = false
 ) {
     val currentSource: StreamSource?
         get() = sources.getOrNull(selectedSourceIndex.coerceAtMost(sources.lastIndex.coerceAtLeast(0)))
@@ -89,10 +98,18 @@ class PlayerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
-    private val appSettings: AppSettings
+    private val appSettings: AppSettings,
+    private val downloadHelper: DownloadManagerHelper
 ) : ViewModel() {
 
-    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+    private val slug: String = run {
+        val raw = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+        try {
+            java.net.URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
+    }
     private val season: Int = savedStateHandle.get<Int>("season") ?: 1
     private val episode: Int = savedStateHandle.get<Int>("episode") ?: 1
     private val title: String = run {
@@ -108,6 +125,10 @@ class PlayerViewModel @Inject constructor(
         try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     }?.takeIf { it.isNotBlank() }
     private val isMovie: Boolean = savedStateHandle.get<Boolean>("isMovie") ?: false
+    private val isLive: Boolean = savedStateHandle.get<Boolean>("isLive") ?: false
+    private val directStreamUrl: String? = savedStateHandle.get<String>("streamUrl")?.let {
+        try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
+    }?.takeIf { it.isNotBlank() }
 
     private val _state = MutableStateFlow(PlayerUiState(
         episodeTitle = title,
@@ -115,7 +136,8 @@ class PlayerViewModel @Inject constructor(
         coverUrl = coverUrl,
         season = season,
         episode = episode,
-        isMovie = isMovie
+        isMovie = isMovie,
+        isLive = isLive
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
@@ -199,6 +221,32 @@ class PlayerViewModel @Inject constructor(
     private fun load() {
         _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
+            if (!directStreamUrl.isNullOrBlank()) {
+                val url = directPlaybackUrl(directStreamUrl)
+                val label = if (isLive) "Live" else "Offline"
+                val source = StreamSource(
+                    hoster = label,
+                    url = url,
+                    mimeType = when {
+                        url.contains(".m3u8", ignoreCase = true) -> "application/x-mpegURL"
+                        url.startsWith("file://") || url.startsWith("content://") -> "video/mp4"
+                        else -> "video/mp4"
+                    },
+                    isHls = url.contains(".m3u8", ignoreCase = true)
+                )
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        hosters = listOf(HosterLink(name = label, redirectUrl = url, language = label, index = 0)),
+                        sources = listOf(source),
+                        selectedHosterIndex = 0,
+                        selectedSourceIndex = 0,
+                        error = null
+                    )
+                }
+                return@launch
+            }
+
             val saved = watchRepo.getProgress(slug, season, episode)
             if (saved != null && !saved.isCompleted && saved.durationMs > 0 && saved.positionMs < saved.durationMs) {
                 _state.update { it.copy(resumePositionMs = saved.positionMs, durationMs = saved.durationMs) }
@@ -216,20 +264,29 @@ class PlayerViewModel @Inject constructor(
                 season = season,
                 episodeUrl = epUrl
             )
-            when (val h = repo.loadHosters(ep)) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    val hosters = h.data
-                    if (hosters.isEmpty()) {
-                        _state.update { it.copy(loading = false, error = context.getString(R.string.player_no_hosters_found)) }
-                        return@launch
+            try {
+                when (val h = repo.loadHosters(ep)) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        val hosters = h.data
+                        if (hosters.isEmpty()) {
+                            _state.update { it.copy(loading = false, error = context.getString(R.string.player_no_hosters_found)) }
+                            return@launch
+                        }
+                        val prefs = _state.value
+                        val sorted = sortHosters(hosters, prefs.preferredHoster, prefs.preferredLanguage)
+                        _state.update { it.copy(hosters = sorted, loading = false) }
+                        resolveHoster(0)
                     }
-                    val prefs = _state.value
-                    val sorted = sortHosters(hosters, prefs.preferredHoster, prefs.preferredLanguage)
-                    _state.update { it.copy(hosters = sorted, loading = false) }
-                    resolveHoster(0)
+                    is NovaStreamRepository.RepoResult.Error ->
+                        _state.update { it.copy(loading = false, error = h.message) }
                 }
-                is NovaStreamRepository.RepoResult.Error ->
-                    _state.update { it.copy(loading = false, error = h.message) }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        error = com.novastream.app.util.ErrorMapper.toUserMessage(context, e)
+                    )
+                }
             }
         }
     }
@@ -275,11 +332,38 @@ class PlayerViewModel @Inject constructor(
         _state.update { it.copy(hosterFallbackNotice = null) }
     }
 
+    fun setBuffering(buffering: Boolean) {
+        _state.update { it.copy(isBuffering = buffering) }
+    }
+
+    fun onPlayerError(message: String) {
+        _state.update { it.copy(error = message, loading = false, isBuffering = false) }
+    }
+
     fun retry() {
+        if (!directStreamUrl.isNullOrBlank()) {
+            load()
+            return
+        }
         val index = _state.value.selectedHosterIndex
         resolveJob?.cancel()
         _state.update { it.copy(error = null, loading = true, hosterFallbackNotice = null) }
         resolveJob = viewModelScope.launch { resolveHoster(index) }
+    }
+
+    @UnstableApi
+    fun buildPlayer(context: Context): ExoPlayer {
+        return ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(downloadHelper.cacheDataSourceFactory()))
+            .setTrackSelector(DefaultTrackSelector(context))
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true
+            )
+            .build()
     }
 
     fun saveProgress(positionMs: Long, durationMs: Long) {
@@ -329,14 +413,7 @@ class PlayerViewModel @Inject constructor(
     fun onEpisodeFinished() {
         _state.update { it.copy(isFinished = true) }
         viewModelScope.launch {
-            watchRepo.removeProgress(
-                com.novastream.app.data.db.WatchProgress.key(
-                    com.novastream.app.data.provider.ActiveProvider.id,
-                    slug,
-                    season,
-                    episode
-                )
-            )
+            watchRepo.removeProgressForEpisode(slug, season, episode)
             ensureAdjacentEpisodesLoaded()
         }
     }
@@ -414,14 +491,7 @@ class PlayerViewModel @Inject constructor(
 
     fun clearProgress() {
         viewModelScope.launch {
-            watchRepo.removeProgress(
-                com.novastream.app.data.db.WatchProgress.key(
-                    com.novastream.app.data.provider.ActiveProvider.id,
-                    slug,
-                    season,
-                    episode
-                )
-            )
+            watchRepo.removeProgressForEpisode(slug, season, episode)
         }
     }
 
@@ -510,5 +580,14 @@ class PlayerViewModel @Inject constructor(
 
     private fun sortSources(sources: List<StreamSource>): List<StreamSource> {
         return sources.sortedByDescending { it.qualityRank }
+    }
+
+    /** Direct navigation stream (live IPTV, offline download, deep link). */
+    private fun directPlaybackUrl(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("file://") || trimmed.startsWith("content://") || trimmed.startsWith("/")) {
+            return if (trimmed.startsWith("/")) "file://$trimmed" else trimmed
+        }
+        return com.novastream.app.util.MediaUrls.playbackUrl(trimmed)
     }
 }

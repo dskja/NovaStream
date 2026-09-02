@@ -30,9 +30,9 @@ object KinoGerScraper {
     // ─── Serien-Listen (Home, Suche, Genre) ────────────────────────────────
 
     /** Parst eine Liste von Serien/Filmen von KinoGer. */
-    fun parseSeriesList(html: String): List<Series> {
+    fun parseSeriesList(html: String, baseUrl: String = BASE_URL): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, BASE_URL)
+        val doc = Jsoup.parse(html, baseUrl)
         val results = linkedMapOf<String, Series>()
 
         // Phase 1: div.short (Standard DLE-Layout)
@@ -57,7 +57,7 @@ object KinoGerScraper {
                 id = slug,
                 title = title,
                 coverUrl = cover,
-                detailUrl = href.substringAfter(BASE_URL).ifBlank { href }
+                detailUrl = relativizeDetailUrl(href, baseUrl)
             )
         }
 
@@ -84,7 +84,7 @@ object KinoGerScraper {
                     id = slug,
                     title = title,
                     coverUrl = cover,
-                    detailUrl = href.substringAfter(BASE_URL).ifBlank { href }
+                    detailUrl = relativizeDetailUrl(href, baseUrl)
                 )
             }
         }
@@ -110,11 +110,11 @@ object KinoGerScraper {
     // ─── Serien-Detail ─────────────────────────────────────────────────────
 
     /** Parst die Detail-Seite einer Serie/Film auf KinoGer. */
-    fun parseSeriesDetail(html: String, slug: String): Pair<Series, List<Season>> {
+    fun parseSeriesDetail(html: String, slug: String, baseUrl: String = BASE_URL): Pair<Series, List<Season>> {
         if (html.isBlank()) {
             return Series(id = slug, title = slugToTitle(slug), coverUrl = null, detailUrl = "/stream/$slug.html") to emptyList()
         }
-        val doc = Jsoup.parse(html, BASE_URL)
+        val doc = Jsoup.parse(html, baseUrl)
 
         // Titel: h1#news-title oder h1
         val title = doc.selectFirst("h1#news-title")?.text()?.trim()
@@ -130,7 +130,7 @@ object KinoGerScraper {
             val src = coverImg.attr("data-src").ifBlank { coverImg.attr("data-lazy-src") }
                 .ifBlank { coverImg.absUrl("src") }.ifBlank { coverImg.attr("src") }
             if (src.isNotBlank() && !src.contains("data:image")) {
-                cover = if (src.startsWith("http")) src else BASE_URL + src
+                cover = if (src.startsWith("http")) src else baseUrl.trimEnd('/') + src
             }
         }
 
@@ -392,6 +392,16 @@ object KinoGerScraper {
     }
 
     /** Extrahiert den Slug aus einer KinoGer URL (/stream/12345-title.html → "12345-title"). */
+    private fun relativizeDetailUrl(href: String, baseUrl: String): String {
+        val trimmedBase = baseUrl.trimEnd('/')
+        return when {
+            href.startsWith(trimmedBase) -> href.removePrefix(trimmedBase).ifBlank { href }
+            href.startsWith("http") -> href
+            href.startsWith("/") -> href
+            else -> "/$href"
+        }
+    }
+
     private fun extractKinoGerSlug(url: String): String? {
         val m = SLUG_PATTERN.matcher(url)
         if (m.find()) {

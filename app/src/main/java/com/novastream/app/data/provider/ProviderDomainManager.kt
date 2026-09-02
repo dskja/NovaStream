@@ -12,6 +12,16 @@ private val Context.domainDataStore by preferencesDataStore("provider_domains")
 object ProviderDomainManager {
 
     private val domainPatterns: Map<String, List<String>> = mapOf(
+        "serienstream" to listOf(
+            "https://serienstream.to",
+            "https://s.to",
+            "https://serienstream.cx"
+        ),
+        "serienstream_cx" to listOf(
+            "https://serienstream.cx",
+            "https://serienstream.to",
+            "https://s.to"
+        ),
         "wiflix" to listOf(
             "https://flemmix.team/",
             "https://ww1.wiflix-adresses.fun/",
@@ -44,7 +54,33 @@ object ProviderDomainManager {
         ),
         "burningseries" to listOf(
             "https://burningseries.cx",
-            "https://bs.to"
+            "https://bs.to",
+            "https://burningseries.ac"
+        ),
+        "aniworld" to listOf(
+            "https://aniworld.to",
+            "https://aniworld.gg",
+            "https://aniworld.nu"
+        ),
+        "kinoger" to listOf(
+            "https://kinoger.to",
+            "https://kinoger.com",
+            "https://kinoger.pw"
+        ),
+        "streamkiste" to listOf(
+            "https://stream-kiste.de",
+            "https://streamkiste.tv",
+            "https://streamkiste.xyz"
+        ),
+        "filmpalast" to listOf(
+            "https://filmpalast.to",
+            "https://filmpalast.cx",
+            "https://filmpalast.io"
+        ),
+        "kinoz" to listOf(
+            "https://kinoz.to",
+            "https://kinos.to",
+            "https://kinoz.tv"
         ),
         "sflix" to listOf(
             "https://sflix.to/",
@@ -160,6 +196,126 @@ object ProviderDomainManager {
             "https://flixer.su/",
             "https://flixer.sh/",
             "https://flixer.it/"
+        ),
+        "hianime" to listOf(
+            "https://hianime.to/",
+            "https://hianime.nz/",
+            "https://hianime.bz/"
+        ),
+        "animeworld" to listOf(
+            "https://www.animeworld.ac/",
+            "https://animeworld.tv/",
+            "https://www.animeworld.so/"
+        ),
+        "anikoto" to listOf(
+            "https://anikototv.to/",
+            "https://anikoto.tv/",
+            "https://anikoto.to/"
+        ),
+        "animeunity" to listOf(
+            "https://www.animeunity.so/",
+            "https://animeunity.to/",
+            "https://animeunity.cc/"
+        ),
+        "hydrahd" to listOf(
+            "https://hydrahd.sh/",
+            "https://hydrahd.cc/",
+            "https://hydrahd.com/"
+        ),
+        "cinezo" to listOf(
+            "https://cinezo.to/",
+            "https://cinezo.net/",
+            "https://cinezo.tv/"
+        ),
+        "showsst" to listOf(
+            "https://shows.st/",
+            "https://showsst.com/",
+            "https://showsst.to/"
+        ),
+        "phantomflix" to listOf(
+            "https://phantomflix.co/",
+            "https://phantomflix.tv/",
+            "https://phantomflix.net/"
+        ),
+        "pressplay" to listOf(
+            "https://pressplay.top/",
+            "https://pressplay.cam/",
+            "https://pressplay.store/"
+        ),
+        "einschalten" to listOf(
+            "https://einschalten.in/",
+            "https://einschalten.to/",
+            "https://einschalten.cx/"
+        ),
+        "frenchanime" to listOf(
+            "https://french-anime.com/",
+            "https://french-streaming.com/",
+            "https://french-anime.tv/"
+        ),
+        "animefenix" to listOf(
+            "https://www.animefenix.tv/",
+            "https://animefenix.com/",
+            "https://animefenix2.com/"
+        ),
+        "tioanime" to listOf(
+            "https://tioanime.com/",
+            "https://tioanime.org/",
+            "https://tioanime.net/"
+        ),
+        "otakufr" to listOf(
+            "https://otakufr.cc/",
+            "https://otakufr.tv/",
+            "https://otakufr.net/"
+        ),
+        "latanime" to listOf(
+            "https://latanime.org/",
+            "https://latanime.com/",
+            "https://latanime.net/"
+        ),
+        "seriesflix" to listOf(
+            "https://seriesflix.store/",
+            "https://seriesflix.tv/",
+            "https://seriesflix.net/"
+        ),
+        "anymovie" to listOf(
+            "https://anymovie.cc/",
+            "https://anymovie.to/",
+            "https://anymovie.net/"
+        ),
+        "flixlatam" to listOf(
+            "https://flixlatam.com/",
+            "https://flixlatam.tv/",
+            "https://flixlatam.net/"
+        ),
+        "filmpertutti" to listOf(
+            "https://filmpertutti.asia/",
+            "https://filmpertutti.io/",
+            "https://filmpertutti.net/"
+        ),
+        "cineblog01" to listOf(
+            "https://cineblog01.hair/",
+            "https://cineblog01.vin/",
+            "https://cineblog01.bond/"
+        ),
+        "guardaflix" to listOf(
+            "https://guardaflix.blog/",
+            "https://guardaflix.net/",
+            "https://guardaflix.tv/"
+        ),
+        "mkvmovies" to listOf(
+            "https://mkvmoviespoint.casa/",
+            "https://mkvmoviespoint.com/",
+            "https://mkvmoviespoint.me/"
+        ),
+        "mkissa" to listOf(
+            "https://mkissa.com/",
+            "https://mkissa.net/",
+            "https://mkissa.tv/"
+        ),
+        "cinecalidad" to listOf(
+            "https://www.cinecalidad.ec/",
+            "https://cinecalidad.la/",
+            "https://cinecalidad.rs/"
         )
     )
 

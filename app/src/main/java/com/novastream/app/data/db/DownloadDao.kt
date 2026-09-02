@@ -28,11 +28,37 @@ interface DownloadDao {
     @Query("UPDATE downloads SET status = :status, updatedAt = :updatedAt WHERE downloadId = :id")
     suspend fun updateStatus(id: String, status: DownloadStatus, updatedAt: Long = System.currentTimeMillis())
 
+    @Query("""
+        UPDATE downloads SET
+            status = :status,
+            bytesDownloaded = :bytesDownloaded,
+            contentLength = :contentLength,
+            errorMessage = :errorMessage,
+            localPath = :localPath,
+            updatedAt = :updatedAt
+        WHERE downloadId = :id
+    """)
+    suspend fun updateProgress(
+        id: String,
+        status: DownloadStatus,
+        bytesDownloaded: Long,
+        contentLength: Long,
+        errorMessage: String?,
+        localPath: String? = null,
+        updatedAt: Long = System.currentTimeMillis()
+    )
+
     @Query("DELETE FROM downloads WHERE downloadId = :id")
     suspend fun delete(id: String)
 
     @Query("SELECT COALESCE(SUM(bytesDownloaded), 0) FROM downloads WHERE status = 'COMPLETED'")
     suspend fun totalDownloadedBytes(): Long
+
+    @Query("SELECT COALESCE(SUM(bytesDownloaded), 0) FROM downloads WHERE status = 'COMPLETED' AND profileId = :profileId")
+    suspend fun totalDownloadedBytes(profileId: String): Long
+
+    @Query("DELETE FROM downloads WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: String)
 
     @Query("SELECT COUNT(*) FROM downloads")
     suspend fun count(): Int

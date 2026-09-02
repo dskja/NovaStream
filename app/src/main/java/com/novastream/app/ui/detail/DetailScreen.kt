@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -30,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +59,7 @@ import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +73,25 @@ fun DetailScreen(
     val series = state.series
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val downloadMsg = state.downloadMessage
+    val castHelper = remember { com.novastream.app.cast.CastHelper.get(context) }
+    var castPlayer by remember { mutableStateOf<androidx.media3.cast.CastPlayer?>(null) }
+    val appSettings = remember { com.novastream.app.data.prefs.AppSettings(context) }
+    val castEnabled by appSettings.castEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(state.castStreamUrl, state.castStreamTitle) {
+        val url = state.castStreamUrl ?: return@LaunchedEffect
+        val title = state.castStreamTitle ?: "NovaStream"
+        if (castEnabled && castHelper.isAvailable && castHelper.isCastSessionActive()) {
+            val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
+            cp?.let {
+                castHelper.loadOnCast(it, url, title)
+                snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_to_tv_started))
+            }
+        }
+        vm.clearCastRequest()
+    }
 
     LaunchedEffect(downloadMsg) {
         downloadMsg?.let { key ->
@@ -78,6 +99,8 @@ fun DetailScreen(
                 "detail_download_started" -> context.getString(R.string.detail_download_started)
                 "detail_download_failed" -> context.getString(R.string.detail_download_failed)
                 "detail_download_no_source" -> context.getString(R.string.detail_download_no_source)
+                "detail_cast_to_tv_failed" -> context.getString(R.string.detail_cast_to_tv_failed)
+                "detail_cast_no_device" -> context.getString(R.string.detail_cast_no_device)
                 else -> key
             }
             snackbarHostState.showSnackbar(text)
@@ -103,7 +126,16 @@ fun DetailScreen(
                 onMarkSeasonWatched = vm::markSeasonAsWatched,
                 onMarkSeasonUnwatched = vm::markSeasonAsUnwatched,
                 onRelatedClick = onRelatedClick,
-                onDownload = vm::downloadCurrentEpisode
+                onDownload = vm::downloadCurrentEpisode,
+                onCast = {
+                    if (castEnabled && castHelper.isCastSessionActive()) {
+                        vm.castCurrentEpisode()
+                    }
+                },
+                onRetrySeason = vm::retrySeasonLoad,
+                castEnabled = castEnabled && castHelper.isAvailable,
+                castHelper = castHelper,
+                casting = state.casting
             )
         }
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -126,7 +158,12 @@ private fun DetailContent(
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
     onRelatedClick: (String) -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onCast: () -> Unit,
+    onRetrySeason: () -> Unit,
+    castEnabled: Boolean,
+    castHelper: com.novastream.app.cast.CastHelper,
+    casting: Boolean
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -328,6 +365,46 @@ private fun DetailContent(
                                 contentDescription = stringResource(R.string.detail_download_episode),
                                 tint = TextSecondary,
                                 modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    if (castEnabled) {
+                        if (casting) {
+                            Box(
+                                Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BgSurfaceElevated)
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Primary)
+                            }
+                        } else if (castHelper.isCastSessionActive()) {
+                            Box(
+                                Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BgSurfaceElevated)
+                                    .clickable(onClick = onCast)
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Cast,
+                                    contentDescription = stringResource(R.string.detail_cast_to_tv),
+                                    tint = Primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        } else {
+                            com.novastream.app.ui.cast.CastMediaRouteButton(
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp),
+                                castHelper = castHelper
                             )
                         }
                     }
@@ -539,6 +616,25 @@ private fun DetailContent(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+                }
+            }
+        } else if (state.seasonError != null) {
+            item {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        state.seasonError ?: "",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = onRetrySeason) {
+                        Text(stringResource(R.string.retry))
+                    }
                 }
             }
         } else if (season != null && season.episodes.isNotEmpty()) {
