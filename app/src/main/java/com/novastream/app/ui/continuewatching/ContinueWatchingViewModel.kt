@@ -33,7 +33,10 @@ class ContinueWatchingViewModel @Inject constructor(
                 watchRepo.watchProgress().collect { progress ->
                     val pid = ActiveProvider.id
                     val items = progress
-                        .filter { !it.isCompleted && (it.providerId.isBlank() || it.providerId == pid) }
+                        .filter {
+                            !it.isCompleted &&
+                                (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
+                        }
                         .sortedByDescending { it.updatedAt }
                     _state.update { it.copy(items = items, loading = false, error = null) }
                 }

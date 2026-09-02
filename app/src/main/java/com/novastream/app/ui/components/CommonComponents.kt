@@ -186,10 +186,12 @@ fun SeriesPosterCard(
     modifier: Modifier = Modifier,
     cardWidth: Int = 130,
     inWatchlist: Boolean = false,
+    showWatchlistBadge: Boolean = true,
     focusRequester: FocusRequester? = null
 ) {
     val context = LocalContext.current
     val isTv = remember { TvUtils.isTvDevice(context) }
+    val imageSize = rememberPosterImageDimensions()
     val effectiveWidth = if (isTv) (cardWidth * 1.35f).toInt().coerceAtLeast(cardWidth + 20) else cardWidth
     var isLoading by remember(series.id, series.coverUrl) { mutableStateOf(true) }
     var isError by remember(series.id, series.coverUrl) { mutableStateOf(false) }
@@ -227,12 +229,24 @@ fun SeriesPosterCard(
                 )
             }
 
-            if (!series.coverUrl.isNullOrBlank() && !isError) {
+            if (isError || series.coverUrl.isNullOrBlank()) {
+                Box(
+                    Modifier.fillMaxSize().background(BgCard),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = series.initials,
+                        color = Accent,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            } else if (!series.coverUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(series.coverUrl)
                         .crossfade(true)
-                        .size(400, 600)
+                        .size(imageSize.width, imageSize.height)
                         .addHeader(
                             "Referer",
                             com.novastream.app.util.MediaUrls.refererFor(series.coverUrl)
@@ -250,31 +264,6 @@ fun SeriesPosterCard(
                         }
                     }
                 )
-                // Gradient overlay am unteren Rand
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.6f to Color.Transparent,
-                                1f to CardGradientBottom
-                            )
-                        )
-                )
-            }
-
-            if (isError || series.coverUrl.isNullOrBlank()) {
-                Box(
-                    Modifier.fillMaxSize().background(BgCard),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = series.initials,
-                        color = Accent,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Black
-                    )
-                }
             }
 
             // Movie badge (top-left)
@@ -297,7 +286,7 @@ fun SeriesPosterCard(
             }
 
             // Watchlist indicator badge (top-right corner)
-            if (inWatchlist) {
+            if (inWatchlist && showWatchlistBadge) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
@@ -477,7 +466,7 @@ fun SectionHeader(
         Spacer(Modifier.weight(1f))
         if (onSeeAll != null) {
             Text(
-                text = "Alle anzeigen",
+                text = stringResource(R.string.section_see_all),
                 color = Primary,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,

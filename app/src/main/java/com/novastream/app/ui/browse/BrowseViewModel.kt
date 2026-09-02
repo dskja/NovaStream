@@ -16,6 +16,7 @@ import androidx.annotation.StringRes
 import com.novastream.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 enum class BrowseContentFilter { ALL, SERIES, MOVIES }
 
@@ -63,20 +65,21 @@ class BrowseViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var activeProviderId: String = ActiveProvider.id
     private var allItems: List<Series> = emptyList()
-    private val initialSection: String? = savedStateHandle.get<String>("section")?.takeIf { it.isNotBlank() }
-    private val initialGenre: String? = savedStateHandle.get<String>("genre")?.takeIf { it.isNotBlank() }
+    private val initialSection: String? = Companion.decodeNavArg(savedStateHandle.get<String>("section"))
+    private val initialGenre: String? = Companion.decodeNavArg(savedStateHandle.get<String>("genre"))
     private val initialFilter: BrowseContentFilter = parseContentFilter(savedStateHandle.get<String>("filter"))
 
     init {
         viewModelScope.launch {
+            var isFirstEmission = true
             providerController.activeProviderId.collect { providerId ->
-                if (activeProviderId != providerId) {
+                if (isFirstEmission || activeProviderId != providerId) {
+                    isFirstEmission = false
                     activeProviderId = providerId
                     resetAndLoad()
                 }
             }
         }
-        viewModelScope.launch { resetAndLoad() }
     }
 
     fun refresh() = viewModelScope.launch { resetAndLoad() }
@@ -114,7 +117,12 @@ class BrowseViewModel @Inject constructor(
 
     fun setSort(sort: BrowseSort) {
         if (_state.value.sort == sort) return
-        _state.update { it.copy(sort = sort, items = applySort(applyContentFilter(allItems))) }
+        viewModelScope.launch {
+            val sorted = withContext(Dispatchers.Default) {
+                applySort(applyContentFilter(allItems), sort)
+            }
+            _state.update { it.copy(sort = sort, items = sorted) }
+        }
     }
 
     fun loadMore() {
@@ -184,7 +192,13 @@ class BrowseViewModel @Inject constructor(
             val result = when (section) {
                 "popular" -> repo.loadPopular()
                 "newest" -> repo.loadNewest()
-                "trending" -> repo.loadPopular()
+                "trending" -> repo.loadHomeCatalog().let { result ->
+                    when (result) {
+                        is NovaStreamRepository.RepoResult.Success ->
+                            NovaStreamRepository.RepoResult.Success(result.data.trending)
+                        is NovaStreamRepository.RepoResult.Error -> result
+                    }
+                }
                 "movies" -> repo.loadMovies()
                 "genre" -> {
                     val slug = _state.value.selectedGenre
@@ -276,11 +290,11 @@ class BrowseViewModel @Inject constructor(
                     )
                 }
                 is NovaStreamRepository.RepoResult.Error -> {
-                    _state.update {
-                        it.copy(
+                    _state.update { current ->
+                        current.copy(
                             loading = false,
                             loadingMore = false,
-                            hasMore = false,
+                            hasMore = if (reset) false else allItems.isNotEmpty(),
                             error = result.message
                         )
                     }
@@ -289,13 +303,17 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    private fun publishItems(reset: Boolean, page: Int, hasMore: Boolean) {
-        val filtered = applyContentFilter(allItems)
+    private suspend fun publishItems(reset: Boolean, page: Int, hasMore: Boolean) {
+        val filter = _state.value.contentFilter
+        val sort = _state.value.sort
+        val items = withContext(Dispatchers.Default) {
+            applySort(applyContentFilter(allItems, filter), sort)
+        }
         _state.update { current ->
             current.copy(
                 loading = false,
                 loadingMore = false,
-                items = applySort(filtered),
+                items = items,
                 page = page,
                 hasMore = hasMore,
                 error = null
@@ -343,6 +361,15 @@ class BrowseViewModel @Inject constructor(
             "series", "serien" -> BrowseContentFilter.SERIES
             else -> BrowseContentFilter.ALL
         }
+
+        private fun decodeNavArg(raw: String?): String? =
+            raw?.takeIf { it.isNotBlank() }?.let {
+                try {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } catch (_: Exception) {
+                    it
+                }
+            }
     }
 }
 

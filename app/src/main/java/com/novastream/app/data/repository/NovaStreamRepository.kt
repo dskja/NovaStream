@@ -143,6 +143,11 @@ class NovaStreamRepository private constructor(
 
             if (result is RepoResult.Success) {
                 putCached(cacheKey, expectedId, CatalogCacheEntry.TYPE_HOME, result.data, TTL_HOME_MS)
+                val page0Key = CatalogCacheEntry.key(expectedId, CatalogCacheEntry.TYPE_CATALOG, "0")
+                val page0List = result.data.all.ifEmpty { result.data.flattened() }.distinctBy { it.id }
+                if (page0List.isNotEmpty()) {
+                    putCached(page0Key, expectedId, CatalogCacheEntry.TYPE_CATALOG, page0List, TTL_CATALOG_MS)
+                }
             }
             result
         }
@@ -184,6 +189,15 @@ class NovaStreamRepository private constructor(
         val cacheType = if (isLetterPage) CatalogCacheEntry.TYPE_CATALOG_LETTER else CatalogCacheEntry.TYPE_CATALOG
         val ttlMs = if (isLetterPage) TTL_CATALOG_LETTER_MS else TTL_CATALOG_MS
         val cacheKey = CatalogCacheEntry.key(pid, cacheType, page.toString())
+        if (page == 0 && !isLetterPage) {
+            val homeKey = CatalogCacheEntry.key(pid, CatalogCacheEntry.TYPE_HOME)
+            getCachedHome(homeKey)?.let { home ->
+                val list = home.all.ifEmpty { home.flattened() }.distinctBy { it.id }
+                if (list.isNotEmpty()) {
+                    return@withRetry RepoResult.Success(list.tagAll(pid))
+                }
+            }
+        }
         getCachedList(cacheKey)?.let { return@withRetry RepoResult.Success(it.tagAll(pid)) }
         coalesceNetwork(cacheKey) {
             getCachedList(cacheKey)?.let { return@coalesceNetwork RepoResult.Success(it.tagAll(pid)) }
@@ -575,7 +589,12 @@ class NovaStreamRepository private constructor(
     }
 
     private fun List<Series>.tagAll(providerId: String): List<Series> =
-        map { s -> if (s.providerId == providerId) s else s.copy(providerId = providerId) }
+        map { s ->
+            val tagged = if (s.providerId == providerId) s else s.copy(providerId = providerId)
+            val cleanTitle = com.novastream.app.util.MediaUrls.sanitizeTitle(tagged.title)
+                .ifBlank { tagged.title }
+            if (cleanTitle == tagged.title) tagged else tagged.copy(title = cleanTitle)
+        }
 
     private fun HomeCatalog.tagAll(providerId: String): HomeCatalog = copy(
         hero = hero.tagAll(providerId),

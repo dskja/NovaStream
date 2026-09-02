@@ -11,21 +11,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.R
-import com.novastream.app.data.db.NovaStreamDatabase
-import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.download.DownloadForegroundService
 import com.novastream.app.provider.SiteProfileImporter
-import com.novastream.app.sync.BackupRestoreManager
-import com.novastream.app.sync.CloudSyncManager
 import com.novastream.app.ui.profile.ProfilePickerSection
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** v12–v15 advanced settings sections (IPTV, sync, downloads, telemetry, profiles). */
 @Composable
-fun SettingsUltraSections(appSettings: AppSettings) {
+fun SettingsUltraSections(
+    vm: SettingsViewModel,
+    onOpenDownloads: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val appSettings = vm.appSettings
     val playTelemetry by appSettings.playTelemetry.collectAsStateWithLifecycle(initialValue = false)
     val iptvEnabled by appSettings.iptvEnabled.collectAsStateWithLifecycle(initialValue = false)
     val castEnabled by appSettings.castEnabled.collectAsStateWithLifecycle(initialValue = true)
@@ -54,6 +54,10 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     }
 
     SettingsSectionHeader(stringResource(R.string.settings_offline_downloads))
+    SettingsAction(stringResource(R.string.settings_open_downloads),
+        stringResource(R.string.settings_open_downloads_sub)) {
+        onOpenDownloads()
+    }
     SettingsAction(stringResource(R.string.settings_downloads_init),
         stringResource(R.string.settings_downloads_init_sub)) {
         DownloadForegroundService.ensureChannel(context)
@@ -73,6 +77,10 @@ fun SettingsUltraSections(appSettings: AppSettings) {
         singleLine = true
     )
     SettingsAction(stringResource(R.string.settings_m3u_save), "") {
+        if (!isValidOptionalHttpUrl(m3uUrl)) {
+            statusMessage = context.getString(R.string.settings_invalid_http_url)
+            return@SettingsAction
+        }
         scope.launch { appSettings.setUserM3uUrl(m3uUrl) }
         statusMessage = context.getString(R.string.settings_m3u_saved)
     }
@@ -84,6 +92,10 @@ fun SettingsUltraSections(appSettings: AppSettings) {
         singleLine = true
     )
     SettingsAction(stringResource(R.string.settings_epg_save), "") {
+        if (!isValidOptionalHttpUrl(epgUrl)) {
+            statusMessage = context.getString(R.string.settings_invalid_http_url)
+            return@SettingsAction
+        }
         scope.launch { appSettings.setEpgUrl(epgUrl) }
         statusMessage = context.getString(R.string.settings_epg_saved)
     }
@@ -91,7 +103,7 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     SettingsSectionHeader(stringResource(R.string.settings_sync_backup))
     SettingsAction(stringResource(R.string.settings_export_backup), "") {
         scope.launch {
-            val file = BackupRestoreManager(context, NovaStreamDatabase.get(context)).exportToFile()
+            val file = vm.exportBackupToFile()
             statusMessage = context.getString(R.string.settings_export_done, file.name)
         }
     }
@@ -112,23 +124,29 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = {
             scope.launch {
+                if (!isValidOptionalHttpUrl(syncUrl)) {
+                    statusMessage = context.getString(R.string.settings_invalid_http_url)
+                    return@launch
+                }
                 appSettings.setSyncUrl(syncUrl)
                 appSettings.setSyncDeviceKey(syncKey)
-                val mgr = CloudSyncManager(context, BackupRestoreManager(context, NovaStreamDatabase.get(context)), appSettings)
-                statusMessage = when (val r = mgr.pushToRemote()) {
-                    is CloudSyncManager.SyncResult.Success -> r.message
-                    is CloudSyncManager.SyncResult.Error -> r.message
+                statusMessage = when (val r = vm.pushCloudSync()) {
+                    is com.novastream.app.sync.CloudSyncManager.SyncResult.Success -> r.message
+                    is com.novastream.app.sync.CloudSyncManager.SyncResult.Error -> r.message
                 }
             }
         }) { Text(stringResource(R.string.settings_sync_push)) }
         OutlinedButton(onClick = {
             scope.launch {
+                if (!isValidOptionalHttpUrl(syncUrl)) {
+                    statusMessage = context.getString(R.string.settings_invalid_http_url)
+                    return@launch
+                }
                 appSettings.setSyncUrl(syncUrl)
                 appSettings.setSyncDeviceKey(syncKey)
-                val mgr = CloudSyncManager(context, BackupRestoreManager(context, NovaStreamDatabase.get(context)), appSettings)
-                statusMessage = when (val r = mgr.pullFromRemote()) {
-                    is CloudSyncManager.SyncResult.Success -> r.message
-                    is CloudSyncManager.SyncResult.Error -> r.message
+                statusMessage = when (val r = vm.pullCloudSync()) {
+                    is com.novastream.app.sync.CloudSyncManager.SyncResult.Success -> r.message
+                    is com.novastream.app.sync.CloudSyncManager.SyncResult.Error -> r.message
                 }
             }
         }) { Text(stringResource(R.string.settings_sync_pull)) }
@@ -156,6 +174,11 @@ fun SettingsUltraSections(appSettings: AppSettings) {
     statusMessage?.let {
         Text(it, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.primary)
     }
+}
+
+private fun isValidOptionalHttpUrl(url: String): Boolean {
+    val trimmed = url.trim()
+    return trimmed.isBlank() || trimmed.startsWith("http://") || trimmed.startsWith("https://")
 }
 
 @Composable

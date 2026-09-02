@@ -29,6 +29,13 @@
 # ─── Media3 / ExoPlayer ────────────────────────────────────────────────
 -dontwarn androidx.media3.**
 
+# ─── Google Cast / MediaRouter ─────────────────────────────────────────
+-keep class com.google.android.gms.cast.** { *; }
+-keep class com.google.android.gms.cast.framework.** { *; }
+-dontwarn com.google.android.gms.cast.**
+-keep class androidx.mediarouter.** { *; }
+-dontwarn androidx.mediarouter.**
+
 # ─── Compose ───────────────────────────────────────────────────────────
 -dontwarn androidx.compose.**
 

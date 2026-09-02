@@ -29,13 +29,27 @@ object ContentRegionResolver {
         ContentLanguage.MULTI -> "en"
     }
 
-    fun currentTvmazeRegion(): String = runBlocking {
-        val settings = AppSettings(AppContext.get())
-        tvmazeRegionFor(ContentLanguage.fromTag(settings.contentLanguage.first()))
+    fun currentTvmazeRegion(): String {
+        val ctx = AppContext.getOrNull() ?: return tvmazeRegionFor(ContentLanguage.DE)
+        return try {
+            val settings = AppSettings(ctx)
+            runBlocking {
+                tvmazeRegionFor(ContentLanguage.fromTag(settings.contentLanguage.first()))
+            }
+        } catch (_: Exception) {
+            tvmazeRegionFor(ContentLanguage.DE)
+        }
     }
 
-    fun currentContentLanguage(): ContentLanguage = runBlocking {
-        val settings = AppSettings(AppContext.get())
-        ContentLanguage.fromTag(settings.contentLanguage.first())
+    fun currentContentLanguage(): ContentLanguage {
+        val ctx = AppContext.getOrNull() ?: return ContentLanguage.DE
+        return try {
+            val settings = AppSettings(ctx)
+            runBlocking {
+                ContentLanguage.fromTag(settings.contentLanguage.first())
+            }
+        } catch (_: Exception) {
+            ContentLanguage.DE
+        }
     }
 }

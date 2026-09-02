@@ -34,6 +34,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 data class DetailUiState(
@@ -42,6 +45,7 @@ data class DetailUiState(
     val seasons: List<Season> = emptyList(),
     val selectedSeasonIndex: Int = 0,
     val loadingSeason: Boolean = false,
+    val seasonError: String? = null,
     val error: String? = null,
     val inWatchlist: Boolean = false,
     val episodeProgress: Map<String, WatchProgress> = emptyMap(),
@@ -57,7 +61,10 @@ data class DetailUiState(
     val loadedProviderId: String? = null,
     val providerMismatch: Boolean = false,
     val downloadMessage: String? = null,
-    val downloading: Boolean = false
+    val downloading: Boolean = false,
+    val casting: Boolean = false,
+    val castStreamUrl: String? = null,
+    val castStreamTitle: String? = null
 ) {
     val selectedSeason: Season?
         get() = seasons.getOrNull(selectedSeasonIndex)
@@ -119,7 +126,16 @@ class DetailViewModel @Inject constructor(
     private val profileManager: ProfileManager
 ) : ViewModel() {
 
-    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+    private fun decodeSlug(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        return try {
+            java.net.URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
+    }
+
+    private var slug: String = decodeSlug(checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" })
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -128,11 +144,42 @@ class DetailViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            savedStateHandle.getStateFlow("slug", "")
+                .map { decodeSlug(it) }
+                .filter { it.isNotBlank() }
+                .distinctUntilChanged()
+                .collect { newSlug ->
+                    if (newSlug != slug) {
+                        slug = newSlug
+                        loadedProviderId = null
+                        _state.update {
+                            DetailUiState(
+                                loading = true,
+                                inWatchlist = it.inWatchlist,
+                                episodeProgress = it.episodeProgress,
+                                progressBySeasonEpisode = it.progressBySeasonEpisode,
+                                currentProgress = it.currentProgress
+                            )
+                        }
+                        load()
+                    }
+                }
+        }
+        viewModelScope.launch {
             providerController.activeProviderId.collect { providerId ->
                 val previous = loadedProviderId
                 if (previous != null && previous != providerId) {
                     _state.update {
-                        it.copy(providerMismatch = true, loading = true, error = null)
+                        it.copy(
+                            providerMismatch = true,
+                            loading = true,
+                            error = null,
+                            series = null,
+                            seasons = emptyList(),
+                            selectedSeasonIndex = 0,
+                            seasonError = null,
+                            relatedTitles = emptyList()
+                        )
                     }
                     load()
                 }
@@ -318,24 +365,31 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun loadSeasonEpisodes(seasonNum: Int) {
-        _state.update { it.copy(loadingSeason = true) }
+        _state.update { it.copy(loadingSeason = true, seasonError = null) }
+        val expectedProvider = ActiveProvider.id
         viewModelScope.launch {
             try {
                 when (val res = repo.loadSeason(slug, seasonNum)) {
                     is NovaStreamRepository.RepoResult.Success -> {
+                        if (ActiveProvider.id != expectedProvider) return@launch
                         _state.update { current ->
                             val updated = current.seasons.map { s ->
                                 if (s.number == seasonNum) s.copy(episodes = res.data) else s
                             }
-                            current.copy(seasons = updated, loadingSeason = false)
+                            current.copy(seasons = updated, loadingSeason = false, seasonError = null)
                         }
                     }
                     is NovaStreamRepository.RepoResult.Error ->
-                        _state.update { it.copy(loadingSeason = false, error = res.message) }
+                        _state.update { it.copy(loadingSeason = false, seasonError = res.message) }
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("DetailVM", "loadSeason error", e)
-                _state.update { it.copy(loadingSeason = false, error = com.novastream.app.util.ErrorMapper.toUserMessage(e)) }
+                _state.update {
+                    it.copy(
+                        loadingSeason = false,
+                        seasonError = com.novastream.app.util.ErrorMapper.toUserMessage(e)
+                    )
+                }
             }
         }
     }
@@ -464,23 +518,15 @@ class DetailViewModel @Inject constructor(
 
     fun downloadCurrentEpisode() {
         val series = _state.value.series ?: return
-        val seasonObj = _state.value.selectedSeason
         viewModelScope.launch {
             _state.update { it.copy(downloading = true, downloadMessage = null) }
             try {
                 DownloadForegroundService.ensureChannel(appContext)
-                val seasonNum = if (series.isMovie) 1 else seasonObj?.number ?: 1
-                var episode: Episode? = seasonObj?.episodes?.firstOrNull()
-                if (episode == null && !series.isMovie) {
-                    when (val epResult = repo.loadSeason(slug, seasonNum)) {
-                        is RepoResult.Success -> episode = epResult.data.firstOrNull()
-                        else -> {}
-                    }
+                val resolved = resolveTargetEpisode(series) ?: run {
+                    _state.update { it.copy(downloading = false, downloadMessage = "detail_download_no_source") }
+                    return@launch
                 }
-                if (episode == null && series.isMovie) {
-                    episode = Episode(number = 1, title = series.title, slug = slug, season = 1, hosters = emptyList())
-                }
-                val ep = episode ?: run {
+                val (seasonNum, ep) = ensureEpisodeLoaded(resolved.first, resolved.second, series) ?: run {
                     _state.update { it.copy(downloading = false, downloadMessage = "detail_download_no_source") }
                     return@launch
                 }
@@ -525,5 +571,103 @@ class DetailViewModel @Inject constructor(
 
     fun clearDownloadMessage() {
         _state.update { it.copy(downloadMessage = null) }
+    }
+
+    fun castCurrentEpisode() {
+        val series = _state.value.series ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(casting = true, castStreamUrl = null, castStreamTitle = null) }
+            try {
+                val resolved = resolveTargetEpisode(series) ?: run {
+                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+                    return@launch
+                }
+                val (seasonNum, ep) = ensureEpisodeLoaded(resolved.first, resolved.second, series) ?: run {
+                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+                    return@launch
+                }
+                when (val hostersResult = repo.loadHosters(ep)) {
+                    is RepoResult.Success -> {
+                        val hoster = hostersResult.data.firstOrNull() ?: run {
+                            _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+                            return@launch
+                        }
+                        when (val sourcesResult = repo.resolveHoster(hoster)) {
+                            is RepoResult.Success -> {
+                                val source = sourcesResult.data.firstOrNull { it.isPlayable }
+                                if (source == null) {
+                                    _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+                                    return@launch
+                                }
+                                _state.update {
+                                    it.copy(
+                                        casting = false,
+                                        castStreamUrl = com.novastream.app.util.MediaUrls.secureUrl(source.url),
+                                        castStreamTitle = "${series.title} – ${ep.title}"
+                                    )
+                                }
+                            }
+                            else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+                        }
+                    }
+                    else -> _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+                }
+            } catch (_: Exception) {
+                _state.update { it.copy(casting = false, downloadMessage = "detail_cast_to_tv_failed") }
+            }
+        }
+    }
+
+    fun retrySeasonLoad() {
+        val season = _state.value.selectedSeason ?: return
+        loadSeasonEpisodes(season.number)
+    }
+
+    private fun resolveTargetEpisode(series: Series): Pair<Int, Int>? {
+        if (series.isMovie) return 1 to 1
+        val progress = _state.value.currentProgress
+        if (progress != null && !progress.isCompleted) {
+            return progress.season to progress.episode
+        }
+        val seasonObj = _state.value.selectedSeason
+        val seasonNum = seasonObj?.number ?: _state.value.seasons.firstOrNull()?.number ?: return null
+        val episodeNum = seasonObj?.episodes?.firstOrNull()?.number
+            ?: _state.value.seasons.firstOrNull { it.episodes.isNotEmpty() }?.episodes?.firstOrNull()?.number
+            ?: 1
+        return seasonNum to episodeNum
+    }
+
+    private suspend fun ensureEpisodeLoaded(
+        seasonNum: Int,
+        episodeNum: Int,
+        series: Series
+    ): Pair<Int, Episode>? {
+        if (series.isMovie) {
+            return 1 to Episode(number = 1, title = series.title, slug = slug, season = 1, hosters = emptyList())
+        }
+        val seasonObj = _state.value.seasons.find { it.number == seasonNum }
+        var ep = seasonObj?.episodes?.find { it.number == episodeNum }
+            ?: seasonObj?.episodes?.firstOrNull()
+        if (ep == null) {
+            when (val epResult = repo.loadSeason(slug, seasonNum)) {
+                is RepoResult.Success -> {
+                    ep = epResult.data.find { it.number == episodeNum } ?: epResult.data.firstOrNull()
+                    if (epResult.data.isNotEmpty()) {
+                        _state.update { current ->
+                            val updated = current.seasons.map { s ->
+                                if (s.number == seasonNum) s.copy(episodes = epResult.data) else s
+                            }
+                            current.copy(seasons = updated)
+                        }
+                    }
+                }
+                else -> return null
+            }
+        }
+        return ep?.let { seasonNum to it }
+    }
+
+    fun clearCastRequest() {
+        _state.update { it.copy(castStreamUrl = null, castStreamTitle = null) }
     }
 }
