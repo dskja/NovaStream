@@ -1,9 +1,7 @@
 package com.novastream.app.data.provider
 
-import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.util.AppContext
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import com.novastream.app.util.PrefsCache
 
 /** Maps [ContentLanguage] to TVMaze schedule country codes and Wikidata language tags. */
 object ContentRegionResolver {
@@ -31,25 +29,13 @@ object ContentRegionResolver {
 
     fun currentTvmazeRegion(): String {
         val ctx = AppContext.getOrNull() ?: return tvmazeRegionFor(ContentLanguage.DE)
-        return try {
-            val settings = AppSettings(ctx)
-            runBlocking {
-                tvmazeRegionFor(ContentLanguage.fromTag(settings.contentLanguage.first()))
-            }
-        } catch (_: Exception) {
-            tvmazeRegionFor(ContentLanguage.DE)
-        }
+        return tvmazeRegionFor(
+            ContentLanguage.fromTag(PrefsCache.contentLanguage(ctx))
+        )
     }
 
     fun currentContentLanguage(): ContentLanguage {
         val ctx = AppContext.getOrNull() ?: return ContentLanguage.DE
-        return try {
-            val settings = AppSettings(ctx)
-            runBlocking {
-                ContentLanguage.fromTag(settings.contentLanguage.first())
-            }
-        } catch (_: Exception) {
-            ContentLanguage.DE
-        }
+        return ContentLanguage.fromTag(PrefsCache.contentLanguage(ctx))
     }
 }

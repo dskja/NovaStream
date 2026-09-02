@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.R
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.*
+import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.provider.ProviderLanguageFilterChips
 import com.novastream.app.ui.provider.ProviderLanguageSectionHeader
 import com.novastream.app.ui.theme.*
@@ -62,14 +63,12 @@ fun OnboardingScreen(
     var languageFilter by remember { mutableStateOf<ContentLanguage?>(ContentLanguage.DE) }
     var profileName by remember { mutableStateOf("") }
     var finishing by remember { mutableStateOf(false) }
+    val registryReady by onboardingVm.registryReady.collectAsStateWithLifecycle()
     val initialFocus = rememberInitialFocusRequester()
 
-    val grouped = remember(languageFilter) {
-        if (languageFilter != null) {
-            mapOf(languageFilter!! to ProviderManager.getFilteredProviderInfos(language = languageFilter, favoriteIds = emptySet()))
-        } else {
-            ProviderManager.getProviderInfosGroupedByLanguage()
-        }
+    val grouped = remember(languageFilter, registryReady) {
+        if (!registryReady) emptyMap()
+        else onboardingVm.providerGroups(languageFilter)
     }
 
     val flatProviders = remember(grouped) { grouped.values.flatten() }
@@ -172,6 +171,11 @@ fun OnboardingScreen(
                     }
                 }
                 3 -> {
+                    if (!registryReady) {
+                        item {
+                            PremiumLoading(label = stringResource(R.string.loading))
+                        }
+                    } else {
                     item {
                         ProviderLanguageFilterChips(
                             selectedLanguage = languageFilter,
@@ -190,6 +194,7 @@ fun OnboardingScreen(
                                 onClick = { selectedId = providerInfo.id }
                             )
                         }
+                    }
                     }
                 }
                 4 -> {

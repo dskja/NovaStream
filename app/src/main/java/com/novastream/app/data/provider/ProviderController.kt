@@ -30,6 +30,7 @@ class ProviderController @Inject constructor(
 
     fun startObserving(scope: CoroutineScope) {
         scope.launch {
+            withContext(Dispatchers.Default) { ProviderRegistry.ensureBuilt() }
             try {
                 ProviderManager.activeProviderIdFlow(context).collect { providerId ->
                     syncFromStore(providerId)
@@ -44,16 +45,17 @@ class ProviderController @Inject constructor(
     }
 
     private fun syncFromStore(providerId: String) {
-        if (!ProviderRegistry.isBuilt()) {
-            _activeProviderId.value = providerId
-            return
-        }
         ActiveProvider.setById(providerId)
         _activeProviderId.value = providerId
     }
 
     suspend fun setActiveProvider(providerId: String) {
-        val resolved = ProviderManager.getProviderOrNull(providerId) ?: return
+        withContext(Dispatchers.Default) { ProviderRegistry.ensureBuilt() }
+        val resolved = ProviderManager.getProviderOrNull(providerId)
+        if (resolved == null) {
+            android.util.Log.w("ProviderController", "Unknown provider id: $providerId")
+            return
+        }
         if (_activeProviderId.value == resolved.id && !_isSwitching.value) return
         _isSwitching.value = true
         try {

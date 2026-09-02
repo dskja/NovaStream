@@ -40,6 +40,7 @@ object SiteProfileImporter {
             val ctx = appContext
             val added = profiles.mapNotNull { profile ->
                 if (profile.id.isBlank() || profile.baseUrl.isBlank()) return@mapNotNull null
+                imported.removeAll { it.provider.id == profile.id }
                 val provider = ConfigurableSiteProvider(profile, ctx)
                 RegisteredProvider(
                     provider = provider,

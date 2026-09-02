@@ -18,12 +18,12 @@ import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import com.novastream.app.util.AppContext
 import com.novastream.app.util.LocaleManager
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import com.novastream.app.util.PrefsCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
@@ -36,16 +36,8 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun attachBaseContext(base: Context) {
-        // Only bind context here — building 60+ providers on the main thread caused ANR/crash at cold start.
         ProviderRegistry.bindContext(base)
-        val localeTag = runBlocking {
-            try {
-                com.novastream.app.data.prefs.AppSettings(base).uiLocale.first()
-            } catch (_: Exception) {
-                LocaleManager.SYSTEM_LOCALE
-            }
-        }
-        super.attachBaseContext(LocaleManager.wrap(base, localeTag))
+        super.attachBaseContext(LocaleManager.wrap(base, PrefsCache.uiLocale(base)))
     }
 
     override fun onCreate() {
@@ -60,9 +52,12 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         VoeWebViewResolver.setContext(this)
         CaptchaWebViewFetcher.setContext(this)
 
-        // Build provider registry off the main thread; sync provider state once ready.
+        // Sync preference cache + build provider registry off the main thread.
         appScope.launch {
             try {
+                val settings = com.novastream.app.data.prefs.AppSettings(this@NovaStreamApp)
+                PrefsCache.setUiLocale(this@NovaStreamApp, settings.uiLocale.first())
+                PrefsCache.setContentLanguage(this@NovaStreamApp, settings.contentLanguage.first())
                 ProviderRegistry.ensureBuilt()
                 providerController.startObserving(this)
             } catch (e: Exception) {
@@ -98,6 +93,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
     override fun onLowMemory() {
         super.onLowMemory()
         coilSingleton?.memoryCache?.clear()
+        CaptchaWebViewFetcher.clear()
     }
 
     private var coilSingleton: ImageLoader? = null

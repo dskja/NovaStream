@@ -363,7 +363,6 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     "novastream.db"
                 )
                     .addMigrations(*ALL_MIGRATIONS)
-                    .fallbackToDestructiveMigration()
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .build().also { INSTANCE = it }
             }

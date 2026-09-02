@@ -73,8 +73,14 @@ class MainActivity : ComponentActivity() {
     private fun parseDetailDeepLink(intent: android.content.Intent?): String? {
         val uri = intent?.data ?: return null
         if (uri.scheme != "novastream" || uri.host != "detail") return null
-        return uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }
+        val raw = uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }
             ?: uri.lastPathSegment?.takeIf { it.isNotBlank() }
+            ?: return null
+        return try {
+            java.net.URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
     }
 
     override fun onDestroy() {

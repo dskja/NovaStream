@@ -216,7 +216,17 @@ class DownloadManagerHelper @Inject constructor(
     }
 
     private suspend fun syncDownload(download: Download, error: Exception?) {
-        val existing = downloadDao.getById(download.request.id) ?: return
+        val existing = downloadDao.getById(download.request.id)
+        if (existing == null) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w(
+                    "DownloadManagerHelper",
+                    "Removing orphan Media3 download without Room row: ${download.request.id}"
+                )
+            }
+            downloadManager.removeDownload(download.request.id)
+            return
+        }
         val status = mapStatus(download.state)
         val localPath = if (status == DownloadStatus.COMPLETED) {
             download.request.uri.toString()
