@@ -325,8 +325,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             composable(Routes.DOWNLOADS) {
                 com.novastream.app.ui.downloads.DownloadsScreen(
                     onBack = { nav.popBackStack() },
-                    onPlay = { item ->
-                        val playbackUrl = item.localPath?.takeIf { it.isNotBlank() } ?: item.streamUrl
+                    onPlay = { item, playbackUrl ->
                         nav.navigate(
                             Routes.player(
                                 slug = item.slug,

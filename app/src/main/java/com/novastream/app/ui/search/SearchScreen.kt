@@ -485,7 +485,7 @@ fun SearchScreen(
                         SeriesPosterCard(s, onClick = {
                             vm.saveRecentSearch(state.query)
                             scope.launch {
-                                if (useGlobal && s.providerId.isNotBlank()) {
+                                if (useGlobal && !s.providerId.isNullOrBlank()) {
                                     vm.ensureProvider(s.providerId)
                                 }
                                 onSeriesClick(s.id)

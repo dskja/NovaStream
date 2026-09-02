@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 data class DownloadsUiState(
@@ -65,9 +66,11 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch {
             profileManager.ensureDefaultProfile()
             profileManager.activeProfileId()
-                .flatMapLatest { profileId -> downloadHelper.observeDownloads(profileId) }
-                .collect { items ->
-                    val bytes = downloadHelper.getStorageUsedBytes()
+                .flatMapLatest { profileId ->
+                    downloadHelper.observeDownloads(profileId).map { profileId to it }
+                }
+                .collect { (profileId, items) ->
+                    val bytes = downloadHelper.getStorageUsedBytes(profileId)
                     _state.update { it.copy(loading = false, items = items, storageBytes = bytes) }
                 }
         }
@@ -81,9 +84,12 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch { downloadHelper.retryDownload(item) }
     }
 
+    fun resolvePlaybackUrl(item: DownloadEntity): String = downloadHelper.resolvePlaybackUrl(item)
+
     fun refresh() {
         viewModelScope.launch {
-            _state.update { it.copy(storageBytes = downloadHelper.getStorageUsedBytes()) }
+            val profileId = profileManager.getActiveProfile().profileId
+            _state.update { it.copy(storageBytes = downloadHelper.getStorageUsedBytes(profileId)) }
         }
     }
 }
@@ -92,7 +98,7 @@ class DownloadsViewModel @Inject constructor(
 @Composable
 fun DownloadsScreen(
     onBack: () -> Unit,
-    onPlay: (DownloadEntity) -> Unit = {}
+    onPlay: (DownloadEntity, String) -> Unit = { _, _ -> }
 ) {
     val vm: DownloadsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -130,7 +136,7 @@ fun DownloadsScreen(
                 items(state.items, key = { it.downloadId }) { item ->
                     DownloadRow(
                         item = item,
-                        onPlay = { onPlay(item) },
+                        onPlay = { onPlay(item, vm.resolvePlaybackUrl(item)) },
                         onRetry = { vm.retryDownload(item) },
                         onRemove = { vm.removeDownload(item.downloadId) }
                     )

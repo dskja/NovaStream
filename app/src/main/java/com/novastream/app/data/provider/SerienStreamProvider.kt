@@ -85,25 +85,27 @@ open class SerienStreamProvider(
 
     /** Strukturierte Home-Sektionen (Hero, Trends, Neue Episoden, …). */
     suspend fun loadHomeCatalog(): StreamingProvider.ProviderResult<HomeCatalog> = runCatchingProvider {
-        val html = api().home()
-        parseWithBase { base ->
+        val base = activeBaseUrl()
+        val html = mirror.requireCatalogHtml(fetchPage = { api().home() }, fallbackUrl = "$base/")
+        parseWithBase { b ->
             val catalog = NovaStreamScraper.parseHomeCatalog(html)
             catalog.copy(
-                hero = tagAll(catalog.hero, base),
-                popular = tagAll(catalog.popular, base),
-                newest = tagAll(catalog.newest, base),
-                trending = tagAll(catalog.trending, base),
-                topShows = tagAll(catalog.topShows, base),
-                all = tagAll(catalog.all, base)
+                hero = tagAll(catalog.hero, b),
+                popular = tagAll(catalog.popular, b),
+                newest = tagAll(catalog.newest, b),
+                trending = tagAll(catalog.trending, b),
+                topShows = tagAll(catalog.topShows, b),
+                all = tagAll(catalog.all, b)
             )
         }
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        val html = api().home()
-        parseWithBase { base ->
+        val base = activeBaseUrl()
+        val html = mirror.requireCatalogHtml(fetchPage = { api().home() }, fallbackUrl = "$base/")
+        parseWithBase { b ->
             val catalog = NovaStreamScraper.parseHomeCatalog(html)
-            tagAll(catalog.flattened().ifEmpty { NovaStreamScraper.parseSeriesList(html) }, base)
+            tagAll(catalog.flattened().ifEmpty { NovaStreamScraper.parseSeriesList(html) }, b)
         }
     }
 

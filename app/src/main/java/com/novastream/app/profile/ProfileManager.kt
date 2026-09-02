@@ -59,6 +59,9 @@ class ProfileManager(
 
     suspend fun deleteProfile(profileId: String) {
         if (profileId == ProfileEntity.DEFAULT_ID) return
+        db.watchlistDao().deleteAllForProfileId(profileId)
+        db.watchProgressDao().deleteForProfile(profileId)
+        db.downloadDao().deleteForProfile(profileId)
         profileDao.delete(profileId)
         ensureDefaultProfile()
     }

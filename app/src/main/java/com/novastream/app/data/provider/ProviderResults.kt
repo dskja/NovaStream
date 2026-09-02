@@ -9,9 +9,13 @@ object ProviderResults {
 
     fun <T> fold(providerId: String, result: Result<T>): StreamingProvider.ProviderResult<T> =
         result.fold(
-            onSuccess = {
-                ProviderHealthMonitor.recordSuccess(providerId)
-                StreamingProvider.ProviderResult.Success(it)
+            onSuccess = { value ->
+                if (value is List<*> && value.isEmpty()) {
+                    ProviderHealthMonitor.recordEmptyResult(providerId)
+                } else {
+                    ProviderHealthMonitor.recordSuccess(providerId)
+                }
+                StreamingProvider.ProviderResult.Success(value)
             },
             onFailure = {
                 ProviderHealthMonitor.recordFailure(providerId)

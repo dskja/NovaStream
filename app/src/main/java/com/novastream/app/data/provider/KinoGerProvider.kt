@@ -87,8 +87,10 @@ class KinoGerProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = mirror.parseBase()
-        val series = KinoGerScraper.parseSeriesList(api().seriesHome(), base)
-        val movies = KinoGerScraper.parseSeriesList(api().movies(), base).map { it.copy(isMovie = true) }
+        val seriesHtml = mirror.requireCatalogHtml(fetchPage = { api().seriesHome() }, fallbackUrl = "$base/")
+        val moviesHtml = mirror.requireCatalogHtml(fetchPage = { api().movies() }, fallbackUrl = "$base/")
+        val series = KinoGerScraper.parseSeriesList(seriesHtml, base)
+        val movies = KinoGerScraper.parseSeriesList(moviesHtml, base).map { it.copy(isMovie = true) }
         (series + movies).distinctBy { it.id }.map { it.copy(providerId = id) }
     }
 

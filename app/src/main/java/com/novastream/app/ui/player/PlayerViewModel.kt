@@ -9,8 +9,15 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.download.DownloadManagerHelper
 import android.content.Context
 import com.novastream.app.R
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.novastream.app.util.AppContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -91,7 +98,8 @@ class PlayerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
-    private val appSettings: AppSettings
+    private val appSettings: AppSettings,
+    private val downloadHelper: DownloadManagerHelper
 ) : ViewModel() {
 
     private val slug: String = run {
@@ -341,6 +349,21 @@ class PlayerViewModel @Inject constructor(
         resolveJob?.cancel()
         _state.update { it.copy(error = null, loading = true, hosterFallbackNotice = null) }
         resolveJob = viewModelScope.launch { resolveHoster(index) }
+    }
+
+    @UnstableApi
+    fun buildPlayer(context: Context): ExoPlayer {
+        return ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(downloadHelper.cacheDataSourceFactory()))
+            .setTrackSelector(DefaultTrackSelector(context))
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true
+            )
+            .build()
     }
 
     fun saveProgress(positionMs: Long, durationMs: Long) {

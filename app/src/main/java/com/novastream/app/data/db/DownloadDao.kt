@@ -34,6 +34,7 @@ interface DownloadDao {
             bytesDownloaded = :bytesDownloaded,
             contentLength = :contentLength,
             errorMessage = :errorMessage,
+            localPath = :localPath,
             updatedAt = :updatedAt
         WHERE downloadId = :id
     """)
@@ -43,6 +44,7 @@ interface DownloadDao {
         bytesDownloaded: Long,
         contentLength: Long,
         errorMessage: String?,
+        localPath: String? = null,
         updatedAt: Long = System.currentTimeMillis()
     )
 
@@ -51,6 +53,12 @@ interface DownloadDao {
 
     @Query("SELECT COALESCE(SUM(bytesDownloaded), 0) FROM downloads WHERE status = 'COMPLETED'")
     suspend fun totalDownloadedBytes(): Long
+
+    @Query("SELECT COALESCE(SUM(bytesDownloaded), 0) FROM downloads WHERE status = 'COMPLETED' AND profileId = :profileId")
+    suspend fun totalDownloadedBytes(profileId: String): Long
+
+    @Query("DELETE FROM downloads WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: String)
 
     @Query("SELECT COUNT(*) FROM downloads")
     suspend fun count(): Int

@@ -65,8 +65,8 @@ class BrowseViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var activeProviderId: String = ActiveProvider.id
     private var allItems: List<Series> = emptyList()
-    private val initialSection: String? = savedStateHandle.get<String>("section")?.takeIf { it.isNotBlank() }
-    private val initialGenre: String? = savedStateHandle.get<String>("genre")?.takeIf { it.isNotBlank() }
+    private val initialSection: String? = Companion.decodeNavArg(savedStateHandle.get<String>("section"))
+    private val initialGenre: String? = Companion.decodeNavArg(savedStateHandle.get<String>("genre"))
     private val initialFilter: BrowseContentFilter = parseContentFilter(savedStateHandle.get<String>("filter"))
 
     init {
@@ -361,6 +361,15 @@ class BrowseViewModel @Inject constructor(
             "series", "serien" -> BrowseContentFilter.SERIES
             else -> BrowseContentFilter.ALL
         }
+
+        private fun decodeNavArg(raw: String?): String? =
+            raw?.takeIf { it.isNotBlank() }?.let {
+                try {
+                    java.net.URLDecoder.decode(it, "UTF-8")
+                } catch (_: Exception) {
+                    it
+                }
+            }
     }
 }
 

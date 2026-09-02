@@ -130,18 +130,7 @@ fun PlayerScreen(
         seekHint = null
     }
 
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context)
-            .setTrackSelector(createPlayerTrackSelector(context, false))
-            .setAudioAttributes(
-                androidx.media3.common.AudioAttributes.Builder()
-                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
-                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(),
-                true
-            )
-            .build()
-    }
+    val exoPlayer = remember { vm.buildPlayer(context) }
 
     com.novastream.app.util.RememberPlaybackNotificationPermission {
         notificationReady = true
@@ -282,6 +271,15 @@ fun PlayerScreen(
 
     LaunchedEffect(state.playbackSpeed) {
         exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
+    }
+
+    LaunchedEffect(state.error) {
+        if (state.error != null && !state.loading) {
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+            playerVisible = false
+            PlaybackForegroundService.stop(context)
+        }
     }
 
     LaunchedEffect(state.skipIntroButton, playerVisible) {

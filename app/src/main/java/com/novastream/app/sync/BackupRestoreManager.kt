@@ -6,6 +6,7 @@ import com.google.gson.annotations.SerializedName
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
+import com.novastream.app.data.db.ProfileEntity
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ProviderManager
 import kotlinx.coroutines.Dispatchers
@@ -59,11 +60,26 @@ class BackupRestoreManager(
                 return@withContext ImportResult.Error("Backup version too new")
             }
             if (!merge) {
-                db.watchlistDao().clear()
-                db.watchProgressDao().deleteAll()
+                val activeProfileId = db.profileDao().getActive()?.profileId ?: ProfileEntity.DEFAULT_ID
+                db.watchlistDao().deleteAllForProfileId(activeProfileId)
+                db.watchProgressDao().deleteForProfile(activeProfileId)
             }
-            payload.watchlist.forEach { db.watchlistDao().upsert(it) }
-            payload.progress.forEach { db.watchProgressDao().upsert(it) }
+            val activeProfileId = db.profileDao().getActive()?.profileId ?: ProfileEntity.DEFAULT_ID
+            payload.watchlist.forEach { item ->
+                val scoped = item.copy(
+                    profileId = activeProfileId,
+                    itemKey = WatchlistItem.key(activeProfileId, item.providerId, item.slug)
+                )
+                db.watchlistDao().upsert(scoped)
+            }
+            payload.progress.forEach { progress ->
+                db.watchProgressDao().upsert(
+                    progress.copy(
+                        profileId = activeProfileId,
+                        episodeKey = WatchProgress.key(activeProfileId, progress.providerId, progress.slug, progress.season, progress.episode)
+                    )
+                )
+            }
             val settings = AppSettings(context)
             payload.uiLocale?.let { settings.setUiLocale(it) }
             payload.contentLanguage?.let { settings.setContentLanguage(it) }

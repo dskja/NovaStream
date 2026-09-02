@@ -2,7 +2,6 @@ package com.novastream.app.data.provider
 
 import android.content.Context
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Shared mirror resolution for providers with rotating domains.
@@ -11,18 +10,18 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 object ProviderDomainResolver {
 
-    private val invalidators = ConcurrentHashMap<String, CopyOnWriteArrayList<() -> Unit>>()
+    private val invalidators = ConcurrentHashMap<String, () -> Unit>()
 
     fun registerInvalidator(providerId: String, invalidator: () -> Unit) {
-        invalidators.getOrPut(providerId) { CopyOnWriteArrayList() }.add(invalidator)
+        invalidators[providerId] = invalidator
     }
 
     fun invalidate(providerId: String) {
-        invalidators[providerId]?.forEach { it.invoke() }
+        invalidators[providerId]?.invoke()
     }
 
     fun invalidateAll() {
-        invalidators.values.forEach { list -> list.forEach { it.invoke() } }
+        invalidators.values.forEach { it.invoke() }
     }
 
     /**

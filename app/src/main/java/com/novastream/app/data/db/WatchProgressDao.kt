@@ -59,6 +59,9 @@ interface WatchProgressDao {
     @Query("DELETE FROM watch_progress WHERE profileId = :profileId AND durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9")
     suspend fun deleteCompletedForProfile(profileId: String)
 
+    @Query("DELETE FROM watch_progress WHERE profileId = :profileId")
+    suspend fun deleteForProfile(profileId: String)
+
     @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9")
     suspend fun deleteCompleted()
 

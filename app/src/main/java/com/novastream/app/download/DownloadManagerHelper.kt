@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.offline.Download
@@ -88,8 +89,8 @@ class DownloadManagerHelper @Inject constructor(
         profileId: String = com.novastream.app.data.db.ProfileEntity.DEFAULT_ID
     ): String {
         require(source.isPlayable) { "Stream URL not playable" }
-        val id = DownloadEntity.key(providerId, slug, season, episode)
-        val secureUrl = com.novastream.app.util.MediaUrls.secureUrl(source.url)
+        val id = DownloadEntity.key(profileId, providerId, slug, season, episode)
+        val secureUrl = com.novastream.app.util.MediaUrls.playbackUrl(source.url)
         val entity = DownloadEntity(
             downloadId = id,
             profileId = profileId,
@@ -150,7 +151,30 @@ class DownloadManagerHelper @Inject constructor(
         downloadDao.delete(id)
     }
 
-    suspend fun getStorageUsedBytes(): Long = downloadDao.totalDownloadedBytes()
+    suspend fun getStorageUsedBytes(profileId: String? = null): Long =
+        if (profileId.isNullOrBlank()) downloadDao.totalDownloadedBytes()
+        else downloadDao.totalDownloadedBytes(profileId)
+
+    /** Cache-aware data source for ExoPlayer — reads completed downloads offline. */
+    fun cacheDataSourceFactory(): CacheDataSource.Factory {
+        downloadManager // ensure initialized
+        val upstream = DefaultHttpDataSource.Factory()
+            .setUserAgent(NovaStreamConfig.USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+        return CacheDataSource.Factory()
+            .setCache(simpleCache)
+            .setUpstreamDataSourceFactory(upstream)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    fun resolvePlaybackUrl(entity: DownloadEntity): String {
+        if (entity.status != DownloadStatus.COMPLETED) return entity.streamUrl
+        val download = runCatching { downloadManager.downloadIndex.getDownload(entity.downloadId) }.getOrNull()
+        if (download != null && download.state == Download.STATE_COMPLETED) {
+            return download.request.uri.toString()
+        }
+        return entity.localPath?.takeIf { it.isNotBlank() } ?: entity.streamUrl
+    }
 
     suspend fun getDownloadCount(): Int = downloadDao.count()
 
@@ -161,12 +185,18 @@ class DownloadManagerHelper @Inject constructor(
     private suspend fun syncDownload(download: Download, error: Exception?) {
         val existing = downloadDao.getById(download.request.id) ?: return
         val status = mapStatus(download.state)
+        val localPath = if (status == DownloadStatus.COMPLETED) {
+            download.request.uri.toString()
+        } else {
+            existing.localPath
+        }
         downloadDao.updateProgress(
             id = download.request.id,
             status = status,
             bytesDownloaded = download.bytesDownloaded,
             contentLength = download.contentLength,
             errorMessage = error?.localizedMessage,
+            localPath = localPath,
             updatedAt = System.currentTimeMillis()
         )
     }
