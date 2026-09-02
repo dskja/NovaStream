@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -62,6 +63,7 @@ import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.tvPlayerKeyHandler
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 private const val INTRO_SKIP_POSITION_MS = 90_000L
 
@@ -105,7 +107,7 @@ fun PlayerScreen(
     }
 
     val currentSource = state.currentSource
-    var showHosters by remember { mutableStateOf(true) }
+    var showHosters by remember { mutableStateOf(false) }
     var playerVisible by remember { mutableStateOf(false) }
     var showNextEpisodeOverlay by remember { mutableStateOf(false) }
     var lastLoadedSourceKey by remember { mutableStateOf<String?>(null) }
@@ -116,19 +118,19 @@ fun PlayerScreen(
         mutableStateOf(com.novastream.app.util.hasNotificationPermission(context))
     }
     var pendingForegroundTitle by remember { mutableStateOf<String?>(null) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isCasting by remember { mutableStateOf(false) }
+    var seekHint by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context)
-            .setTrackSelector(createPlayerTrackSelector(context, false))
-            .setAudioAttributes(
-                androidx.media3.common.AudioAttributes.Builder()
-                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
-                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(),
-                true
-            )
-            .build()
+    LaunchedEffect(seekHint) {
+        seekHint ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(750)
+        seekHint = null
     }
+
+    val exoPlayer = remember { vm.buildPlayer(context) }
 
     com.novastream.app.util.RememberPlaybackNotificationPermission {
         notificationReady = true
@@ -138,16 +140,56 @@ fun PlayerScreen(
         }
     }
 
-    fun enterPipIfSupported() {
-        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
-        if (currentSource == null) return
+    fun enterPipIfSupported(): Boolean {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return false
+        if (currentSource == null) return false
+        try {
+            val builder = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setAutoEnterEnabled(exoPlayer.isPlaying)
+            }
+            activity.enterPictureInPictureMode(builder.build())
+            return activity.isInPictureInPictureMode
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    fun updatePipAutoEnter() {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        if (!playerVisible || currentSource == null) return
         try {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
+                .setAutoEnterEnabled(exoPlayer.isPlaying)
                 .build()
-            activity.enterPictureInPictureMode(params)
-        } catch (_: Exception) {}
+            activity.setPictureInPictureParams(params)
+        } catch (e: Exception) {
+            com.novastream.app.util.DebugLog.w("PlayerScreen", "PiP auto-enter update failed", e)
+        }
+    }
+
+    DisposableEffect(playerVisible, currentSource) {
+        val pipListener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePipAutoEnter()
+            }
+        }
+        exoPlayer.addListener(pipListener)
+        PlayerPlaybackController.pipEnterHandler = {
+            if (playerVisible && currentSource != null && exoPlayer.isPlaying) {
+                enterPipIfSupported()
+            } else {
+                false
+            }
+        }
+        updatePipAutoEnter()
+        onDispose {
+            exoPlayer.removeListener(pipListener)
+            PlayerPlaybackController.pipEnterHandler = null
+        }
     }
 
     DisposableEffect(lifecycleOwner, currentSource) {
@@ -168,17 +210,35 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(castHelper, playerVisible) {
+        while (isActive) {
+            isCasting = castHelper.isCastSessionActive()
+            if (isCasting && exoPlayer.isPlaying) {
+                exoPlayer.pause()
+                exoPlayer.playWhenReady = false
+            }
+            kotlinx.coroutines.delay(500)
+        }
+    }
+
     val episodeEndListener = remember(vm) {
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                vm.setBuffering(playbackState == Player.STATE_BUFFERING)
                 if (playbackState == Player.STATE_READY && pendingResumeMs > 0L && !hasAppliedResumeSeek) {
                     exoPlayer.seekTo(pendingResumeMs)
                     hasAppliedResumeSeek = true
                 }
-                if (playbackState == Player.STATE_ENDED) {
+                if (playbackState == Player.STATE_ENDED && !state.isLive) {
                     vm.onEpisodeFinished()
                     showNextEpisodeOverlay = true
                 }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                vm.onPlayerError(
+                    com.novastream.app.util.ErrorMapper.toUserMessage(error)
+                )
             }
         }
     }
@@ -215,6 +275,10 @@ fun PlayerScreen(
             .setUri(url)
             .setMimeType(src.mimeType)
 
+        src.cacheKey?.takeIf { it.isNotBlank() }?.let { key ->
+            mediaItemBuilder.setCustomCacheKey(key)
+        }
+
         src.subtitleUrl?.takeIf { it.isNotBlank() }?.let { subUrl ->
             mediaItemBuilder.setSubtitleConfigurations(
                 listOf(
@@ -234,12 +298,15 @@ fun PlayerScreen(
         exoPlayer.playWhenReady = true
         try {
             exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            com.novastream.app.util.DebugLog.w("PlayerScreen", "playback speed apply failed", e)
+        }
 
         lastLoadedSourceKey = sourceKey
         playerVisible = true
         showHosters = false
         vm.ensureAdjacentEpisodesLoaded()
+        updatePipAutoEnter()
 
         val playbackTitle = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
         if (notificationReady || com.novastream.app.util.hasNotificationPermission(context)) {
@@ -253,6 +320,15 @@ fun PlayerScreen(
         exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
     }
 
+    LaunchedEffect(state.error) {
+        if (state.error != null && !state.loading) {
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+            playerVisible = false
+            PlaybackForegroundService.stop(context)
+        }
+    }
+
     LaunchedEffect(state.skipIntroButton, playerVisible) {
         while (isActive) {
             kotlinx.coroutines.delay(500)
@@ -264,8 +340,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(playerVisible) {
-        if (!playerVisible) return@LaunchedEffect
+    LaunchedEffect(playerVisible, state.isLive) {
+        if (!playerVisible || state.isLive) return@LaunchedEffect
         var lastSavedPos = 0L
         try {
             while (true) {
@@ -286,18 +362,26 @@ fun PlayerScreen(
 
     DisposableEffect(exoPlayer, episodeEndListener) {
         exoPlayer.addListener(episodeEndListener)
-        PlayerPlaybackController.attach(exoPlayer)
+        PlayerPlaybackController.attach(context, exoPlayer)
         onDispose {
             PlayerPlaybackController.detach(exoPlayer)
-            try {
-                val pos = exoPlayer.currentPosition
-                val dur = exoPlayer.duration
-                if (dur > 0 && pos > 0) {
-                    vm.saveProgressImmediate(pos, dur)
+            if (!state.isLive) {
+                try {
+                    val pos = exoPlayer.currentPosition
+                    val dur = exoPlayer.duration
+                    if (dur > 0 && pos > 0) {
+                        vm.saveProgressImmediate(pos, dur)
+                    }
+                } catch (e: Exception) {
+                    com.novastream.app.util.DebugLog.w("PlayerScreen", "save progress on dispose failed", e)
                 }
-            } catch (_: Exception) {}
-            try { exoPlayer.removeListener(episodeEndListener) } catch (_: Exception) {}
-            try { exoPlayer.release() } catch (_: Exception) {}
+            }
+            try { exoPlayer.removeListener(episodeEndListener) } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("PlayerScreen", "remove listener failed", e)
+            }
+            try { exoPlayer.release() } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("PlayerScreen", "release player failed", e)
+            }
             playerVisible = false
             showHosters = false
             lastLoadedSourceKey = null
@@ -341,7 +425,14 @@ fun PlayerScreen(
             )
     ) {
         val player = exoPlayer
-        if (currentSource != null) {
+        if (state.error != null && !state.loading) {
+            PlayerErrorOverlay(
+                message = state.error ?: stringResource(R.string.error_unknown),
+                canTryAlternateHoster = state.hasAlternateHoster,
+                onRetry = { vm.retry() },
+                onTryAlternateHoster = { vm.tryAlternateHoster() }
+            )
+        } else if (currentSource != null) {
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -349,14 +440,14 @@ fun PlayerScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT
                         )
-                        useController = !showHosters
+                        useController = false
                         this.player = player
                         setPadding(0, 0, 0, navBarHeightPx)
                     }
                 },
                 update = { pv ->
                     pv.player = player
-                    pv.useController = !showHosters
+                    pv.useController = false
                     pv.setPadding(0, 0, 0, navBarHeightPx)
                     pv.isFocusable = true
                     pv.isFocusableInTouchMode = true
@@ -365,15 +456,80 @@ fun PlayerScreen(
                     .fillMaxSize()
                     .focusable()
             )
+
+            if (!showHosters) {
+                PlayerTapToToggleControls(
+                    controlsVisible = controlsVisible,
+                    onToggle = { controlsVisible = !controlsVisible },
+                    isLive = state.isLive,
+                    onSeekBackward = if (state.isLive) null else {
+                        {
+                            val pos = exoPlayer.currentPosition
+                            exoPlayer.seekTo((pos - 10_000).coerceAtLeast(0))
+                            seekHint = context.getString(R.string.player_seek_back_fmt, 10)
+                            controlsVisible = true
+                        }
+                    },
+                    onSeekForward = if (state.isLive) null else {
+                        {
+                            val dur = exoPlayer.duration
+                            val pos = exoPlayer.currentPosition
+                            if (dur > 0) {
+                                exoPlayer.seekTo((pos + 10_000).coerceAtMost(dur))
+                                seekHint = context.getString(R.string.player_seek_forward_fmt, 10)
+                                controlsVisible = true
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            if (!state.isLive && seekHint != null) {
+                PlayerSeekHint(
+                    hint = seekHint,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+
+            PlayerControlsOverlay(
+                player = exoPlayer,
+                trackSelector = exoPlayer.trackSelector as DefaultTrackSelector,
+                visible = playerVisible && !showHosters && controlsVisible && !isCasting,
+                isLive = state.isLive,
+                hasPreviousEpisode = state.previousEpisode != null,
+                hasNextEpisode = state.nextEpisode != null,
+                onPreviousEpisode = {
+                    state.previousEpisode?.let { prev ->
+                        onPreviousEpisode(prev.season, prev.episode, prev.title)
+                    }
+                },
+                onNextEpisode = {
+                    state.nextEpisode?.let { next ->
+                        onNextEpisode(next.season, next.episode, next.title)
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         } else if (state.loading) {
             PremiumLoading(label = stringResource(R.string.player_resolving_stream))
-        } else if (state.error != null) {
-            PlayerErrorOverlay(
-                message = state.error ?: stringResource(R.string.error_unknown),
-                canTryAlternateHoster = state.hasAlternateHoster,
-                onRetry = { vm.retry() },
-                onTryAlternateHoster = { vm.tryAlternateHoster() }
-            )
+        }
+
+        if (playerVisible && state.isBuffering && currentSource != null) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x99000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Primary,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         if (playerVisible && state.loading && state.hosterSwitching) {
@@ -519,7 +675,7 @@ fun PlayerScreen(
                     }
                 }
             }
-            if (playerVisible && castEnabled && castHelper.isAvailable) {
+            if (playerVisible && !state.isMovie && state.previousEpisode != null) {
                 Box(
                     Modifier
                         .padding(start = 8.dp)
@@ -527,18 +683,52 @@ fun PlayerScreen(
                         .clip(CircleShape)
                         .background(GlassMedium)
                         .clickable {
-                            val url = currentSource?.url ?: return@clickable
-                            val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
-                            val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
-                            cp?.let { castHelper.loadOnCast(it, url, title) }
+                            state.previousEpisode?.let { prev ->
+                                onPreviousEpisode(prev.season, prev.episode, prev.title)
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Cast,
-                        stringResource(R.string.player_cast),
-                        tint = if (castHelper.isCastSessionActive()) Primary else Color.White,
+                        Icons.Default.SkipPrevious,
+                        stringResource(R.string.player_previous_episode),
+                        tint = Color.White,
                         modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            if (playerVisible && castEnabled && castHelper.isAvailable) {
+                if (castHelper.isCastSessionActive()) {
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(GlassMedium)
+                            .clickable {
+                                val url = currentSource?.url ?: return@clickable
+                                val title = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
+                                exoPlayer.pause()
+                                exoPlayer.playWhenReady = false
+                                val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
+                                cp?.let { castHelper.loadOnCast(it, url, title) }
+                                isCasting = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Cast,
+                            stringResource(R.string.player_cast),
+                            tint = Primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                } else {
+                    com.novastream.app.ui.cast.CastMediaRouteButton(
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(36.dp),
+                        castHelper = castHelper
                     )
                 }
             }
@@ -599,6 +789,38 @@ fun PlayerScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = isCasting,
+            enter = fadeIn() + slideInVertically { -it / 2 },
+            exit = fadeOut() + slideOutVertically { -it / 2 },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 72.dp,
+                    start = 16.dp,
+                    end = 16.dp
+                )
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xDD1A1A1A))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Cast, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.player_casting_to_tv),
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -847,6 +1069,13 @@ fun PlayerScreen(
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
     }
 }
 

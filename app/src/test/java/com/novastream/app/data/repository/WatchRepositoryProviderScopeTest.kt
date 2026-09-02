@@ -1,5 +1,6 @@
 package com.novastream.app.data.repository
 
+import com.novastream.app.data.db.ProfileEntity
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.provider.ActiveProvider
@@ -82,10 +83,10 @@ class WatchRepositoryProviderScopeTest {
 
     @Test
     fun watchProgressForActiveProvider_keepsUnknownMigrationRows() = runTest {
-        WatchRepositoryProviderScopeTestSupport.insertProgress(
-            repo,
+        WatchRepositoryProviderScopeTestSupport.insertProgressRaw(
             WatchProgress(
-                episodeKey = WatchProgress.key("unknown", "old", 1, 1),
+                episodeKey = WatchProgress.key(ProfileEntity.DEFAULT_ID, "unknown", "old", 1, 1),
+                profileId = ProfileEntity.DEFAULT_ID,
                 providerId = "unknown",
                 slug = "old",
                 seriesTitle = "Old",
@@ -113,20 +114,20 @@ class WatchRepositoryProviderScopeTest {
 
     @Test
     fun watchlistFlow_filtersByActiveProvider() = runTest {
-        WatchRepositoryProviderScopeTestSupport.insertWatchlist(
-            repo,
+        WatchRepositoryProviderScopeTestSupport.insertWatchlistRaw(
             WatchlistItem(
-                itemKey = WatchlistItem.key("serienstream", "dark"),
+                itemKey = WatchlistItem.key(ProfileEntity.DEFAULT_ID, "serienstream", "dark"),
+                profileId = ProfileEntity.DEFAULT_ID,
                 providerId = "serienstream",
                 slug = "dark",
                 title = "Dark",
                 coverUrl = null
             )
         )
-        WatchRepositoryProviderScopeTestSupport.insertWatchlist(
-            repo,
+        WatchRepositoryProviderScopeTestSupport.insertWatchlistRaw(
             WatchlistItem(
-                itemKey = WatchlistItem.key("aniworld", "naruto"),
+                itemKey = WatchlistItem.key(ProfileEntity.DEFAULT_ID, "aniworld", "naruto"),
+                profileId = ProfileEntity.DEFAULT_ID,
                 providerId = "aniworld",
                 slug = "naruto",
                 title = "Naruto",

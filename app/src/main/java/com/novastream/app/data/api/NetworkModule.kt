@@ -1,6 +1,7 @@
 package com.novastream.app.data.api
 
 import com.novastream.app.data.model.NovaStreamConfig
+import com.novastream.app.util.MediaUrls
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.Dns
@@ -24,16 +25,37 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object NetworkModule {
 
+    /** Upgrade http→https only for hosts that are not cleartext-allowed in network security config. */
+    private val httpsUpgradeInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val url = request.url
+        if (url.scheme == "http") {
+            val host = url.host
+            if (!MediaUrls.isCleartextAllowedHost(host)) {
+                val upgraded = request.newBuilder()
+                    .url(url.newBuilder().scheme("https").build())
+                    .build()
+                return@Interceptor chain.proceed(upgraded)
+            }
+        }
+        chain.proceed(request)
+    }
+
     private val userAgentInterceptor = Interceptor { chain ->
         val original = chain.request()
         val builder = original.newBuilder()
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
+            .header("Upgrade-Insecure-Requests", "1")
+            .header("Sec-Fetch-Dest", "document")
+            .header("Sec-Fetch-Mode", "navigate")
+            .header("Sec-Fetch-Site", "none")
+            .header("Sec-Fetch-User", "?1")
 
         if (original.header("Referer") == null) {
-            val host = original.url.host
-            builder.header("Referer", "https://$host/")
+            // Scheme-aware Referer (HTTP IP mirrors must not get https://… Referer)
+            builder.header("Referer", "${original.url.scheme}://${original.url.host}/")
         }
 
         chain.proceed(builder.build())
@@ -62,9 +84,6 @@ object NetworkModule {
                 }
             }
             attempt++
-            if (attempt < 3) {
-                Thread.sleep(250L * attempt)
-            }
         }
         throw lastException ?: java.io.IOException("Max retries exceeded")
     }
@@ -73,13 +92,42 @@ object NetworkModule {
         maxRequestsPerHost = 6
     }
 
-    /** Session cookies — helps Cloudflare / DDoS-Guard challenges across redirect chains. */
+    /**
+     * Session cookies shared with Android WebView CookieManager (BetterStreamflix NetworkClient pattern).
+     * Cloudflare / DDoS-Guard cookies obtained in WebView become available to OkHttp and vice versa.
+     */
     private val cookieJar: CookieJar = object : CookieJar {
-        private val store = ConcurrentHashMap<String, List<Cookie>>()
+        private val memory = ConcurrentHashMap<String, List<Cookie>>()
+
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            if (cookies.isNotEmpty()) store[url.host] = cookies
+            if (cookies.isEmpty()) return
+            memory[url.host] = cookies
+            try {
+                val cm = android.webkit.CookieManager.getInstance()
+                cookies.forEach { cookie ->
+                    cm.setCookie(url.toString(), cookie.toString())
+                }
+                cm.flush()
+            } catch (_: Throwable) {
+                // CookieManager unavailable in some unit-test environments
+            }
         }
-        override fun loadForRequest(url: HttpUrl): List<Cookie> = store[url.host].orEmpty()
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            val byName = linkedMapOf<String, Cookie>()
+            memory[url.host].orEmpty().forEach { byName[it.name] = it }
+            try {
+                val cookieString = android.webkit.CookieManager.getInstance().getCookie(url.toString())
+                if (!cookieString.isNullOrBlank()) {
+                    cookieString.split(";").forEach { part ->
+                        Cookie.parse(url, part.trim())?.let { byName[it.name] = it }
+                    }
+                }
+            } catch (_: Throwable) {
+                // ignore
+            }
+            return byName.values.toList()
+        }
     }
 
     private fun baseClientBuilder(): OkHttpClient.Builder =
@@ -87,6 +135,7 @@ object NetworkModule {
             .dns(dohDns)
             .cookieJar(cookieJar)
             .dispatcher(buildDispatcher())
+            .addInterceptor(httpsUpgradeInterceptor)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(retryInterceptor)
             .addInterceptor(loggingInterceptor)
@@ -96,6 +145,13 @@ object NetworkModule {
             .readTimeout(NovaStreamConfig.READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .writeTimeout(NovaStreamConfig.WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .callTimeout(45, TimeUnit.SECONDS)
+            .connectionSpecs(
+                listOf(
+                    okhttp3.ConnectionSpec.MODERN_TLS,
+                    okhttp3.ConnectionSpec.COMPATIBLE_TLS,
+                    okhttp3.ConnectionSpec.CLEARTEXT
+                )
+            )
             .retryOnConnectionFailure(true)
 
     /**

@@ -1,11 +1,15 @@
 package com.novastream.app.ui.player
 
 import android.content.Context
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import com.novastream.app.util.DebugLog
 
 /**
- * Koordiniert PlayerScreen-Registrierung, Foreground-Service und ExoPlayer-Stop.
+ * Koordiniert PlayerScreen-Registrierung, MediaSession, Foreground-Service und ExoPlayer-Stop.
  */
+@UnstableApi
 object PlayerPlaybackController {
 
     private val lock = Any()
@@ -15,6 +19,13 @@ object PlayerPlaybackController {
 
     @Volatile
     private var activePlayer: ExoPlayer? = null
+
+    @Volatile
+    private var mediaSession: MediaSession? = null
+
+    /** Invoked from [android.app.Activity.onUserLeaveHint] to enter PiP when playback is active. */
+    @Volatile
+    var pipEnterHandler: (() -> Boolean)? = null
 
     fun registerPlayerScreen() {
         synchronized(lock) { registeredScreens++ }
@@ -38,15 +49,23 @@ object PlayerPlaybackController {
         PlaybackForegroundService.stop(context)
     }
 
-    fun attach(player: ExoPlayer) {
+    fun attach(context: Context, player: ExoPlayer) {
         activePlayer = player
+        releaseMediaSession()
+        mediaSession = MediaSession.Builder(context.applicationContext, player).build()
     }
 
     fun detach(player: ExoPlayer) {
         if (activePlayer === player) {
             activePlayer = null
+            releaseMediaSession()
+            pipEnterHandler = null
         }
     }
+
+    fun mediaSession(): MediaSession? = mediaSession
+
+    fun requestPictureInPicture(): Boolean = pipEnterHandler?.invoke() ?: false
 
     fun stopPlayback() {
         val player = activePlayer ?: return
@@ -54,7 +73,13 @@ object PlayerPlaybackController {
             player.pause()
             player.stop()
             player.clearMediaItems()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            DebugLog.w("PlayerPlaybackController", "stopPlayback failed", e)
         }
+    }
+
+    private fun releaseMediaSession() {
+        mediaSession?.release()
+        mediaSession = null
     }
 }

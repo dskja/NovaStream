@@ -19,27 +19,35 @@ object AniListMetaService {
     private const val ENDPOINT = "https://graphql.anilist.co"
     private val client get() = NetworkModule.okHttpClient
 
+    private val mediaFields = """
+        id
+        idMal
+        isAdult
+        title { romaji english native }
+        description(asHtml: false)
+        coverImage { large extraLarge }
+        bannerImage
+        averageScore
+        startDate { year }
+        genres
+        status
+        characters(perPage: 12, sort: ROLE) {
+          edges {
+            role
+            node { name { full } image { medium } }
+          }
+        }
+        trailer { id site }
+        duration
+    """.trimIndent()
+
     suspend fun search(query: String, limit: Int = 10): List<MetaShow> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val gql = """
             query(${ '$' }search: String, ${ '$' }perPage: Int) {
               Page(page: 1, perPage: ${ '$' }perPage) {
                 media(search: ${ '$' }search, type: ANIME, sort: SEARCH_MATCH) {
-                  id
-                  title { romaji english native }
-                  description(asHtml: false)
-                  coverImage { large extraLarge }
-                  bannerImage
-                  averageScore
-                  startDate { year }
-                  genres
-                  status
-                  characters(perPage: 12, sort: ROLE) {
-                    edges {
-                      role
-                      node { name { full } image { medium } }
-                    }
-                  }
+                  $mediaFields
                 }
               }
             }
@@ -64,26 +72,14 @@ object AniListMetaService {
         val gql = """
             query(${ '$' }id: Int) {
               Media(id: ${ '$' }id, type: ANIME) {
-                id
-                title { romaji english native }
-                description(asHtml: false)
-                coverImage { large extraLarge }
-                bannerImage
-                averageScore
-                startDate { year }
-                genres
-                status
-                characters(perPage: 12, sort: ROLE) {
-                  edges {
-                    role
-                    node { name { full } image { medium } }
-                  }
-                }
+                $mediaFields
                 relations(perPage: 12) {
                   edges {
                     relationType
                     node {
                       id
+                      idMal
+                      isAdult
                       title { romaji english }
                       coverImage { large }
                       bannerImage
@@ -106,20 +102,89 @@ object AniListMetaService {
         show.similar.take(limit)
     }
 
+    suspend fun trailerForMedia(anilistId: Int): String? = withContext(Dispatchers.IO) {
+        if (anilistId <= 0) return@withContext null
+        val gql = """
+            query(${ '$' }id: Int) {
+              Media(id: ${ '$' }id, type: ANIME) {
+                trailer { id site }
+              }
+            }
+        """.trimIndent()
+        val body = postGraphQl(gql, JSONObject().put("id", anilistId)) ?: return@withContext null
+        val trailer = body.optJSONObject("data")
+            ?.optJSONObject("Media")
+            ?.optJSONObject("trailer")
+        TrailerMetaService.parseAniListTrailer(trailer)
+    }
+
+    suspend fun episodes(anilistId: Int, maxPages: Int = 4): List<MetaEpisode> = withContext(Dispatchers.IO) {
+        if (anilistId <= 0) return@withContext emptyList()
+        val all = mutableListOf<MetaEpisode>()
+        for (page in 1..maxPages.coerceIn(1, 8)) {
+            val gql = """
+                query(${'$'}id: Int, ${'$'}page: Int) {
+                  Media(id: ${'$'}id, type: ANIME) {
+                    episodes(page: ${'$'}page, perPage: 50, sort: EPISODE) {
+                      episode
+                      title { romaji english }
+                      thumbnail
+                      duration
+                      airingAt
+                    }
+                  }
+                }
+            """.trimIndent()
+            val body = postGraphQl(
+                gql,
+                JSONObject().put("id", anilistId).put("page", page)
+            ) ?: break
+            val eps = body.optJSONObject("data")
+                ?.optJSONObject("Media")
+                ?.optJSONArray("episodes")
+                ?: break
+            if (eps.length() == 0) break
+            for (i in 0 until eps.length()) {
+                parseEpisodeNode(eps.getJSONObject(i))?.let { all.add(it) }
+            }
+            if (eps.length() < 50) break
+        }
+        all
+    }
+
+    fun parseEpisodeNode(obj: JSONObject): MetaEpisode? {
+        val number = obj.optInt("episode", -1)
+        if (number <= 0) return null
+        val titles = obj.optJSONObject("title")
+        val title = titles?.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
+            ?: titles?.optString("romaji")?.takeIf { it.isNotBlank() && it != "null" }
+            ?: "Episode $number"
+        val airedAt = obj.optLong("airingAt", 0L).takeIf { it > 0 }
+        val airdate = airedAt?.let {
+            java.time.Instant.ofEpochSecond(it)
+                .atZone(java.time.ZoneOffset.UTC)
+                .toLocalDate()
+                .toString()
+        }
+        val runtime = obj.optInt("duration", -1).takeIf { it > 0 }
+        val thumb = obj.optString("thumbnail").takeIf { it.isNotBlank() && it != "null" }
+        return MetaEpisode(
+            id = "anilist-ep-$number",
+            season = 1,
+            number = number,
+            title = title,
+            airdate = airdate,
+            runtime = runtime,
+            imageUrl = thumb
+        )
+    }
+
     suspend fun trending(limit: Int = 20): List<MetaShow> = withContext(Dispatchers.IO) {
         val gql = """
             query(${ '$' }perPage: Int) {
               Page(page: 1, perPage: ${ '$' }perPage) {
                 media(type: ANIME, sort: TRENDING_DESC) {
-                  id
-                  title { romaji english native }
-                  description(asHtml: false)
-                  coverImage { large extraLarge }
-                  bannerImage
-                  averageScore
-                  startDate { year }
-                  genres
-                  status
+                  $mediaFields
                 }
               }
             }
@@ -153,6 +218,11 @@ object AniListMetaService {
         val genres = parseStringArray(obj.optJSONArray("genres"))
         val cast = parseCharacters(obj.optJSONObject("characters"))
         val similar = if (withRelations) parseRelations(obj.optJSONObject("relations")) else emptyList()
+        val isAdultFlag = obj.optBoolean("isAdult", false) ||
+            genres.any { it.equals("Hentai", ignoreCase = true) }
+        val idMal = obj.optInt("idMal", -1).takeIf { it > 0 }
+        val trailerUrl = TrailerMetaService.parseAniListTrailer(obj.optJSONObject("trailer"))
+        val runtime = obj.optInt("duration", -1).takeIf { it > 0 }
         return MetaShow(
             id = "anilist-$id",
             title = title,
@@ -164,10 +234,15 @@ object AniListMetaService {
             posterUrl = poster,
             backdropUrl = obj.optString("bannerImage").takeIf { it.isNotBlank() && it != "null" },
             language = "Japanese",
+            runtime = runtime,
+            trailerUrl = trailerUrl,
             cast = cast,
             anilistId = id,
+            idMal = idMal,
             mediaType = "anime",
-            similar = similar
+            similar = similar,
+            isAdult = if (isAdultFlag) true else null,
+            contentRatingSource = if (isAdultFlag) "anilist" else null
         )
     }
 

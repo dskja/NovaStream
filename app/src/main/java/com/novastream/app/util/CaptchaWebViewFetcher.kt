@@ -19,7 +19,7 @@ import kotlin.coroutines.resume
  */
 object CaptchaWebViewFetcher {
 
-    private const val MAX_REQUESTS_PER_MINUTE = 3
+    private const val MAX_REQUESTS_PER_MINUTE = 12
     private const val RATE_WINDOW_MS = 60_000L
 
     @Volatile
@@ -34,6 +34,25 @@ object CaptchaWebViewFetcher {
 
     fun setContext(context: Context) {
         appContext = context.applicationContext
+    }
+
+    /** Release shared WebView memory (e.g. on low memory). */
+    fun clear() {
+        synchronized(rateLimitLock) {
+            requestTimestamps.clear()
+        }
+        destroyWebView()
+    }
+
+    @androidx.annotation.MainThread
+    private fun destroyWebView() {
+        sharedWebView?.let { webView ->
+            runCatching {
+                webView.stopLoading()
+                webView.destroy()
+            }
+        }
+        sharedWebView = null
     }
 
     private fun acquireRateLimitSlot(): Boolean {
@@ -73,7 +92,7 @@ object CaptchaWebViewFetcher {
         }
         return webViewMutex.withLock {
             withContext(Dispatchers.Main) {
-                withTimeoutOrNull(timeoutMs) {
+                val html = withTimeoutOrNull(timeoutMs) {
                     suspendCancellableCoroutine { cont ->
                         val webView = try {
                             getOrCreateWebView(context)
@@ -84,6 +103,11 @@ object CaptchaWebViewFetcher {
                         webView.webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, finishedUrl: String?) {
                                 if (!cont.isActive) return
+                                // Ensure WebView cookies are flushed so OkHttp CookieJar can read them
+                                try {
+                                    android.webkit.CookieManager.getInstance().flush()
+                                } catch (_: Exception) {
+                                }
                                 try {
                                     view?.evaluateJavascript(
                                         "(function(){return document.documentElement.outerHTML;})();"
@@ -113,6 +137,8 @@ object CaptchaWebViewFetcher {
                         }
                     }
                 } ?: ""
+                destroyWebView()
+                html
             }
         }
     }

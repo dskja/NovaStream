@@ -73,4 +73,30 @@ class SearchResultAggregatorTest {
         assertEquals(1, detailed.size)
         assertEquals(27205, detailed.first().series.tmdbId)
     }
+
+    @Test
+    fun `mergeSeriesFields unions external ids and isAdult`() {
+        val s1 = Series(id = "a", title = "Dark", providerId = "p1", coverUrl = "http://cover")
+        val s2 = Series(id = "b", title = "Dark", providerId = "p2", imdbId = "tt5753856", isAdult = true)
+        val merged = SearchResultAggregator.mergeSeriesFields(listOf(s1, s2))
+        assertEquals("http://cover", merged.coverUrl)
+        assertEquals("tt5753856", merged.imdbId)
+        assertEquals(true, merged.isAdult)
+    }
+
+    @Test
+    fun `mergeSeriesFields keeps adult when any provider marks adult`() {
+        val safe = Series(id = "a", title = "Peppa", providerId = "p1", isAdult = false)
+        val risky = Series(id = "b", title = "Peppa", providerId = "p2", isAdult = true)
+        val merged = SearchResultAggregator.mergeSeriesFields(listOf(safe, risky))
+        assertEquals(true, merged.isAdult)
+    }
+
+    @Test
+    fun `aggregate sets provider count when multiple providers`() {
+        val s1 = Series(id = "a", title = "Dark", providerId = "p1")
+        val s2 = Series(id = "b", title = "Dark", providerId = "p2")
+        val detailed = SearchResultAggregator.aggregateDetailed(listOf("p1" to listOf(s1), "p2" to listOf(s2)))
+        assertEquals(2, detailed.first().series.availableProviderCount)
+    }
 }

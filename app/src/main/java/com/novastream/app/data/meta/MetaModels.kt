@@ -28,7 +28,18 @@ data class MetaShow(
     val wikidataId: String? = null,
     val tvmazeId: String? = null,
     val mediaType: String? = null,
-    val similar: List<MetaShow> = emptyList()
+    val similar: List<MetaShow> = emptyList(),
+    /** Explicit 18+ flag from AniList or resolved certification pipeline. */
+    val isAdult: Boolean? = null,
+    /** Primary certification label, e.g. "FSK 12" or "TV-MA". */
+    val contentRating: String? = null,
+    val contentRatingSource: String? = null,
+    /** MyAnimeList ID (for Jikan fallback, no key). */
+    val idMal: Int? = null,
+    val kitsuId: Int? = null,
+    val shikimoriId: Int? = null,
+    /** Epguides.com show key, e.g. "BreakingBad". */
+    val epguidesKey: String? = null
 ) {
     val year: String?
         get() = premiered?.take(4)

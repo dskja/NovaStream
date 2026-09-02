@@ -42,10 +42,19 @@ class DownloadForegroundService : Media3DownloadService(
         downloads: MutableList<Download>,
         notMetRequirements: Int
     ): Notification {
-        val active = downloads.count { it.state == Download.STATE_DOWNLOADING }
+        val downloading = downloads.filter { it.state == Download.STATE_DOWNLOADING }
+        val active = downloading.size
         val text = when {
             notMetRequirements and Requirements.NETWORK != 0 ->
                 getString(R.string.download_waiting_network)
+            active == 1 -> {
+                val percent = downloading.first().percentDownloaded
+                if (percent >= 0f) {
+                    getString(R.string.download_progress_fmt, percent.toInt())
+                } else {
+                    getString(R.string.download_in_progress_fmt, active)
+                }
+            }
             active > 0 -> getString(R.string.download_in_progress_fmt, active)
             else -> getString(R.string.download_queue_idle)
         }

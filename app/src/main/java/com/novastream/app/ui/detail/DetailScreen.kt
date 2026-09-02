@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -30,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,20 +59,46 @@ import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
 import com.novastream.app.ui.theme.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     onBack: () -> Unit,
     onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit,
-    onRelatedClick: (String) -> Unit = {}
+    onRelatedClick: (String) -> Unit = {},
+    onNavigateToSlug: (String) -> Unit = onRelatedClick
 ) {
     val vm: DetailViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val series = state.series
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val downloadMsg = state.downloadMessage
+    val castHelper = remember { com.novastream.app.cast.CastHelper.get(context) }
+    var castPlayer by remember { mutableStateOf<androidx.media3.cast.CastPlayer?>(null) }
+    val appSettings = remember { com.novastream.app.data.prefs.AppSettings(context) }
+    val castEnabled by appSettings.castEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(Unit) {
+        vm.navigateToSlug.collect { targetSlug ->
+            onNavigateToSlug(targetSlug)
+        }
+    }
+
+    LaunchedEffect(state.castStreamUrl, state.castStreamTitle) {
+        val url = state.castStreamUrl ?: return@LaunchedEffect
+        val title = state.castStreamTitle ?: "NovaStream"
+        if (castEnabled && castHelper.isAvailable && castHelper.isCastSessionActive()) {
+            val cp = castPlayer ?: castHelper.createCastPlayer()?.also { castPlayer = it }
+            cp?.let {
+                castHelper.loadOnCast(it, url, title)
+                snackbarHostState.showSnackbar(context.getString(R.string.detail_cast_to_tv_started))
+            }
+        }
+        vm.clearCastRequest()
+    }
 
     LaunchedEffect(downloadMsg) {
         downloadMsg?.let { key ->
@@ -78,6 +106,8 @@ fun DetailScreen(
                 "detail_download_started" -> context.getString(R.string.detail_download_started)
                 "detail_download_failed" -> context.getString(R.string.detail_download_failed)
                 "detail_download_no_source" -> context.getString(R.string.detail_download_no_source)
+                "detail_cast_to_tv_failed" -> context.getString(R.string.detail_cast_to_tv_failed)
+                "detail_cast_no_device" -> context.getString(R.string.detail_cast_no_device)
                 else -> key
             }
             snackbarHostState.showSnackbar(text)
@@ -102,8 +132,18 @@ fun DetailScreen(
                 onToggleWatched = vm::toggleEpisodeWatched,
                 onMarkSeasonWatched = vm::markSeasonAsWatched,
                 onMarkSeasonUnwatched = vm::markSeasonAsUnwatched,
-                onRelatedClick = onRelatedClick,
-                onDownload = vm::downloadCurrentEpisode
+                onRelatedSeriesClick = vm::openRelated,
+                onAlsoOnClick = vm::switchToAlsoOn,
+                onDownload = vm::downloadCurrentEpisode,
+                onCast = {
+                    if (castEnabled && castHelper.isCastSessionActive()) {
+                        vm.castCurrentEpisode()
+                    }
+                },
+                onRetrySeason = vm::retrySeasonLoad,
+                castEnabled = castEnabled && castHelper.isAvailable,
+                castHelper = castHelper,
+                casting = state.casting
             )
         }
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -125,8 +165,14 @@ private fun DetailContent(
     onToggleWatched: (Int, Int, String) -> Unit,
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
-    onRelatedClick: (String) -> Unit,
-    onDownload: () -> Unit
+    onRelatedSeriesClick: (com.novastream.app.data.model.Series) -> Unit,
+    onAlsoOnClick: (com.novastream.app.data.meta.ContentMappingResolver.AlsoOnEntry) -> Unit,
+    onDownload: () -> Unit,
+    onCast: () -> Unit,
+    onRetrySeason: () -> Unit,
+    castEnabled: Boolean,
+    castHelper: com.novastream.app.cast.CastHelper,
+    casting: Boolean
 ) {
     val series = state.series ?: return
     val context = LocalContext.current
@@ -166,9 +212,10 @@ private fun DetailContent(
                     .height(320.dp)
             ) {
                 if (!series.coverUrl.isNullOrBlank() && !imageError) {
+                    val heroUrl = series.backdropUrl?.takeIf { it.isNotBlank() } ?: series.coverUrl
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(series.coverUrl)
+                            .data(heroUrl)
                             .crossfade(true)
                             .build(),
                         contentDescription = series.title,
@@ -331,6 +378,46 @@ private fun DetailContent(
                             )
                         }
                     }
+                    if (castEnabled) {
+                        if (casting) {
+                            Box(
+                                Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BgSurfaceElevated)
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Primary)
+                            }
+                        } else if (castHelper.isCastSessionActive()) {
+                            Box(
+                                Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BgSurfaceElevated)
+                                    .clickable(onClick = onCast)
+                                    .focusable(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Cast,
+                                    contentDescription = stringResource(R.string.detail_cast_to_tv),
+                                    tint = Primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        } else {
+                            com.novastream.app.ui.cast.CastMediaRouteButton(
+                                modifier = Modifier
+                                    .padding(start = 8.dp)
+                                    .size(44.dp),
+                                castHelper = castHelper
+                            )
+                        }
+                    }
                     Box(
                         Modifier
                             .padding(start = 8.dp)
@@ -372,20 +459,34 @@ private fun DetailContent(
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.SmartDisplay,
-                                contentDescription = null,
-                                tint = Primary,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Icon(Icons.Default.SmartDisplay, null, tint = Primary, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.detail_watch_trailer),
-                                color = TextPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.labelLarge
-                            )
+                            Text(stringResource(R.string.detail_watch_trailer), color = Primary, fontWeight = FontWeight.SemiBold)
                         }
+                    }
+                }
+                state.officialSite?.takeIf { it.isNotBlank() }?.let { site ->
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BgSurfaceElevated)
+                            .clickable {
+                                val url = if (site.startsWith("http")) site else "https://$site"
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url)
+                                )
+                                context.startActivity(intent)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.detail_official_site),
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
                     }
                 }
                 series.description?.let { desc ->
@@ -411,16 +512,41 @@ private fun DetailContent(
                     }
                 }
                 // Free metadata (TVMaze) pills
-                if (series.genres.isNotEmpty() || state.metaRating != null || state.metaNetwork != null || state.imdbId != null) {
+                if (series.genres.isNotEmpty() || state.metaRating != null || state.contentRating != null ||
+                    state.metaRuntime != null || state.metaNetwork != null || state.imdbId != null ||
+                    !series.status.isNullOrBlank()
+                ) {
                     Spacer(Modifier.height(12.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                     ) {
                         state.metaRating?.let { StatPill("★ ${String.format("%.1f", it)}") }
+                        state.contentRating?.let { StatPill(it) }
+                        state.metaRuntime?.let { StatPill(stringResource(R.string.detail_runtime_fmt, it)) }
                         series.year?.let { StatPill(it) }
+                        series.status?.takeIf { it.isNotBlank() }?.let { StatPill(it) }
                         state.metaNetwork?.let { StatPill(it) }
-                        state.imdbId?.let { StatPill(it) }
+                        state.imdbId?.let { imdb ->
+                            StatPill(
+                                text = imdb,
+                                onClick = {
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse("https://www.imdb.com/title/$imdb/")
+                                    )
+                                    context.startActivity(intent)
+                                }
+                            )
+                        }
+                    }
+                    state.contentRatingSource?.takeIf { it.isNotBlank() }?.let { source ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.detail_rating_source_fmt, source),
+                            color = TextTertiary,
+                            fontSize = 11.sp
+                        )
                     }
                     if (series.genres.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
@@ -434,28 +560,84 @@ private fun DetailContent(
                 if (state.metaCast.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))
                     Text(stringResource(R.string.detail_cast), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        state.metaCast.take(8).joinToString(" · ") {
-                            if (!it.character.isNullOrBlank()) "${it.name} (${it.character})" else it.name
-                        },
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        items(state.metaCast.take(12), key = { it.name }) { person ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(72.dp)
+                            ) {
+                                val photoUrl = person.imageUrl?.takeIf { it.isNotBlank() }
+                                if (photoUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(photoUrl)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = person.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                    )
+                                } else {
+                                    Box(
+                                        Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(BgSurfaceElevated),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            person.name.take(1).uppercase(),
+                                            color = Accent,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    person.name,
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                person.character?.takeIf { it.isNotBlank() }?.let { role ->
+                                    Text(
+                                        role,
+                                        color = TextTertiary,
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-                if (state.alsoOnProviders.isNotEmpty()) {
+                if (state.alsoOnEntries.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))
                     Text(stringResource(R.string.detail_also_on), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        state.alsoOnProviders.joinToString(" · "),
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        items(state.alsoOnEntries, key = { "${it.providerId}:${it.slug}" }) { entry ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { onAlsoOnClick(entry) },
+                                label = { Text(entry.displayName, fontSize = 12.sp) }
+                            )
+                        }
+                    }
                 }
                 // Series stats: seasons and total episodes
                 val totalEpisodes = state.seasons.sumOf { it.episodes.size }
@@ -539,6 +721,25 @@ private fun DetailContent(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = Primary, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+                }
+            }
+        } else if (state.seasonError != null) {
+            item {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        state.seasonError ?: "",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = onRetrySeason) {
+                        Text(stringResource(R.string.retry))
+                    }
                 }
             }
         } else if (season != null && season.episodes.isNotEmpty()) {
@@ -676,7 +877,7 @@ private fun DetailContent(
                     items(state.relatedTitles, key = { it.id }) { related ->
                         SeriesPosterCard(
                             series = related,
-                            onClick = { onRelatedClick(related.id) }
+                            onClick = { onRelatedSeriesClick(related) }
                         )
                     }
                 }
@@ -959,6 +1160,37 @@ private fun PremiumEpisodeRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+            episode.airdate?.takeIf { it.isNotBlank() }?.let { date ->
+                Spacer(Modifier.height(2.dp))
+                val runtimeLabel = episode.runtime?.takeIf { it > 0 }?.let {
+                    stringResource(R.string.detail_episode_runtime_fmt, it)
+                }
+                Text(
+                    if (runtimeLabel != null) "$date · $runtimeLabel" else date,
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp
+                )
+            } ?: episode.runtime?.takeIf { it > 0 }?.let { mins ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    stringResource(R.string.detail_episode_runtime_fmt, mins),
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp
+                )
+            }
+            episode.summary?.takeIf { it.isNotBlank() }?.let { summary ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    summary,
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (episode.hosters.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1026,13 +1258,13 @@ private fun formatRemaining(progress: WatchProgress): Int {
 }
 
 @Composable
-private fun StatPill(text: String) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(BgSurfaceElevated)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
+private fun StatPill(text: String, onClick: (() -> Unit)? = null) {
+    val modifier = Modifier
+        .clip(RoundedCornerShape(12.dp))
+        .background(BgSurfaceElevated)
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = 12.dp, vertical = 6.dp)
+    Box(modifier) {
         Text(
             text,
             color = TextSecondary,

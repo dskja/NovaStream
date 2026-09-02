@@ -1,5 +1,6 @@
 package com.novastream.app.data.provider
 
+import android.content.Context
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.HosterLink
@@ -32,169 +33,168 @@ class FilmPalastProvider(
     override val id: String = "filmpalast",
     override val displayName: String = "FilmPalast",
     override val baseUrl: String = "https://filmpalast.to",
-    override val supportsSeries: Boolean = true
+    override val supportsSeries: Boolean = true,
+    private val appContext: Context? = null
 ) : StreamingProvider {
 
-    override val supportsMovies: Boolean = true
-    override val catalogHint: String = "Filme & Serien"
-    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
-        com.novastream.app.data.model.Genre("action", "Action"),
-        com.novastream.app.data.model.Genre("comedy", "Comedy"),
-        com.novastream.app.data.model.Genre("drama", "Drama"),
-        com.novastream.app.data.model.Genre("horror", "Horror"),
-        com.novastream.app.data.model.Genre("thriller", "Thriller"),
-        com.novastream.app.data.model.Genre("science-fiction", "Sci-Fi")
-    )
+    private val mirror = MirrorSupport(id, baseUrl, appContext, "/stream/")
 
-    private val hosterResolver = HosterResolver(baseUrl = baseUrl)
+    private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
+
+    private suspend fun activeBaseUrl(): String = mirror.activeBase()
+
+    private fun parseBase(): String = mirror.parseBase()
+
+    private suspend fun fetchUrl(url: String): String = mirror.fetch(url)
+
+    override val supportsMovies: Boolean = true
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(id)
 
     private val episodeSlugRegex = Regex("""-s(\d+)e(\d+)$""", RegexOption.IGNORE_CASE)
     private val streamSlugRegex = Regex("""/stream/([\w%.-]+)""", RegexOption.IGNORE_CASE)
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val home = fetchUrl(baseUrl)
-        val serien = fetchUrl("$baseUrl/serien/view")
-        val moviesHtml = fetchUrl("$baseUrl/movies/new").ifBlank { fetchUrl("$baseUrl/movies") }
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        val base = activeBaseUrl()
+        // BetterStreamflix: movies from /movies/new/page/1, series from /serien/view/page/1
+        val moviesHtml = fetchUrl("$base/movies/new/page/1").ifBlank { fetchUrl("$base/movies/new") }
+        val serien = fetchUrl("$base/serien/view/page/1").ifBlank { fetchUrl("$base/serien/view") }
+        val home = mirror.requireCatalogHtml(fetchPage = { fetchUrl(base) }, fallbackUrl = "$base/")
         val merged = linkedMapOf<String, Series>()
-        for (s in parseFilmPalastList(home) + parseFilmPalastList(serien)) {
+        for (s in parseFilmPalastList(serien) + parseFilmPalastList(home)) {
             if (!merged.containsKey(s.id)) merged[s.id] = s.copy(providerId = id)
         }
         for (s in parseFilmPalastList(moviesHtml)) {
             if (!merged.containsKey(s.id)) merged[s.id] = s.copy(isMovie = true, providerId = id)
         }
         merged.values.toList()
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val html = fetchUrl("$baseUrl/movies/new").ifBlank { fetchUrl("$baseUrl/movies") }
-        parseFilmPalastList(html).map { it.copy(isMovie = true, providerId = id) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
-
-    override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
-        return runCatching {
-            val html = searchFilmPalast(query.trim())
-            parseFilmPalastList(html)
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
     }
 
-    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatching {
-        val episodePageSlug = resolveEpisodePageSlug(slug)
-        val html = fetchUrl("$baseUrl/stream/$episodePageSlug")
-        parseFilmPalastDetail(html, seriesBaseSlug(slug))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        val base = activeBaseUrl()
+        val html = fetchUrl("$base/movies/new").ifBlank { fetchUrl("$base/movies") }
+        parseFilmPalastList(html).map { it.copy(isMovie = true, providerId = id) }
+    }
 
-    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatching {
+    override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
+            val html = searchFilmPalast(query.trim())
+            parseFilmPalastList(html)
+        }
+    }
+
+    override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatchingProvider {
+        val base = activeBaseUrl()
         val episodePageSlug = resolveEpisodePageSlug(slug)
-        val html = fetchUrl("$baseUrl/stream/$episodePageSlug")
+        val html = fetchUrl("$base/stream/$episodePageSlug")
+        parseFilmPalastDetail(html, seriesBaseSlug(slug))
+    }
+
+    override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatchingProvider {
+        val base = activeBaseUrl()
+        val episodePageSlug = resolveEpisodePageSlug(slug)
+        val html = fetchUrl("$base/stream/$episodePageSlug")
         val (_, seasons) = parseFilmPalastDetail(html, seriesBaseSlug(slug))
         seasons.find { it.number == season }?.episodes ?: emptyList()
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatching {
+    override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
+        val base = activeBaseUrl()
         val url = when {
             episode.episodeUrl.startsWith("http") -> episode.episodeUrl
-            episode.episodeUrl.startsWith("/") -> baseUrl + episode.episodeUrl
-            episode.episodeUrl.isNotBlank() -> "$baseUrl/stream/${episode.episodeUrl}"
+            episode.episodeUrl.startsWith("/") -> base + episode.episodeUrl
+            episode.episodeUrl.isNotBlank() -> "$base/stream/${episode.episodeUrl}"
             else -> {
                 val epSlug = "${episode.slug}-s${episode.season.toString().padStart(2, '0')}e${episode.number.toString().padStart(2, '0')}"
-                "$baseUrl/stream/$epSlug"
+                "$base/stream/$epSlug"
             }
         }
         val html = fetchUrl(url)
         parseFilmPalastHosters(html)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatching {
+    override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
         hosterResolver.resolve(hoster.name, hoster.redirectUrl)
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val path = when (genre.trim().lowercase()) {
-            "serien", "series", "serie" -> "/serien/view"
-            "filme", "movies", "movie", "neu", "new" -> "/movies/new"
-            else -> "/serien/view"
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            val base = activeBaseUrl()
+            val paths = ProviderGenrePaths.pathsFor(id, genre.trim())
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = parseFilmPalastList(fetchUrl(base + path))
+                if (results.isNotEmpty()) break
+            }
+            results
         }
-        parseFilmPalastList(fetchUrl(baseUrl + path))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        parseFilmPalastList(fetchUrl("$baseUrl/serien/view"))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        val base = activeBaseUrl()
+        parseFilmPalastList(fetchUrl("$base/serien/view"))
+    }
 
-    override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        parseFilmPalastList(fetchUrl(baseUrl))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        val base = activeBaseUrl()
+        parseFilmPalastList(fetchUrl(base))
+    }
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        val path = when {
-            page <= 0 -> "/serien/view"
-            else -> "/serien/view?page=${page + 1}"
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        val base = activeBaseUrl()
+        val serienPath = if (page <= 0) "/serien/view" else "/serien/view?page=${page + 1}"
+        val moviesPath = if (page <= 0) "/movies/new" else "/movies/new?page=${page + 1}"
+        val merged = linkedMapOf<String, Series>()
+        for (s in parseFilmPalastList(fetchUrl(base + serienPath))) {
+            merged[s.id] = s.copy(providerId = id)
         }
-        parseFilmPalastList(fetchUrl(baseUrl + path))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+        for (s in parseFilmPalastList(fetchUrl(base + moviesPath))) {
+            if (!merged.containsKey(s.id)) merged[s.id] = s.copy(isMovie = true, providerId = id)
+        }
+        merged.values.toList()
+    }
 
-    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        val base = activeBaseUrl()
         val basePath = when (genre.trim().lowercase()) {
             "filme", "movies", "movie", "neu", "new" -> "/movies/new"
             else -> "/serien/view"
         }
         val path = if (page <= 0) basePath else "$basePath?page=${page + 1}"
-        parseFilmPalastList(fetchUrl(baseUrl + path))
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+        parseFilmPalastList(fetchUrl(base + path))
+    }
 
     // ─── Networking ─────────────────────────────────────────────────────────
 
-    private suspend fun fetchUrl(url: String): String =
-        ProviderHttp.fetch(url, referer = "$baseUrl/", webViewFallback = true)
+    private suspend fun searchFilmPalast(query: String): String {
+        val base = activeBaseUrl()
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        // BetterStreamflix primary: GET /search/title/{query}
+        val titleSearch = fetchUrl("$base/search/title/$encoded")
+        if (titleSearch.isNotBlank() && !ProviderHttp.isChallenge(titleSearch) &&
+            (titleSearch.contains("/stream/") || titleSearch.contains("article"))
+        ) {
+            return titleSearch
+        }
+        val getHtml = fetchUrl("$base/search?headerSearchText=$encoded")
+        if (getHtml.isNotBlank() && !ProviderHttp.isChallenge(getHtml)) return getHtml
+        return searchFilmPalastPost(query, base)
+    }
 
-    private suspend fun searchFilmPalast(query: String): String = withContext(Dispatchers.IO) {
+    private suspend fun searchFilmPalastPost(query: String, base: String): String = withContext(Dispatchers.IO) {
         val body = FormBody.Builder()
             .add("headerSearchText", query)
             .build()
         val req = Request.Builder()
-            .url("$baseUrl/search")
+            .url("$base/search")
             .post(body)
             .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-            .header("Referer", "$baseUrl/")
+            .header("Referer", "$base/")
             .header("Accept", "text/html,application/xhtml+xml,*/*")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .build()
@@ -205,9 +205,9 @@ class FilmPalastProvider(
         // Fallback: GET
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
         val getReq = Request.Builder()
-            .url("$baseUrl/search?headerSearchText=$encoded")
+            .url("$base/search?headerSearchText=$encoded")
             .header("User-Agent", com.novastream.app.data.model.NovaStreamConfig.USER_AGENT)
-            .header("Referer", "$baseUrl/")
+            .header("Referer", "$base/")
             .header("Accept", "text/html,application/xhtml+xml,*/*")
             .build()
         NetworkModule.okHttpClient.newCall(getReq).execute().use { resp ->
@@ -220,8 +220,30 @@ class FilmPalastProvider(
     /** Parst Katalog-Listen und kollabiert Episode-Slugs zu Serien-IDs. */
     private fun parseFilmPalastList(html: String): List<Series> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val results = linkedMapOf<String, Series>()
+
+        // BetterStreamflix: div#content article → h2 a + img
+        for (article in doc.select("div#content article")) {
+            val a = article.selectFirst("h2 a[href*=/stream/]") ?: article.selectFirst("a[href*=/stream/]") ?: continue
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val rawSlug = extractStreamSlug(href) ?: continue
+            val seriesId = seriesBaseSlug(rawSlug)
+            if (results.containsKey(seriesId)) continue
+            val title = a.text().trim().ifBlank { slugToTitle(rawSlug) }
+            val cover = article.selectFirst("a img")?.let { img ->
+                makeAbsolute(img.attr("src").ifBlank { img.attr("data-src") })
+            } ?: findCoverNear(a)
+            results[seriesId] = Series(
+                id = seriesId,
+                title = cleanEpisodeTitle(title),
+                coverUrl = cover,
+                detailUrl = "/stream/$seriesId",
+                isMovie = !episodeSlugRegex.containsMatchIn(rawSlug) && seriesId == rawSlug
+            )
+        }
+
+        if (results.isNotEmpty()) return results.values.toList()
 
         for (a in doc.select("a[href*=/stream/], a[href*=stream/]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
@@ -259,7 +281,7 @@ class FilmPalastProvider(
                 detailUrl = "/stream/$seriesSlug"
             ) to emptyList()
         }
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
 
         val rawTitle = doc.selectFirst("h1")?.text()?.trim()
             ?: doc.selectFirst("h2")?.text()?.trim()
@@ -343,9 +365,26 @@ class FilmPalastProvider(
 
     private fun parseFilmPalastHosters(html: String): List<HosterLink> {
         if (html.isBlank()) return emptyList()
-        val doc = Jsoup.parse(html, baseUrl)
+        val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
+
+        // BetterStreamflix: ul.currentStreamLinks
+        for (block in doc.select("ul.currentStreamLinks")) {
+            val name = block.selectFirst("li.hostBg p.hostName")?.text()?.trim() ?: "Unbekannt"
+            var linkElement = block.selectFirst("a[href]")
+            var url = linkElement?.attr("href")?.trim()
+            if (linkElement == null || url.isNullOrBlank()) {
+                linkElement = block.selectFirst("a[data-player-url]")
+                url = linkElement?.attr("data-player-url")?.trim()
+            }
+            if (url.isNullOrBlank()) continue
+            val redirectUrl = makeAbsolute(url)
+            if (!seen.add("$name-$redirectUrl")) continue
+            hosters.add(HosterLink(name = name, redirectUrl = redirectUrl, index = hosters.size))
+        }
+
+        if (hosters.isNotEmpty()) return hosters
 
         for (li in doc.select("li.streamPlayBtn")) {
             val a = li.selectFirst("a.button.rb.iconPlay")
@@ -393,14 +432,15 @@ class FilmPalastProvider(
      */
     private suspend fun resolveEpisodePageSlug(slug: String): String {
         if (episodeSlugRegex.containsMatchIn(slug)) return slug
+        val base = activeBaseUrl()
 
         val s01e01 = "$slug-s01e01"
-        val probe = fetchUrl("$baseUrl/stream/$s01e01")
+        val probe = fetchUrl("$base/stream/$s01e01")
         if (probe.isNotBlank() && looksLikeStreamPage(probe)) return s01e01
 
-        val direct = fetchUrl("$baseUrl/stream/$slug")
+        val direct = fetchUrl("$base/stream/$slug")
         if (direct.isNotBlank()) {
-            val doc = Jsoup.parse(direct, baseUrl)
+            val doc = Jsoup.parse(direct, parseBase())
             val firstEp = doc.selectFirst("a.getStaffelStream")
             if (firstEp != null) {
                 extractStreamSlug(firstEp.absUrl("href").ifBlank { firstEp.attr("href") })?.let { return it }
@@ -410,7 +450,7 @@ class FilmPalastProvider(
 
         // Suche nach Titel und erste Episode nehmen
         val searchHtml = searchFilmPalast(slugToTitle(slug))
-        val searchDoc = Jsoup.parse(searchHtml, baseUrl)
+        val searchDoc = Jsoup.parse(searchHtml, parseBase())
         for (a in searchDoc.select("a[href*=/stream/]")) {
             val found = extractStreamSlug(a.absUrl("href").ifBlank { a.attr("href") }) ?: continue
             if (seriesBaseSlug(found).equals(slug, ignoreCase = true)) {
@@ -457,8 +497,8 @@ class FilmPalastProvider(
     private fun makeAbsolute(url: String): String = when {
         url.startsWith("http://") || url.startsWith("https://") -> url
         url.startsWith("//") -> "https:$url"
-        url.startsWith("/") -> baseUrl + url
-        else -> "$baseUrl/$url"
+        url.startsWith("/") -> parseBase() + url
+        else -> "${parseBase()}/$url"
     }
 
     private fun absImg(img: Element): String? {

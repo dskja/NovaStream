@@ -36,15 +36,16 @@ data class DownloadEntity(
     val localPath: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isMovie: Boolean = false
 ) {
     val progressPercent: Int
         get() = if (contentLength <= 0L) 0
         else ((bytesDownloaded * 100) / contentLength).toInt().coerceIn(0, 100)
 
     companion object {
-        fun key(providerId: String, slug: String, season: Int, episode: Int): String =
-            "$providerId|$slug|S$season|E$episode"
+        fun key(profileId: String, providerId: String, slug: String, season: Int, episode: Int): String =
+            "$profileId|$providerId|$slug|S$season|E$episode"
     }
 }
 

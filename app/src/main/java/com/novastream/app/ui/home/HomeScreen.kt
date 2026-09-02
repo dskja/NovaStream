@@ -47,15 +47,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.ui.components.ContinueWatchingCard
 import com.novastream.app.ui.components.ProviderHealthBanner
 import com.novastream.app.ui.components.PremiumEmpty
-import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.SectionHeader
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.components.ShimmerBox
@@ -100,15 +96,15 @@ fun HomeScreen(
         if (!state.loading && (state.hero.isNotEmpty() || state.popular.isNotEmpty())) {
             try {
                 initialFocus.requestFocus()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("HomeScreen", "focus request failed", e)
+            }
         }
     }
 
     val showShimmer = state.loading && !state.reduceMotion
     val shimmerAnimate = !state.reduceMotion
-    val iptvEnabled by remember {
-        com.novastream.app.data.prefs.AppSettings(context).iptvEnabled
-    }.collectAsStateWithLifecycle(initialValue = false)
+    val iptvEnabled = state.iptvEnabled
 
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
@@ -120,7 +116,8 @@ fun HomeScreen(
         LazyColumn(
             Modifier
                 .fillMaxSize()
-                .background(BgPure)
+                .background(BgPure),
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             // Provider Badge - zeigt aktiven Provider
         item {
@@ -200,9 +197,9 @@ fun HomeScreen(
                     )
                 } else if (state.hero.isNotEmpty()) {
                     HeroCarousel(
-                        series = state.hero.take(8),
+                        series = state.hero.take(if (state.performanceMode) 3 else 8),
                         onClick = onSeriesClick,
-                        autoScrollEnabled = !state.reduceMotion,
+                        autoScrollEnabled = !state.reduceMotion && !state.performanceMode,
                         focusRequester = initialFocus
                     )
                 }
@@ -300,18 +297,7 @@ fun HomeScreen(
                 }
             }
 
-            // Error State
-            if (state.error != null && state.popular.isEmpty()) {
-                item {
-                    PremiumError(
-                        message = state.error ?: stringResource(R.string.error_unknown),
-                        onRetry = vm::load,
-                        modifier = Modifier.fillParentMaxSize()
-                    )
-                }
-            }
-
-            // Empty catalog
+            // Empty catalog (no duplicate PremiumError — ProviderHealthBanner handles errors above)
             if (catalogEmpty) {
                 item {
                     PremiumEmpty(
@@ -384,7 +370,17 @@ fun HomeScreen(
                                     .width(160.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(Color.White.copy(alpha = 0.06f))
-                                    .clickable { onSeriesClick(ep.seriesSlug) }
+                                    .clickable {
+                                        onContinueWatchingClick(
+                                            ep.seriesSlug,
+                                            ep.season,
+                                            ep.episode,
+                                            ep.shortDisplay,
+                                            ep.seriesTitle,
+                                            ep.coverUrl,
+                                            false
+                                        )
+                                    }
                                     .padding(12.dp)
                             ) {
                                 Text(
@@ -553,6 +549,7 @@ private fun HeroCarousel(
             val s = series[page]
             var isLoading by remember(s.id) { mutableStateOf(true) }
             var isError by remember(s.id) { mutableStateOf(false) }
+            val shouldLoadImage = kotlin.math.abs(page - pagerState.currentPage) <= 1
 
             Box(
                 Modifier
@@ -566,11 +563,12 @@ private fun HeroCarousel(
                     )
                     .clickable { onClick(s.id) }
             ) {
-                if (!s.coverUrl.isNullOrBlank() && !isError) {
+                if (!s.coverUrl.isNullOrBlank() && !isError && shouldLoadImage) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(s.coverUrl)
                             .crossfade(true)
+                            .size(1280, 720)
                             .addHeader(
                                 "Referer",
                                 com.novastream.app.util.MediaUrls.refererFor(s.coverUrl)

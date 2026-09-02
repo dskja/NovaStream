@@ -36,10 +36,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.novastream.app.data.db.WatchlistItem
+import com.novastream.app.data.meta.CatalogMetaEnricher
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -52,10 +57,12 @@ import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.tv.rememberInitialFocusRequester
 import com.novastream.app.ui.tv.tvFocusRing
 import com.novastream.app.ui.tv.tvFocusable
+import com.novastream.app.util.ErrorMapper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 enum class WatchlistProviderFilter(@StringRes val labelRes: Int) {
@@ -84,19 +91,37 @@ enum class SortOption(@StringRes val labelRes: Int) {
 class WatchlistViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val profileManager: ProfileManager,
+    private val catalogMetaEnricher: CatalogMetaEnricher,
+    private val appSettings: AppSettings
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WatchlistUiState())
     val state: StateFlow<WatchlistUiState> = _state.asStateFlow()
 
+    private var kidsMode: Boolean = false
+
     init {
+        viewModelScope.launch {
+            profileManager.isKidsProfile().collect { isKids ->
+                kidsMode = isKids
+                republish()
+            }
+        }
+        viewModelScope.launch {
+            providerController.activeProviderId.collect { providerId ->
+                val filtered = filterByProvider(_state.value.allItems, _state.value.providerFilter, providerId)
+                val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
+                _state.update { it.copy(items = sorted) }
+            }
+        }
         viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { items ->
-                    val pid = ActiveProvider.id
+                    val pid = providerController.activeProviderId.value
                     val filtered = filterByProvider(items, _state.value.providerFilter, pid)
-                    val sorted = sortItems(filtered, _state.value.sortOption)
+                    val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
                     _state.update {
                         it.copy(
                             allItems = items,
@@ -104,16 +129,19 @@ class WatchlistViewModel @Inject constructor(
                             loading = false
                         )
                     }
+                    enrichWatchlistMetadata(items)
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
-                _state.update { it.copy(loading = false, error = context.getString(R.string.watchlist_error_loading)) }
+                _state.update {
+                    it.copy(loading = false, error = ErrorMapper.toUserMessage(e))
+                }
             }
         }
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progressList ->
-                    val pid = ActiveProvider.id
+                    val pid = providerController.activeProviderId.value
                     val slugs = progressList
                         .filter {
                             !it.isCompleted &&
@@ -155,10 +183,50 @@ class WatchlistViewModel @Inject constructor(
     }
 
     fun setProviderFilter(filter: WatchlistProviderFilter) {
-        val pid = ActiveProvider.id
+        val pid = providerController.activeProviderId.value
         val filtered = filterByProvider(_state.value.allItems, filter, pid)
-        val sorted = sortItems(filtered, _state.value.sortOption)
+        val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
         _state.update { it.copy(providerFilter = filter, items = sorted) }
+    }
+
+    private fun republish() {
+        val pid = providerController.activeProviderId.value
+        val filtered = filterByProvider(_state.value.allItems, _state.value.providerFilter, pid)
+        val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
+        _state.update { it.copy(items = sorted) }
+    }
+
+    private fun enrichWatchlistMetadata(items: List<WatchlistItem>) {
+        val needsEnrich = items.any { it.isAdult == null && it.genres.isNullOrBlank() }
+        if (!needsEnrich) return
+        viewModelScope.launch {
+            try {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val preferAnime = ActiveProvider.isAniWorld
+                var changed = false
+                val enriched = items.map { item ->
+                    if (item.isAdult != null && !item.genres.isNullOrBlank()) return@map item
+                    val series = catalogMetaEnricher.enrichOne(item.toSeries(), language, preferAnime)
+                    val updated = item.copy(
+                        coverUrl = series.coverUrl ?: item.coverUrl,
+                        isAdult = series.isAdult ?: item.isAdult,
+                        genres = WatchlistItem.genresToCsv(series.genres) ?: item.genres
+                    )
+                    if (updated != item) {
+                        changed = true
+                        watchRepo.upsertWatchlistItem(updated)
+                    }
+                    updated
+                }
+                if (!changed) return@launch
+                val pid = providerController.activeProviderId.value
+                val filtered = filterByProvider(enriched, _state.value.providerFilter, pid)
+                val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
+                _state.update { it.copy(allItems = enriched, items = sorted) }
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("WatchlistVM", "enrichWatchlistMetadata failed", e)
+            }
+        }
     }
 
     fun switchToProvider(providerId: String) {
@@ -214,7 +282,9 @@ fun WatchlistScreen(
         if (!state.loading && state.items.isNotEmpty()) {
             try {
                 initialFocus.requestFocus()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("WatchlistScreen", "focus request failed", e)
+            }
         }
     }
 
@@ -377,7 +447,7 @@ fun WatchlistScreen(
             }
         }
 
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.error != null -> PremiumError(
                     state.error ?: stringResource(R.string.watchlist_error_loading),
@@ -416,6 +486,7 @@ fun WatchlistScreen(
                                     series = item.toSeries(),
                                     onClick = { onSeriesClick(item.slug) },
                                     inWatchlist = true,
+                                    showWatchlistBadge = false,
                                     cardWidth = if (isTv) 160 else 130,
                                     focusRequester = if (isFirst) initialFocus else null
                                 )

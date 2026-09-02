@@ -1,6 +1,7 @@
 package com.novastream.app.di
 
 import android.content.Context
+import com.novastream.app.download.DownloadManagerHelper
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.profile.ProfileManager
 import dagger.Module
@@ -18,6 +19,7 @@ object ProfileModule {
     @Singleton
     fun provideProfileManager(
         @ApplicationContext context: Context,
-        db: NovaStreamDatabase
-    ): ProfileManager = ProfileManager(context, db)
+        db: NovaStreamDatabase,
+        downloadHelper: DownloadManagerHelper
+    ): ProfileManager = ProfileManager(context, db, downloadHelper)
 }

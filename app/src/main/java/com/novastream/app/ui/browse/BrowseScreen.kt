@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumError
 import com.novastream.app.ui.components.PremiumLoading
+import com.novastream.app.ui.components.ProviderHealthBanner
 import com.novastream.app.ui.components.SeriesPosterCard
 import com.novastream.app.ui.theme.*
 import com.novastream.app.ui.tv.TvUtils
@@ -57,7 +58,9 @@ fun BrowseScreen(
         if (!state.loading && state.items.isNotEmpty()) {
             try {
                 initialFocus.requestFocus()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("BrowseScreen", "focus request failed", e)
+            }
         }
     }
 
@@ -90,7 +93,7 @@ fun BrowseScreen(
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minPoster),
                 state = gridState,
-                contentPadding = PaddingValues(12.dp),
+                contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 80.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxSize()
@@ -153,6 +156,17 @@ fun BrowseScreen(
                                 }
                             }
                         }
+                    }
+                }
+
+                if (state.error != null && state.items.isNotEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        ProviderHealthBanner(
+                            providerName = state.providerName,
+                            loadDurationMs = null,
+                            error = state.error,
+                            onRetry = vm::refresh
+                        )
                     }
                 }
 

@@ -25,7 +25,11 @@ interface NovaStreamApi {
     suspend fun home(): String
 
     @GET("/suche")
-    suspend fun search(@Query("term") query: String): String
+    suspend fun search(
+        @Query("term") query: String,
+        @Query("tab") tab: String = "shows",
+        @Query("page") page: Int = 1
+    ): String
 
     @GET("/serie/{slug}")
     suspend fun seriesDetail(@Path("slug") slug: String): String

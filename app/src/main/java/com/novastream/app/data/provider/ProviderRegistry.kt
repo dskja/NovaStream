@@ -5,33 +5,70 @@ import com.novastream.app.provider.SiteProfileImporter
 
 /**
  * Central registry for all streaming providers with language tags and capability metadata.
- * Dynamic-URL providers receive [Context] via [initialize] from Hilt [com.novastream.app.di.ProviderModule].
+ * Dynamic-URL providers receive [Context] via [bindContext] / [initialize].
  */
 object ProviderRegistry {
+
+    const val DEFAULT_PROVIDER_ID: String = "serienstream"
 
     @Volatile
     private var entriesCache: List<RegisteredProvider>? = null
 
-    /** Called once at app startup from Hilt with @ApplicationContext. */
-    fun initialize(context: Context) {
-        if (entriesCache == null) {
-            synchronized(this) {
-                if (entriesCache == null) {
-                    entriesCache = buildRegistry(context.applicationContext)
-                }
-            }
+    @Volatile
+    private var initializedContext: Context? = null
+
+    private val buildLock = Any()
+
+    /**
+     * Lightweight context bind for [attachBaseContext] — no provider instantiation.
+     */
+    fun bindContext(context: Context) {
+        val appCtx = context.applicationContext
+        synchronized(this) {
+            if (initializedContext === appCtx) return
+            initializedContext = appCtx
+            SiteProfileImporter.bindContext(appCtx)
         }
     }
 
+    /**
+     * Ensures the full provider list is built. Safe to call from any thread; builds at most once.
+     */
+    fun ensureBuilt() {
+        if (entriesCache != null) return
+        synchronized(buildLock) {
+            if (entriesCache != null) return
+            entriesCache = buildRegistry(initializedContext)
+        }
+    }
+
+    fun isBuilt(): Boolean = entriesCache != null
+
+    /**
+     * Idempotent full init — [bindContext] plus [ensureBuilt].
+     */
+    fun initialize(context: Context) {
+        bindContext(context)
+        ensureBuilt()
+    }
+
     private val builtInEntries: List<RegisteredProvider>
-        get() = entriesCache ?: buildRegistry(appContext = null).also { entriesCache = it }
+        get() {
+            entriesCache?.let { return it }
+            synchronized(buildLock) {
+                entriesCache?.let { return it }
+                return buildRegistry(initializedContext).also { entriesCache = it }
+            }
+        }
 
     private fun allEntries(): List<RegisteredProvider> =
         builtInEntries + SiteProfileImporter.registeredProviders()
 
     val providers: List<StreamingProvider> get() = allEntries().map { it.provider }
 
-    val defaultProvider: StreamingProvider get() = builtInEntries.first().provider
+    val defaultProvider: StreamingProvider
+        get() = builtInEntries.firstOrNull { it.provider.id == DEFAULT_PROVIDER_ID }?.provider
+            ?: builtInEntries.first().provider
 
     fun allRegistered(): List<RegisteredProvider> = allEntries()
 
@@ -75,7 +112,8 @@ object ProviderRegistry {
     fun getProviderInfos(): List<ProviderInfo> = allEntries().map { it.toProviderInfo() }
 
     fun contentLanguageOf(providerId: String): ContentLanguage =
-        findRegistered(providerId)?.contentLanguage ?: ContentLanguage.MULTI
+        findRegistered(providerId)?.contentLanguage
+            ?: ProviderGenres.contentLanguageOf(providerId)
 
     private fun RegisteredProvider.toProviderInfo(): ProviderInfo = ProviderInfo(
         id = provider.id,
@@ -94,68 +132,68 @@ object ProviderRegistry {
     private fun buildRegistry(appContext: Context?): List<RegisteredProvider> {
         val ctx = appContext
         return listOf(
-            reg(SerienStreamProvider(), ContentLanguage.DE, movies = false, cap = capsSs()),
-            reg(SerienStreamCxProvider(), ContentLanguage.DE, movies = false, cap = capsSs()),
-            reg(AniWorldProvider(), ContentLanguage.DE, movies = false, cap = capsAniworld()),
-            reg(KinoGerProvider(), ContentLanguage.DE, movies = true, cap = capsKinoger()),
-            reg(BurningSeriesProvider(), ContentLanguage.DE, movies = false, cap = capsBs()),
-            reg(MegaKinoProvider(), ContentLanguage.DE, movies = true, cap = capsMegakino()),
-            reg(StreamKisteProvider(), ContentLanguage.DE, movies = true, cap = capsStreamkiste()),
-            reg(FilmPalastProvider(), ContentLanguage.DE, movies = true, cap = capsFilmpalast()),
-            reg(KinoZProvider(), ContentLanguage.DE, movies = true, cap = capsKinoz()),
-            reg(HdFilmeProvider(), ContentLanguage.DE, movies = true, cap = capsFmhy()),
-            reg(EinschaltenProvider(), ContentLanguage.DE, movies = true, series = false, cap = capsFmhy()),
+            reg(SerienStreamProvider(appContext = ctx), ContentLanguage.DE, movies = false, cap = capsSs()),
+            reg(SerienStreamCxProvider(appContext = ctx), ContentLanguage.DE, movies = false, cap = capsSs()),
+            reg(AniWorldProvider(appContext = ctx), ContentLanguage.DE, movies = false, cap = capsAniworld()),
+            reg(KinoGerProvider(appContext = ctx), ContentLanguage.DE, movies = true, cap = capsKinoger()),
+            reg(BurningSeriesProvider(appContext = ctx), ContentLanguage.DE, movies = false, cap = capsBs()),
+            reg(MegaKinoProvider(appContext = ctx), ContentLanguage.DE, movies = true, cap = capsMegakino()),
+            reg(StreamKisteProvider(appContext = ctx), ContentLanguage.DE, movies = true, cap = capsStreamkiste()),
+            reg(FilmPalastProvider(appContext = ctx), ContentLanguage.DE, movies = true, cap = capsFilmpalast()),
+            reg(KinoZProvider(appContext = ctx), ContentLanguage.DE, movies = true, cap = capsKinoz()),
+            reg(HdFilmeProvider(ctx), ContentLanguage.DE, movies = true, cap = capsFmhy()),
+            reg(EinschaltenProvider(ctx), ContentLanguage.DE, movies = true, series = false, cap = capsFmhy()),
             reg(FreeCatalogProvider(), ContentLanguage.MULTI, movies = false, cap = capsFree(), region = "Global"),
             reg(FreeCatalogBrowseProvider(), ContentLanguage.MULTI, movies = false, cap = capsFreeBrowse(), region = "Free Browse"),
-            reg(HydraHdProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(CinezoProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(ShowsStProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(PhantomFlixProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(FlixerProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(SflixProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(RidomoviesProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(AnikotoProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(DramaCoolProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(PressPlayProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(HydraHdProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(CinezoProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(ShowsStProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(PhantomFlixProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(FlixerProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(SflixProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(RidomoviesProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(AnikotoProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(DramaCoolProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(PressPlayProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
             reg(WiflixProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
             reg(FrenchStreamProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
-            reg(FrenchAnimeProvider(), ContentLanguage.FR, movies = true, cap = capsFmhy()),
-            reg(FrembedProvider(), ContentLanguage.FR, movies = true, cap = capsFmhy()),
-            reg(FanpelisProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(AnimeFlvProvider(), ContentLanguage.ES, movies = false, cap = capsFmhy()),
-            reg(JkAnimeProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(PelisplustoProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(DoramasflixProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(GuardaSerieProvider(), ContentLanguage.IT, movies = false, cap = capsFmhy()),
-            reg(Cb01Provider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(Altadefinizione01Provider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(AnimeUnityProvider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(StreamingCommunityItProvider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(StreamingCommunityEnProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(FilmyOnlineProvider(), ContentLanguage.PL, movies = true, cap = capsFmhy()),
-            reg(ZaluknijProvider(), ContentLanguage.PL, movies = true, cap = capsFmhy()),
-            reg(MkissaProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(Lookmovie2Provider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(Soap2dayProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(MkvMoviesProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(MoflixProvider(), ContentLanguage.DE, movies = true, cap = capsFmhy()),
+            reg(FrenchAnimeProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
+            reg(FrembedProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
+            reg(FanpelisProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(AnimeFlvProvider(ctx), ContentLanguage.ES, movies = false, cap = capsFmhy()),
+            reg(JkAnimeProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(PelisplustoProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(DoramasflixProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(GuardaSerieProvider(ctx), ContentLanguage.IT, movies = false, cap = capsFmhy()),
+            reg(Cb01Provider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(Altadefinizione01Provider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(AnimeUnityProvider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(StreamingCommunityItProvider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(StreamingCommunityEnProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(FilmyOnlineProvider(ctx), ContentLanguage.PL, movies = true, cap = capsFmhy()),
+            reg(ZaluknijProvider(ctx), ContentLanguage.PL, movies = true, cap = capsFmhy()),
+            reg(MkissaProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(Lookmovie2Provider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(Soap2dayProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(MkvMoviesProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(MoflixProvider(ctx), ContentLanguage.DE, movies = true, cap = capsFmhy()),
             reg(Cuevana3Provider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(PelisflixProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(AnimeworldProvider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(FilmpertuttiProvider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(Cineblog01Provider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(VoirfilmsProvider(), ContentLanguage.FR, movies = true, cap = capsFmhy()),
-            reg(NekoSamaProvider(), ContentLanguage.FR, movies = true, cap = capsFmhy()),
-            reg(HiAnimeProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(AnimeFenixProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(TioAnimeProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(SeriesFlixProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(AnyMovieProvider(), ContentLanguage.EN, movies = true, cap = capsFmhy()),
-            reg(FlixLatamProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(OtakuFrProvider(), ContentLanguage.FR, movies = true, cap = capsFmhy()),
-            reg(LatAnimeProvider(), ContentLanguage.ES, movies = true, cap = capsFmhy()),
-            reg(GuardaFlixProvider(), ContentLanguage.IT, movies = true, cap = capsFmhy()),
-            reg(CineCalidadProvider(), ContentLanguage.ES, movies = true, series = false, cap = capsFmhy())
+            reg(PelisflixProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(AnimeworldProvider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(FilmpertuttiProvider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(Cineblog01Provider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(VoirfilmsProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
+            reg(NekoSamaProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
+            reg(HiAnimeProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(AnimeFenixProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(TioAnimeProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(SeriesFlixProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(AnyMovieProvider(ctx), ContentLanguage.EN, movies = true, cap = capsFmhy()),
+            reg(FlixLatamProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(OtakuFrProvider(ctx), ContentLanguage.FR, movies = true, cap = capsFmhy()),
+            reg(LatAnimeProvider(ctx), ContentLanguage.ES, movies = true, cap = capsFmhy()),
+            reg(GuardaFlixProvider(ctx), ContentLanguage.IT, movies = true, cap = capsFmhy()),
+            reg(CineCalidadProvider(ctx), ContentLanguage.ES, movies = true, series = false, cap = capsFmhy())
         )
     }
 

@@ -14,12 +14,14 @@ import androidx.room.PrimaryKey
         Index(value = ["slug", "season", "episode"]),
         Index(value = ["updatedAt"]),
         Index(value = ["slug"]),
-        Index(value = ["providerId"])
+        Index(value = ["providerId"]),
+        Index(value = ["profileId"])
     ]
 )
 data class WatchProgress(
     @PrimaryKey
     val episodeKey: String,
+    val profileId: String = ProfileEntity.DEFAULT_ID,
     val providerId: String = "",
     val slug: String,
     val seriesTitle: String,
@@ -30,7 +32,9 @@ data class WatchProgress(
     val positionMs: Long,
     val durationMs: Long,
     val isMovie: Boolean = false,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    /** Adult flag from meta when progress was saved (kids filter). */
+    val isAdult: Boolean? = null
 ) {
     val progressPercent: Float
         get() = if (durationMs > 0 && positionMs >= 0) (positionMs.toFloat() / durationMs * 100f).coerceIn(0f, 100f) else 0f
@@ -55,7 +59,7 @@ data class WatchProgress(
         else "S${season}E${episode} - $episodeTitle"
 
     companion object {
-        fun key(providerId: String, slug: String, season: Int, episode: Int): String =
-            "$providerId|$slug-$season-$episode"
+        fun key(profileId: String, providerId: String, slug: String, season: Int, episode: Int): String =
+            "$profileId|$providerId|$slug-$season-$episode"
     }
 }

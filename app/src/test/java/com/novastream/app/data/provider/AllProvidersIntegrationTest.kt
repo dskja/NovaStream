@@ -152,13 +152,8 @@ class AllProvidersIntegrationTest {
         }
     }
 
-    private fun searchQueryFor(provider: StreamingProvider): String = when (provider.id) {
-        "aniworld" -> "Naruto"
-        "kinoger", "filmpalast", "kinoz", "megakino", "hydrahd", "cinezo" -> "Avatar"
-        "dramacool" -> "Squid Game"
-        "freecatalog" -> "Breaking Bad"
-        else -> "Dark"
-    }
+    private fun searchQueryFor(provider: StreamingProvider): String =
+        ProviderSearchQueries.forProvider(provider)
 
     private fun printReport(results: List<ProviderSmokeResult>) {
         println("\n=== NovaStream Provider Smoke Report ===")
