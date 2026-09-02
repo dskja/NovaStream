@@ -5,6 +5,7 @@ import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ProviderUrls
+import com.novastream.app.util.AdultContentDetector
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -89,6 +90,8 @@ object UniversalHtmlScraper {
         val cover = doc.selectFirst(profile.detailCoverSelector)?.let { absImg(it, profile.baseUrl) }
             ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
         val year = Regex("""\b((?:19|20)\d{2})\b""").find(title + " " + (description ?: ""))?.groupValues?.get(1)
+        val genres = extractGenres(doc)
+        val isAdult = AdultContentDetector.detectFromDocument(doc)
 
         val episodes = parseEpisodes(doc, profile, slug)
         var seasons = if (episodes.isNotEmpty()) {
@@ -128,11 +131,20 @@ object UniversalHtmlScraper {
             detailUrl = detailPath,
             description = description,
             year = year,
+            genres = genres,
             seasonCount = seasons.size.takeIf { it > 0 },
-            isMovie = isMovie
+            isMovie = isMovie,
+            isAdult = isAdult
         )
         return series to seasons
     }
+
+    private fun extractGenres(doc: Document): List<String> =
+        doc.select("a[href*=/genre/], a[href*=/genres/], .genre a, [class*=genre] a")
+            .mapNotNull { it.text().trim().ifBlank { null } }
+            .filter { it.length in 2..40 }
+            .distinct()
+            .take(12)
 
     private fun isMovieContent(providerId: String, slug: String, detailPath: String): Boolean =
         ProviderUrls.isMovieSlug(providerId, slug) ||

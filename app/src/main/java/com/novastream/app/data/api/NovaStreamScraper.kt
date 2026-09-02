@@ -7,6 +7,7 @@ import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
+import com.novastream.app.util.AdultContentDetector
 import com.novastream.app.data.model.NovaStreamConfig
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -401,6 +402,7 @@ object NovaStreamScraper {
         ) ?: extractYear(doc.text().take(2000))
 
         val rating = extractRating(doc)
+        val isAdult = AdultContentDetector.detectFromDocument(doc)
 
         val series = Series(
             id = slug,
@@ -412,7 +414,8 @@ object NovaStreamScraper {
             genres = genres,
             year = year,
             rating = rating,
-            seasonCount = parseSeasons(doc, slug).size.takeIf { it > 0 }
+            seasonCount = parseSeasons(doc, slug).size.takeIf { it > 0 },
+            isAdult = isAdult
         )
 
         return series to parseSeasons(doc, slug)

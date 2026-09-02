@@ -19,7 +19,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.novastream.app.profile.ProfileManager
 import com.novastream.app.util.AppContext
+import com.novastream.app.util.KidsContentFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -101,7 +103,8 @@ class PlayerViewModel @Inject constructor(
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
     private val downloadHelper: DownloadManagerHelper,
-    private val playbackRequestStore: PlaybackRequestStore
+    private val playbackRequestStore: PlaybackRequestStore,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val slug: String = run {
@@ -232,6 +235,15 @@ class PlayerViewModel @Inject constructor(
     private fun load() {
         _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
+            if (profileManager.getActiveProfile().isKids &&
+                KidsContentFilter.isBlockedForKidsPlayback(slug, seriesTitle, title)
+            ) {
+                _state.update {
+                    it.copy(loading = false, error = context.getString(R.string.kids_content_blocked))
+                }
+                return@launch
+            }
+
             if (!downloadId.isNullOrBlank()) {
                 val source = downloadHelper.offlineSourceFor(downloadId)
                 if (source == null) {

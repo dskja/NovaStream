@@ -89,13 +89,16 @@ class HomeViewModel @Inject constructor(
                     val pid = ActiveProvider.id
                     _state.update {
                         it.copy(
-                            continueWatching = progress.filter { p ->
-                                !p.isCompleted && (
-                                    p.providerId.isBlank() ||
-                                        p.providerId == pid ||
-                                        p.providerId == "unknown"
-                                    )
-                            }
+                            continueWatching = KidsContentFilter.filterProgress(
+                                progress.filter { p ->
+                                    !p.isCompleted && (
+                                        p.providerId.isBlank() ||
+                                            p.providerId == pid ||
+                                            p.providerId == "unknown"
+                                        )
+                                },
+                                kidsMode
+                            )
                         )
                     }
                 }
@@ -109,9 +112,12 @@ class HomeViewModel @Inject constructor(
                     val pid = ActiveProvider.id
                     _state.update {
                         it.copy(
-                            watchlist = list.filter { w ->
-                                w.providerId.isBlank() || w.providerId == pid
-                            }
+                            watchlist = KidsContentFilter.filterWatchlist(
+                                list.filter { w ->
+                                    w.providerId.isBlank() || w.providerId == pid
+                                },
+                                kidsMode
+                            )
                         )
                     }
                 }

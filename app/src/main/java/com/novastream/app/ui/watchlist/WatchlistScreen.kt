@@ -39,6 +39,8 @@ import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -84,17 +86,26 @@ enum class SortOption(@StringRes val labelRes: Int) {
 class WatchlistViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WatchlistUiState())
     val state: StateFlow<WatchlistUiState> = _state.asStateFlow()
 
+    private var kidsMode: Boolean = false
+
     init {
+        viewModelScope.launch {
+            profileManager.isKidsProfile().collect { isKids ->
+                kidsMode = isKids
+                republish()
+            }
+        }
         viewModelScope.launch {
             providerController.activeProviderId.collect { providerId ->
                 val filtered = filterByProvider(_state.value.allItems, _state.value.providerFilter, providerId)
-                val sorted = sortItems(filtered, _state.value.sortOption)
+                val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
                 _state.update { it.copy(items = sorted) }
             }
         }
@@ -103,7 +114,7 @@ class WatchlistViewModel @Inject constructor(
                 watchRepo.watchlist().collect { items ->
                     val pid = providerController.activeProviderId.value
                     val filtered = filterByProvider(items, _state.value.providerFilter, pid)
-                    val sorted = sortItems(filtered, _state.value.sortOption)
+                    val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
                     _state.update {
                         it.copy(
                             allItems = items,
@@ -166,8 +177,15 @@ class WatchlistViewModel @Inject constructor(
     fun setProviderFilter(filter: WatchlistProviderFilter) {
         val pid = providerController.activeProviderId.value
         val filtered = filterByProvider(_state.value.allItems, filter, pid)
-        val sorted = sortItems(filtered, _state.value.sortOption)
+        val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
         _state.update { it.copy(providerFilter = filter, items = sorted) }
+    }
+
+    private fun republish() {
+        val pid = providerController.activeProviderId.value
+        val filtered = filterByProvider(_state.value.allItems, _state.value.providerFilter, pid)
+        val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
+        _state.update { it.copy(items = sorted) }
     }
 
     fun switchToProvider(providerId: String) {
