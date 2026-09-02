@@ -132,7 +132,7 @@ object JikanMetaService {
     }
 
     /** Episode list for an anime (MAL id). Episodes are mapped to season 1. */
-    suspend fun episodes(malId: Int, maxPages: Int = 4): List<MetaEpisode> = withContext(Dispatchers.IO) {
+    suspend fun episodes(malId: Int, maxPages: Int = 8): List<MetaEpisode> = withContext(Dispatchers.IO) {
         if (malId <= 0) return@withContext emptyList()
         val result = mutableListOf<MetaEpisode>()
         var page = 1

@@ -66,7 +66,8 @@ import kotlinx.coroutines.launch
 fun DetailScreen(
     onBack: () -> Unit,
     onPlay: (slug: String, season: Int, episode: Int, title: String, seriesTitle: String, coverUrl: String?, isMovie: Boolean) -> Unit,
-    onRelatedClick: (String) -> Unit = {}
+    onRelatedClick: (String) -> Unit = {},
+    onNavigateToSlug: (String) -> Unit = onRelatedClick
 ) {
     val vm: DetailViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -79,6 +80,12 @@ fun DetailScreen(
     var castPlayer by remember { mutableStateOf<androidx.media3.cast.CastPlayer?>(null) }
     val appSettings = remember { com.novastream.app.data.prefs.AppSettings(context) }
     val castEnabled by appSettings.castEnabled.collectAsStateWithLifecycle(initialValue = true)
+
+    LaunchedEffect(Unit) {
+        vm.navigateToSlug.collect { targetSlug ->
+            onNavigateToSlug(targetSlug)
+        }
+    }
 
     LaunchedEffect(state.castStreamUrl, state.castStreamTitle) {
         val url = state.castStreamUrl ?: return@LaunchedEffect
@@ -125,7 +132,8 @@ fun DetailScreen(
                 onToggleWatched = vm::toggleEpisodeWatched,
                 onMarkSeasonWatched = vm::markSeasonAsWatched,
                 onMarkSeasonUnwatched = vm::markSeasonAsUnwatched,
-                onRelatedClick = onRelatedClick,
+                onRelatedSeriesClick = vm::openRelated,
+                onAlsoOnClick = vm::switchToAlsoOn,
                 onDownload = vm::downloadCurrentEpisode,
                 onCast = {
                     if (castEnabled && castHelper.isCastSessionActive()) {
@@ -157,7 +165,8 @@ private fun DetailContent(
     onToggleWatched: (Int, Int, String) -> Unit,
     onMarkSeasonWatched: (Int) -> Unit,
     onMarkSeasonUnwatched: (Int) -> Unit,
-    onRelatedClick: (String) -> Unit,
+    onRelatedSeriesClick: (com.novastream.app.data.model.Series) -> Unit,
+    onAlsoOnClick: (com.novastream.app.data.meta.ContentMappingResolver.AlsoOnEntry) -> Unit,
     onDownload: () -> Unit,
     onCast: () -> Unit,
     onRetrySeason: () -> Unit,
@@ -613,17 +622,22 @@ private fun DetailContent(
                         }
                     }
                 }
-                if (state.alsoOnProviders.isNotEmpty()) {
+                if (state.alsoOnEntries.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))
                     Text(stringResource(R.string.detail_also_on), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        state.alsoOnProviders.joinToString(" · "),
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        items(state.alsoOnEntries, key = { "${it.providerId}:${it.slug}" }) { entry ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { onAlsoOnClick(entry) },
+                                label = { Text(entry.displayName, fontSize = 12.sp) }
+                            )
+                        }
+                    }
                 }
                 // Series stats: seasons and total episodes
                 val totalEpisodes = state.seasons.sumOf { it.episodes.size }
@@ -863,7 +877,7 @@ private fun DetailContent(
                     items(state.relatedTitles, key = { it.id }) { related ->
                         SeriesPosterCard(
                             series = related,
-                            onClick = { onRelatedClick(related.id) }
+                            onClick = { onRelatedSeriesClick(related) }
                         )
                     }
                 }

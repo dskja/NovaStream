@@ -5,13 +5,16 @@ import com.novastream.app.data.model.Episode
 /** Merges provider-scraped episodes with free metadata (TVMaze/Epguides). */
 object EpisodeMetaMerger {
 
-    fun merge(providerEpisodes: List<Episode>, metaEpisodes: List<MetaEpisode>, season: Int): List<Episode> {
+    fun merge(providerEpisodes: List<Episode>, metaEpisodes: List<MetaEpisode>, season: Int, episodeNumberOffset: Int = 0): List<Episode> {
         if (metaEpisodes.isEmpty()) return providerEpisodes
         val byNumber = metaEpisodes
-            .filter { it.season == season || it.season <= 0 }
+            .filter {
+                episodeNumberOffset > 0 || it.season == season || it.season <= 0
+            }
             .associateBy { it.number }
         return providerEpisodes.map { ep ->
-            val meta = byNumber[ep.number] ?: return@map ep
+            val globalNum = ep.number + episodeNumberOffset
+            val meta = byNumber[globalNum] ?: byNumber[ep.number] ?: return@map ep
             ep.copy(
                 title = ep.title.takeIf { it.isNotBlank() && !it.equals("Episode ${ep.number}", true) }
                     ?: meta.title.ifBlank { ep.title },

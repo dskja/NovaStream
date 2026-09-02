@@ -29,7 +29,8 @@ object MetaEpisodeResolver {
         tvmazeId: String? = null,
         epguidesKey: String? = null,
         season: Int? = null,
-        idMal: Int? = null
+        idMal: Int? = null,
+        anilistId: Int? = null
     ): List<MetaEpisode> = withContext(Dispatchers.IO) {
         if (!tvmazeId.isNullOrBlank()) {
             val fromTvmaze = runCatching {
@@ -42,17 +43,24 @@ object MetaEpisodeResolver {
             ?: EpguidesMetaService.guessKeyFromTitle(title)
         val fromEpguides = runCatching { EpguidesMetaService.episodes(key, season) }.getOrDefault(emptyList())
         if (fromEpguides.isNotEmpty()) return@withContext fromEpguides
+        if (anilistId != null && anilistId > 0) {
+            val fromAni = runCatching { AniListMetaService.episodes(anilistId) }.getOrDefault(emptyList())
+            if (fromAni.isNotEmpty()) {
+                return@withContext filterAnimeEpisodesForSeason(fromAni, season)
+            }
+        }
         if (idMal != null && idMal > 0) {
             val fromJikan = runCatching { JikanMetaService.episodes(idMal) }.getOrDefault(emptyList())
             if (fromJikan.isNotEmpty()) {
-                return@withContext if (season != null && season != 1) {
-                    fromJikan.filter { it.season == season }
-                } else {
-                    fromJikan
-                }
+                return@withContext filterAnimeEpisodesForSeason(fromJikan, season)
             }
         }
         emptyList()
+    }
+
+    private fun filterAnimeEpisodesForSeason(episodes: List<MetaEpisode>, season: Int?): List<MetaEpisode> {
+        if (season == null || season <= 1) return episodes
+        return episodes.filter { it.season == season || it.season <= 0 }
     }
 
     suspend fun resolveEpguidesKey(title: String): String? {

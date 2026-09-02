@@ -40,17 +40,18 @@ data class ContentEntity(
             anilistId: Int? = null,
             wikidataId: String? = null,
             tmdbId: Int? = null,
-            idMal: Int? = null
+            idMal: Int? = null,
+            canonicalKeyOverride: String? = null
         ): ContentEntity? {
-            val key = when {
-                !imdbId.isNullOrBlank() -> "imdb:${imdbId.trim()}"
-                tmdbId != null && tmdbId > 0 -> "tmdb:$tmdbId"
-                !tvmazeId.isNullOrBlank() -> "tvmaze:${tvmazeId.trim()}"
-                anilistId != null && anilistId > 0 -> "anilist:$anilistId"
-                idMal != null && idMal > 0 -> "mal:$idMal"
-                !wikidataId.isNullOrBlank() -> "wikidata:${wikidataId.trim()}"
-                else -> return null
-            }
+            val ids = com.novastream.app.data.meta.ExternalIds(
+                imdbId = imdbId,
+                tvmazeId = tvmazeId,
+                anilistId = anilistId,
+                wikidataId = wikidataId,
+                tmdbId = tmdbId,
+                idMal = idMal
+            )
+            val key = canonicalKeyOverride?.takeIf { it.isNotBlank() } ?: ids.canonicalKey() ?: return null
             return ContentEntity(
                 slug = slug,
                 providerId = providerId,

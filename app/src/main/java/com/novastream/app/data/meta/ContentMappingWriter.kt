@@ -9,6 +9,7 @@ object ContentMappingWriter {
 
     fun entityFor(series: Series, enrichment: MetaEnrichment): ContentEntity? {
         val ids = enrichment.externalIds
+        val canonicalKey = enrichment.canonicalKey ?: ids.canonicalKey()
         return ContentEntity.fromExternalIds(
             slug = series.id,
             providerId = series.providerId?.takeIf { it.isNotBlank() } ?: "unknown",
@@ -18,7 +19,8 @@ object ContentMappingWriter {
             anilistId = ids.anilistId ?: enrichment.show.anilistId,
             wikidataId = ids.wikidataId ?: enrichment.show.wikidataId,
             tmdbId = ids.tmdbId ?: enrichment.show.tmdbId,
-            idMal = ids.idMal ?: enrichment.show.idMal
+            idMal = ids.idMal ?: enrichment.show.idMal,
+            canonicalKeyOverride = canonicalKey
         )
     }
 

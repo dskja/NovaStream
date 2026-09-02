@@ -10,6 +10,7 @@ import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderLanguageManager
 import com.novastream.app.data.provider.StreamingProvider
+import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.profile.ProfileManager
 import com.novastream.app.util.ErrorMapper
 import com.novastream.app.util.KidsContentFilter
@@ -45,7 +46,8 @@ class GlobalSearchViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val profileManager: ProfileManager,
     private val freeMetaGraph: FreeMetaGraph,
-    private val catalogMetaEnricher: CatalogMetaEnricher
+    private val catalogMetaEnricher: CatalogMetaEnricher,
+    private val appSettings: AppSettings
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GlobalSearchUiState())
@@ -55,6 +57,14 @@ class GlobalSearchViewModel @Inject constructor(
     private var kidsMode: Boolean = false
 
     init {
+        viewModelScope.launch {
+            appSettings.contentLanguage.collect { tag ->
+                val lang = ContentLanguage.fromTag(tag)
+                if (_state.value.contentLanguage != lang) {
+                    _state.update { it.copy(contentLanguage = lang) }
+                }
+            }
+        }
         viewModelScope.launch {
             profileManager.isKidsProfile().collect { isKids ->
                 kidsMode = isKids
@@ -159,14 +169,20 @@ class GlobalSearchViewModel @Inject constructor(
         val preferAnime = query.contains("anime", ignoreCase = true) ||
             ActiveProvider.isAniWorld
         val language = _state.value.contentLanguage
+        val enrichedProviders = catalogMetaEnricher.enrichProviderResults(
+            providerResults,
+            language,
+            preferAnime,
+            limitPerProvider = 20
+        )
         val metaSeries = freeMetaGraph.search(query, preferAnime = preferAnime, limit = 15)
             .map { show ->
                 val stub = freeMetaGraph.toSeries(show, "free-meta")
                 catalogMetaEnricher.enrichOne(stub, language, preferAnime)
             }
         val combined = if (metaSeries.isNotEmpty()) {
-            providerResults + ("free-meta" to metaSeries)
-        } else providerResults
+            enrichedProviders + ("free-meta" to metaSeries)
+        } else enrichedProviders
         return SearchResultAggregator.aggregate(combined)
     }
 

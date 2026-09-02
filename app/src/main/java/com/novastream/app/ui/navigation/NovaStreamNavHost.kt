@@ -378,8 +378,10 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     onPlay = { slug, season, episode, title, seriesTitle, coverUrl, isMovie ->
                         nav.navigate(Routes.player(slug, season, episode, title, seriesTitle, coverUrl, isMovie))
                     },
-                    onRelatedClick = { relatedSlug ->
-                        nav.navigate(Routes.detail(relatedSlug))
+                    onNavigateToSlug = { targetSlug ->
+                        nav.navigate(Routes.detail(targetSlug)) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }

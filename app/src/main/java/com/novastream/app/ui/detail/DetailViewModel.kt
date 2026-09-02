@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.ContentDao
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.meta.AgeRatingResolver
+import com.novastream.app.data.meta.ContentMappingResolver
+import com.novastream.app.data.meta.ContentMappingResolver.AlsoOnEntry
 import com.novastream.app.data.meta.ContentMappingWriter
 import com.novastream.app.data.meta.EpisodeMetaMerger
 import com.novastream.app.data.meta.ExternalIds
@@ -39,6 +41,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -66,7 +71,7 @@ data class DetailUiState(
     val imdbId: String? = null,
     val trailerUrl: String? = null,
     val relatedTitles: List<Series> = emptyList(),
-    val alsoOnProviders: List<String> = emptyList(),
+    val alsoOnEntries: List<AlsoOnEntry> = emptyList(),
     val loadedProviderId: String? = null,
     val providerMismatch: Boolean = false,
     val downloadMessage: String? = null,
@@ -149,10 +154,14 @@ class DetailViewModel @Inject constructor(
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
+    private val _navigateToSlug = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val navigateToSlug: SharedFlow<String> = _navigateToSlug.asSharedFlow()
+
     private var loadedProviderId: String? = null
     private var metaTvmazeId: String? = null
     private var metaEpguidesKey: String? = null
     private var metaIdMal: Int? = null
+    private var metaAnilistId: Int? = null
 
     private fun clearMetaState() = _state.update {
         it.copy(
@@ -166,7 +175,7 @@ class DetailViewModel @Inject constructor(
             imdbId = null,
             trailerUrl = null,
             relatedTitles = emptyList(),
-            alsoOnProviders = emptyList()
+            alsoOnEntries = emptyList()
         )
     }
 
@@ -212,6 +221,7 @@ class DetailViewModel @Inject constructor(
                     metaTvmazeId = null
                     metaEpguidesKey = null
                     metaIdMal = null
+                    metaAnilistId = null
                     load()
                 }
             }
@@ -493,15 +503,12 @@ class DetailViewModel @Inject constructor(
         metaTvmazeId = ids.tvmazeId ?: meta.tvmazeId
         metaEpguidesKey = ids.epguidesKey ?: meta.epguidesKey
         metaIdMal = ids.idMal ?: meta.idMal
+        metaAnilistId = ids.anilistId ?: meta.anilistId ?: series.anilistId
 
-        val alsoOn = enrichment.canonicalKey?.let { key ->
-            contentDao.findByCanonicalKeyExcluding(key, providerId)
-                .mapNotNull { ProviderRegistry.getProviderOrNull(it.providerId)?.displayName }
-                .distinct()
-        } ?: emptyList()
+        val alsoOn = ContentMappingResolver.alsoOnEntries(contentDao, enrichment, providerId)
 
-        val similar = enrichment.similar.take(20).map { similarShow ->
-            freeMetaGraph.toSeries(similarShow, providerId)
+        val similar = enrichment.similar.take(20).mapNotNull { similarShow ->
+            resolveSimilarSeries(similarShow, providerId)
         }
 
         if (profileManager.getActiveProfile().isKids && !KidsContentFilter.isKidsSafe(enriched)) {
@@ -512,7 +519,7 @@ class DetailViewModel @Inject constructor(
                     error = appContext.getString(R.string.kids_content_blocked),
                     metaCast = emptyList(),
                     relatedTitles = emptyList(),
-                    alsoOnProviders = emptyList()
+                    alsoOnEntries = emptyList()
                 )
             }
             return
@@ -538,10 +545,62 @@ class DetailViewModel @Inject constructor(
                 imdbId = ids.imdbId ?: meta.imdbId,
                 trailerUrl = trailerUrl,
                 relatedTitles = similar.ifEmpty { it.relatedTitles },
-                alsoOnProviders = alsoOn
+                alsoOnEntries = alsoOn
             )
         }
         enrichLoadedSeasons()
+    }
+
+    fun switchToAlsoOn(entry: AlsoOnEntry) {
+        viewModelScope.launch {
+            if (ProviderRegistry.getProviderOrNull(entry.providerId) == null) return@launch
+            providerController.setActiveProvider(entry.providerId)
+            slug = entry.slug
+            loadedProviderId = null
+            clearMetaState()
+            metaTvmazeId = null
+            metaEpguidesKey = null
+            metaIdMal = null
+            metaAnilistId = null
+            _state.update {
+                DetailUiState(
+                    loading = true,
+                    inWatchlist = it.inWatchlist,
+                    episodeProgress = it.episodeProgress,
+                    progressBySeasonEpisode = it.progressBySeasonEpisode,
+                    currentProgress = it.currentProgress
+                )
+            }
+            _navigateToSlug.emit(entry.slug)
+            load()
+        }
+    }
+
+    fun openRelated(related: Series) {
+        viewModelScope.launch {
+            val resolved = resolveProviderSlug(related) ?: return@launch
+            _navigateToSlug.emit(resolved)
+        }
+    }
+
+    private suspend fun resolveProviderSlug(target: Series): String? =
+        ContentMappingResolver.resolveProviderSlug(
+            dao = contentDao,
+            target = target,
+            providerId = ActiveProvider.id,
+            searchByTitle = { title ->
+                when (val res = repo.search(title)) {
+                    is NovaStreamRepository.RepoResult.Success ->
+                        res.data.firstOrNull { FreeMetaService.titlesSimilar(title, it.title) }
+                    else -> null
+                }
+            }
+        )
+
+    private suspend fun resolveSimilarSeries(metaShow: com.novastream.app.data.meta.MetaShow, providerId: String): Series? {
+        val stub = freeMetaGraph.toSeries(metaShow, providerId)
+        val slug = resolveProviderSlug(stub) ?: return null
+        return stub.copy(id = slug, providerId = providerId)
     }
 
     private suspend fun enrichLoadedSeasons() {
@@ -568,9 +627,18 @@ class DetailViewModel @Inject constructor(
             tvmazeId = metaTvmazeId ?: resolvedSeries.tvmazeId,
             epguidesKey = metaEpguidesKey,
             season = seasonNum,
-            idMal = metaIdMal
+            idMal = metaIdMal,
+            anilistId = metaAnilistId ?: resolvedSeries.anilistId
         )
-        return EpisodeMetaMerger.merge(eps, metaEps, seasonNum)
+        val offset = episodeNumberOffset(_state.value.seasons, seasonNum)
+        return EpisodeMetaMerger.merge(eps, metaEps, seasonNum, episodeNumberOffset = offset)
+    }
+
+    private fun episodeNumberOffset(seasons: List<Season>, seasonNum: Int): Int {
+        if (seasonNum <= 1) return 0
+        return seasons
+            .filter { it.number < seasonNum }
+            .sumOf { season -> season.episodes.maxOfOrNull { it.number } ?: season.episodes.size }
     }
 
     private fun mergeSeriesWithMeta(

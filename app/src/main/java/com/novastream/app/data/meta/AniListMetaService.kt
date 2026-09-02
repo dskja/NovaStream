@@ -118,6 +118,67 @@ object AniListMetaService {
         TrailerMetaService.parseAniListTrailer(trailer)
     }
 
+    suspend fun episodes(anilistId: Int, maxPages: Int = 4): List<MetaEpisode> = withContext(Dispatchers.IO) {
+        if (anilistId <= 0) return@withContext emptyList()
+        val all = mutableListOf<MetaEpisode>()
+        for (page in 1..maxPages.coerceIn(1, 8)) {
+            val gql = """
+                query(${'$'}id: Int, ${'$'}page: Int) {
+                  Media(id: ${'$'}id, type: ANIME) {
+                    episodes(page: ${'$'}page, perPage: 50, sort: EPISODE) {
+                      episode
+                      title { romaji english }
+                      thumbnail
+                      duration
+                      airingAt
+                    }
+                  }
+                }
+            """.trimIndent()
+            val body = postGraphQl(
+                gql,
+                JSONObject().put("id", anilistId).put("page", page)
+            ) ?: break
+            val eps = body.optJSONObject("data")
+                ?.optJSONObject("Media")
+                ?.optJSONArray("episodes")
+                ?: break
+            if (eps.length() == 0) break
+            for (i in 0 until eps.length()) {
+                parseEpisodeNode(eps.getJSONObject(i))?.let { all.add(it) }
+            }
+            if (eps.length() < 50) break
+        }
+        all
+    }
+
+    fun parseEpisodeNode(obj: JSONObject): MetaEpisode? {
+        val number = obj.optInt("episode", -1)
+        if (number <= 0) return null
+        val titles = obj.optJSONObject("title")
+        val title = titles?.optString("english")?.takeIf { it.isNotBlank() && it != "null" }
+            ?: titles?.optString("romaji")?.takeIf { it.isNotBlank() && it != "null" }
+            ?: "Episode $number"
+        val airedAt = obj.optLong("airingAt", 0L).takeIf { it > 0 }
+        val airdate = airedAt?.let {
+            java.time.Instant.ofEpochSecond(it)
+                .atZone(java.time.ZoneOffset.UTC)
+                .toLocalDate()
+                .toString()
+        }
+        val runtime = obj.optInt("duration", -1).takeIf { it > 0 }
+        val thumb = obj.optString("thumbnail").takeIf { it.isNotBlank() && it != "null" }
+        return MetaEpisode(
+            id = "anilist-ep-$number",
+            season = 1,
+            number = number,
+            title = title,
+            airdate = airdate,
+            runtime = runtime,
+            imageUrl = thumb
+        )
+    }
+
     suspend fun trending(limit: Int = 20): List<MetaShow> = withContext(Dispatchers.IO) {
         val gql = """
             query(${ '$' }perPage: Int) {

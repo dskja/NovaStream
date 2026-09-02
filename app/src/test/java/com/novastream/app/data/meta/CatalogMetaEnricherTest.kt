@@ -16,6 +16,17 @@ class CatalogMetaEnricherTest {
         override suspend fun upsert(entity: ContentEntity) {}
         override suspend fun findByCanonicalKeyExcluding(canonicalKey: String, excludeProviderId: String) =
             emptyList<ContentEntity>()
+        override suspend fun findByCanonicalKeyAndProvider(canonicalKey: String, providerId: String): ContentEntity? = null
+        override suspend fun findByImdbAndProvider(imdbId: String, providerId: String): ContentEntity? = null
+        override suspend fun findByTvmazeAndProvider(tvmazeId: String, providerId: String): ContentEntity? = null
+        override suspend fun findByAnilistAndProvider(anilistId: Int, providerId: String): ContentEntity? = null
+        override suspend fun findRelatedExcluding(
+            excludeProviderId: String,
+            imdbId: String?,
+            tvmazeId: String?,
+            anilistId: Int?,
+            wikidataId: String?
+        ): List<ContentEntity> = emptyList()
         override suspend fun findByProviderSlug(providerId: String, slug: String): ContentEntity? = null
     }
 

@@ -165,9 +165,16 @@ class SearchViewModel @Inject constructor(
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id == expected) {
                             val trending = res.data.trending.ifEmpty { res.data.popular }
+                            val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                            val enriched = catalogMetaEnricher.enrichList(
+                                trending,
+                                language,
+                                preferAnime = ActiveProvider.isAniWorld,
+                                limit = 20
+                            )
                             _state.update {
                                 it.copy(
-                                    trending = KidsContentFilter.filterSeries(trending, kidsMode).take(20),
+                                    trending = KidsContentFilter.filterSeries(enriched, kidsMode).take(20),
                                     trendingError = null
                                 )
                             }
@@ -177,9 +184,16 @@ class SearchViewModel @Inject constructor(
                         when (val popular = repo.loadPopular()) {
                             is NovaStreamRepository.RepoResult.Success -> {
                                 if (ActiveProvider.id == expected) {
+                                    val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                                    val enriched = catalogMetaEnricher.enrichList(
+                                        popular.data,
+                                        language,
+                                        preferAnime = ActiveProvider.isAniWorld,
+                                        limit = 20
+                                    )
                                     _state.update {
                                         it.copy(
-                                            trending = KidsContentFilter.filterSeries(popular.data, kidsMode).take(20),
+                                            trending = KidsContentFilter.filterSeries(enriched, kidsMode).take(20),
                                             trendingError = null
                                         )
                                     }
@@ -287,14 +301,20 @@ class SearchViewModel @Inject constructor(
         language: ContentLanguage,
         preferAnime: Boolean
     ): List<com.novastream.app.data.model.Series> {
+        val enrichedProviders = catalogMetaEnricher.enrichProviderResults(
+            providerResults,
+            language,
+            preferAnime,
+            limitPerProvider = 24
+        )
         val metaSeries = freeMetaGraph.search(query, preferAnime = preferAnime, limit = 12)
             .map { show ->
                 val stub = freeMetaGraph.toSeries(show, "free-meta")
                 catalogMetaEnricher.enrichOne(stub, language, preferAnime)
             }
         val combined = if (metaSeries.isNotEmpty()) {
-            providerResults + ("free-meta" to metaSeries)
-        } else providerResults
+            enrichedProviders + ("free-meta" to metaSeries)
+        } else enrichedProviders
         return SearchResultAggregator.aggregate(combined)
     }
 }

@@ -13,6 +13,20 @@ class CatalogMetaEnricher @Inject constructor(
     private val contentDao: ContentDao
 ) {
 
+    suspend fun enrichProviderResults(
+        providerResults: List<Pair<String, List<Series>>>,
+        language: ContentLanguage,
+        preferAnime: Boolean = false,
+        limitPerProvider: Int = 24
+    ): List<Pair<String, List<Series>>> = providerResults.map { (providerId, items) ->
+        providerId to enrichList(
+            items.map { it.copy(providerId = providerId) },
+            language,
+            preferAnime,
+            limit = limitPerProvider
+        )
+    }
+
     suspend fun enrichList(
         items: List<Series>,
         language: ContentLanguage,
