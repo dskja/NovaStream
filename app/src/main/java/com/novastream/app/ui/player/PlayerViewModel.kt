@@ -126,6 +126,9 @@ class PlayerViewModel @Inject constructor(
     }?.takeIf { it.isNotBlank() }
     private val isMovie: Boolean = savedStateHandle.get<Boolean>("isMovie") ?: false
     private val isLive: Boolean = savedStateHandle.get<Boolean>("isLive") ?: false
+    private val downloadId: String? = savedStateHandle.get<String>("downloadId")?.let {
+        try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
+    }?.takeIf { it.isNotBlank() }
     private val directStreamUrl: String? = savedStateHandle.get<String>("streamUrl")?.let {
         try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     }?.takeIf { it.isNotBlank() }
@@ -221,6 +224,30 @@ class PlayerViewModel @Inject constructor(
     private fun load() {
         _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
+            if (!downloadId.isNullOrBlank()) {
+                val source = downloadHelper.offlineSourceFor(downloadId)
+                if (source == null) {
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            error = context.getString(R.string.player_no_hosters_found)
+                        )
+                    }
+                    return@launch
+                }
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        hosters = listOf(HosterLink(name = "Offline", redirectUrl = source.url, language = "Offline", index = 0)),
+                        sources = listOf(source),
+                        selectedHosterIndex = 0,
+                        selectedSourceIndex = 0,
+                        error = null
+                    )
+                }
+                return@launch
+            }
+
             if (!directStreamUrl.isNullOrBlank()) {
                 val url = directPlaybackUrl(directStreamUrl)
                 val label = if (isLive) "Live" else "Offline"
@@ -341,7 +368,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun retry() {
-        if (!directStreamUrl.isNullOrBlank()) {
+        if (!downloadId.isNullOrBlank() || !directStreamUrl.isNullOrBlank()) {
             load()
             return
         }

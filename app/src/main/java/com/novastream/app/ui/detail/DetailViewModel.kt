@@ -556,6 +556,7 @@ class DetailViewModel @Inject constructor(
                                     source = source,
                                     profileId = profileId
                                 )
+                                downloadHelper.resumeDownloads()
                                 _state.update { it.copy(downloading = false, downloadMessage = "detail_download_started") }
                             }
                             else -> _state.update { it.copy(downloading = false, downloadMessage = "detail_download_failed") }

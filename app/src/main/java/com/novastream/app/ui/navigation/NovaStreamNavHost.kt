@@ -65,7 +65,7 @@ object Routes {
     const val SETTINGS_PLAYBACK = "settings/playback"
     const val SETTINGS_APPEARANCE = "settings/appearance"
     const val SETTINGS_ADVANCED = "settings/advanced"
-    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}&streamUrl={streamUrl}&isLive={isLive}"
+    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}&streamUrl={streamUrl}&isLive={isLive}&downloadId={downloadId}"
 
     fun browse(section: String = "", genre: String? = null, filter: String? = null): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
@@ -85,14 +85,16 @@ object Routes {
         coverUrl: String? = null,
         isMovie: Boolean = false,
         streamUrl: String? = null,
-        isLive: Boolean = false
+        isLive: Boolean = false,
+        downloadId: String? = null
     ): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
         val t = enc(title)
         val st = enc(seriesTitle)
         val cu = coverUrl?.let { enc(it) } ?: ""
         val su = streamUrl?.let { enc(it) } ?: ""
-        return "player/${enc(slug)}/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive"
+        val did = downloadId?.let { enc(it) } ?: ""
+        return "player/${enc(slug)}/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive&downloadId=$did"
     }
 
     /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
@@ -325,7 +327,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
             composable(Routes.DOWNLOADS) {
                 com.novastream.app.ui.downloads.DownloadsScreen(
                     onBack = { nav.popBackStack() },
-                    onPlay = { item, playbackUrl ->
+                    onPlay = { item, _ ->
                         nav.navigate(
                             Routes.player(
                                 slug = item.slug,
@@ -334,8 +336,8 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                                 title = item.episodeTitle,
                                 seriesTitle = item.title,
                                 coverUrl = item.coverUrl,
-                                isMovie = false,
-                                streamUrl = playbackUrl
+                                isMovie = item.slug.startsWith("movie"),
+                                downloadId = item.downloadId
                             )
                         )
                     }
@@ -390,7 +392,8 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     navArgument("coverUrl") { type = NavType.StringType; defaultValue = "" },
                     navArgument("isMovie") { type = NavType.BoolType; defaultValue = false },
                     navArgument("streamUrl") { type = NavType.StringType; defaultValue = "" },
-                    navArgument("isLive") { type = NavType.BoolType; defaultValue = false }
+                    navArgument("isLive") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("downloadId") { type = NavType.StringType; defaultValue = "" }
                 ),
                 enterTransition = {
                     androidx.compose.animation.slideInVertically(

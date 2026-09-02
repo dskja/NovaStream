@@ -235,6 +235,10 @@ fun PlayerScreen(
             .setUri(url)
             .setMimeType(src.mimeType)
 
+        src.cacheKey?.takeIf { it.isNotBlank() }?.let { key ->
+            mediaItemBuilder.setCustomCacheKey(key)
+        }
+
         src.subtitleUrl?.takeIf { it.isNotBlank() }?.let { subUrl ->
             mediaItemBuilder.setSubtitleConfigurations(
                 listOf(

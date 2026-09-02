@@ -1,6 +1,7 @@
 package com.novastream.app.download
 
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -15,6 +16,7 @@ import com.novastream.app.data.db.DownloadDao
 import com.novastream.app.data.db.DownloadEntity
 import com.novastream.app.data.db.DownloadStatus
 import com.novastream.app.data.db.NovaStreamDatabase
+import com.novastream.app.data.db.ProfileEntity
 import com.novastream.app.data.model.NovaStreamConfig
 import com.novastream.app.data.model.StreamSource
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -86,7 +88,7 @@ class DownloadManagerHelper @Inject constructor(
         episode: Int,
         coverUrl: String?,
         source: StreamSource,
-        profileId: String = com.novastream.app.data.db.ProfileEntity.DEFAULT_ID
+        profileId: String = ProfileEntity.DEFAULT_ID
     ): String {
         require(source.isPlayable) { "Stream URL not playable" }
         val id = DownloadEntity.key(profileId, providerId, slug, season, episode)
@@ -108,26 +110,14 @@ class DownloadManagerHelper @Inject constructor(
         )
         downloadDao.upsert(entity)
 
-        val request = DownloadRequest.Builder(id, android.net.Uri.parse(secureUrl))
-            .setMimeType(source.mimeType)
-            .setCustomCacheKey(id)
-            .build()
-        downloadManager.addDownload(request)
-        Media3DownloadService.sendAddDownload(
-            context,
-            DownloadForegroundService::class.java,
-            request,
-            false
-        )
+        val request = buildDownloadRequest(id, secureUrl, source.mimeType)
+        startDownload(request)
         return id
     }
 
     suspend fun retryDownload(entity: DownloadEntity) {
         downloadManager.removeDownload(entity.downloadId)
-        val request = DownloadRequest.Builder(entity.downloadId, android.net.Uri.parse(entity.streamUrl))
-            .setMimeType(entity.mimeType)
-            .setCustomCacheKey(entity.downloadId)
-            .build()
+        val request = buildDownloadRequest(entity.downloadId, entity.streamUrl, entity.mimeType)
         downloadDao.upsert(
             entity.copy(
                 status = DownloadStatus.QUEUED,
@@ -137,18 +127,19 @@ class DownloadManagerHelper @Inject constructor(
                 updatedAt = System.currentTimeMillis()
             )
         )
-        downloadManager.addDownload(request)
-        Media3DownloadService.sendAddDownload(
-            context,
-            DownloadForegroundService::class.java,
-            request,
-            false
-        )
+        startDownload(request)
     }
 
     suspend fun removeDownload(id: String) {
         downloadManager.removeDownload(id)
         downloadDao.delete(id)
+    }
+
+    suspend fun removeDownloadsForProfile(profileId: String) {
+        downloadDao.getAllForProfile(profileId).forEach { entity ->
+            runCatching { downloadManager.removeDownload(entity.downloadId) }
+        }
+        downloadDao.deleteForProfile(profileId)
     }
 
     suspend fun getStorageUsedBytes(profileId: String? = null): Long =
@@ -167,16 +158,58 @@ class DownloadManagerHelper @Inject constructor(
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 
-    fun resolvePlaybackUrl(entity: DownloadEntity): String {
-        if (entity.status != DownloadStatus.COMPLETED) return entity.streamUrl
-        val download = runCatching { downloadManager.downloadIndex.getDownload(entity.downloadId) }.getOrNull()
-        if (download != null && download.state == Download.STATE_COMPLETED) {
-            return download.request.uri.toString()
-        }
-        return entity.localPath?.takeIf { it.isNotBlank() } ?: entity.streamUrl
+    /** Resume queued/in-progress downloads after app restart. */
+    fun resumeDownloads() {
+        downloadManager // ensure initialized
+        DownloadForegroundService.ensureChannel(context)
+        Media3DownloadService.start(context, DownloadForegroundService::class.java)
+        downloadManager.resumeDownloads()
+    }
+
+    fun resolvePlaybackUrl(entity: DownloadEntity): String =
+        offlineSourceFor(entity.downloadId)?.url ?: entity.streamUrl
+
+    /** Build a [StreamSource] for offline playback with the correct Media3 cache key. */
+    fun offlineSourceFor(downloadId: String): StreamSource? {
+        val download = runCatching { downloadManager.downloadIndex.getDownload(downloadId) }.getOrNull()
+            ?: return null
+        if (download.state != Download.STATE_COMPLETED) return null
+        val request = download.request
+        val url = request.uri.toString()
+        val mimeType = request.mimeType?.takeIf { it.isNotBlank() }
+            ?: inferMimeType(url)
+        val isHls = isHlsMime(mimeType) || url.contains(".m3u8", ignoreCase = true)
+        val cacheKey = request.customCacheKey?.takeIf { it.isNotBlank() }
+            ?: if (!isHls) downloadId else null
+        return StreamSource(
+            hoster = "Offline",
+            url = url,
+            mimeType = mimeType,
+            isHls = isHls,
+            cacheKey = cacheKey
+        )
     }
 
     suspend fun getDownloadCount(): Int = downloadDao.count()
+
+    internal fun buildDownloadRequest(id: String, url: String, mimeType: String): DownloadRequest {
+        val builder = DownloadRequest.Builder(id, Uri.parse(url))
+            .setMimeType(mimeType)
+        if (!isHlsMime(mimeType) && !url.contains(".m3u8", ignoreCase = true)) {
+            builder.setCustomCacheKey(id)
+        }
+        return builder.build()
+    }
+
+    private fun startDownload(request: DownloadRequest) {
+        downloadManager // ensure initialized
+        Media3DownloadService.sendAddDownload(
+            context,
+            DownloadForegroundService::class.java,
+            request,
+            false
+        )
+    }
 
     private suspend fun syncAllFromMedia3() {
         downloadManager.currentDownloads.forEach { syncDownload(it, null) }
@@ -210,6 +243,13 @@ class DownloadManagerHelper @Inject constructor(
         Download.STATE_REMOVING -> DownloadStatus.REMOVED
         else -> DownloadStatus.QUEUED
     }
+
+    private fun isHlsMime(mimeType: String): Boolean =
+        mimeType.contains("mpegURL", ignoreCase = true) ||
+            mimeType.contains("m3u8", ignoreCase = true)
+
+    private fun inferMimeType(url: String): String =
+        if (url.contains(".m3u8", ignoreCase = true)) "application/x-mpegURL" else "video/mp4"
 
     fun release() {
         runCatching { downloadManager.release() }

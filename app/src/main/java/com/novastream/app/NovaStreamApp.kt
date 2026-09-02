@@ -31,6 +31,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     @Inject lateinit var database: NovaStreamDatabase
     @Inject lateinit var providerController: ProviderController
+    @Inject lateinit var downloadHelper: com.novastream.app.download.DownloadManagerHelper
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -52,6 +53,9 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         AppContext.init(this)
         com.novastream.app.telemetry.PlaySuccessTracker.init(this)
         com.novastream.app.download.DownloadForegroundService.ensureChannel(this)
+        appScope.launch {
+            runCatching { downloadHelper.resumeDownloads() }
+        }
         runCatching { com.novastream.app.cast.CastHelper.get(this) }
         VoeWebViewResolver.setContext(this)
         CaptchaWebViewFetcher.setContext(this)

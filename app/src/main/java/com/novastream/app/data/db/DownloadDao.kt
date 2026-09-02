@@ -13,6 +13,9 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE profileId = :profileId ORDER BY createdAt DESC")
     fun observeAll(profileId: String): Flow<List<DownloadEntity>>
 
+    @Query("SELECT * FROM downloads WHERE profileId = :profileId")
+    suspend fun getAllForProfile(profileId: String): List<DownloadEntity>
+
     @Query("SELECT * FROM downloads WHERE downloadId = :id LIMIT 1")
     suspend fun getById(id: String): DownloadEntity?
 

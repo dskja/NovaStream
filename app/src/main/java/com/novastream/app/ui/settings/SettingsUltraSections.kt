@@ -11,7 +11,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.R
+import com.novastream.app.di.DownloadEntryPoint
 import com.novastream.app.download.DownloadForegroundService
+import dagger.hilt.android.EntryPointAccessors
 import com.novastream.app.provider.SiteProfileImporter
 import com.novastream.app.ui.profile.ProfilePickerSection
 import kotlinx.coroutines.flow.first
@@ -61,6 +63,9 @@ fun SettingsUltraSections(
     SettingsAction(stringResource(R.string.settings_downloads_init),
         stringResource(R.string.settings_downloads_init_sub)) {
         DownloadForegroundService.ensureChannel(context)
+        val helper = EntryPointAccessors.fromApplication(context, DownloadEntryPoint::class.java)
+            .downloadManagerHelper()
+        helper.resumeDownloads()
         statusMessage = context.getString(R.string.settings_downloads_ready)
     }
 
