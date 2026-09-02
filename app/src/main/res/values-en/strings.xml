@@ -409,6 +409,7 @@
     <string name="settings_profile_switched">Profile \"%1$s\" active</string>
     <string name="settings_profile_pin_wrong">Wrong PIN</string>
     <string name="settings_profile_kids">Kids profile</string>
+    <string name="kids_content_blocked">This content is not available in kids profile.</string>
     <string name="settings_epg_url">EPG URL (XMLTV)</string>
     <string name="settings_epg_save">Save EPG</string>
     <string name="settings_epg_saved">EPG URL saved</string>

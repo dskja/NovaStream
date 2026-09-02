@@ -8,7 +8,9 @@ import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderLanguageManager
 import com.novastream.app.data.provider.StreamingProvider
+import com.novastream.app.profile.ProfileManager
 import com.novastream.app.util.ErrorMapper
+import com.novastream.app.util.KidsContentFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -38,13 +40,25 @@ data class GlobalSearchUiState(
 
 @HiltViewModel
 class GlobalSearchViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GlobalSearchUiState())
     val state: StateFlow<GlobalSearchUiState> = _state.asStateFlow()
 
     private var searchJob: kotlinx.coroutines.Job? = null
+    private var kidsMode: Boolean = false
+
+    init {
+        viewModelScope.launch {
+            profileManager.isKidsProfile().collect { isKids ->
+                kidsMode = isKids
+                val q = _state.value.query
+                if (q.length >= 2) search(q)
+            }
+        }
+    }
 
     fun setScope(scope: GlobalSearchScope) {
         _state.update { it.copy(scope = scope) }
@@ -91,7 +105,13 @@ class GlobalSearchViewModel @Inject constructor(
                     GlobalSearchScope.ACTIVE_PROVIDER -> searchSingle(ActiveProvider.get(), trimmed)
                     GlobalSearchScope.CONTENT_LANGUAGE -> searchMany(providers, trimmed)
                 }
-                _state.update { it.copy(loading = false, results = aggregated, error = null) }
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        results = KidsContentFilter.filterSeries(aggregated, kidsMode),
+                        error = null
+                    )
+                }
             } catch (e: Exception) {
                 _state.update { it.copy(loading = false, error = ErrorMapper.toUserMessage(context, e)) }
             }

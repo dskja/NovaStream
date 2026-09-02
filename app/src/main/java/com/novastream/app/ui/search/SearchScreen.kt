@@ -46,6 +46,8 @@ import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import com.novastream.app.data.repository.NovaStreamRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -84,7 +86,8 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repo: NovaStreamRepository,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
@@ -93,6 +96,7 @@ class SearchViewModel @Inject constructor(
     private var searchJob: kotlinx.coroutines.Job? = null
     private var trendingJob: kotlinx.coroutines.Job? = null
     private var activeProviderId: String? = null
+    private var kidsMode: Boolean = false
 
     init {
         viewModelScope.launch {
@@ -105,9 +109,18 @@ class SearchViewModel @Inject constructor(
                     if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("SearchVM", "Recent searches parse error, resetting", e)
                     try {
                         context.dataStore.edit { it.remove(RECENT_SEARCHES_KEY) }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        com.novastream.app.util.DebugLog.w("SearchVM", "reset recent searches failed", e)
+                    }
                     _state.update { it.copy(recentSearches = emptyList()) }
                 }
+            }
+        }
+        viewModelScope.launch {
+            profileManager.isKidsProfile().collect { isKids ->
+                kidsMode = isKids
+                val q = _state.value.query
+                if (q.length >= 2) onQueryChange(q) else loadTrending()
             }
         }
         viewModelScope.launch {
@@ -146,14 +159,24 @@ class SearchViewModel @Inject constructor(
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id == expected) {
                             val trending = res.data.trending.ifEmpty { res.data.popular }
-                            _state.update { it.copy(trending = trending.take(20), trendingError = null) }
+                            _state.update {
+                                it.copy(
+                                    trending = KidsContentFilter.filterSeries(trending, kidsMode).take(20),
+                                    trendingError = null
+                                )
+                            }
                         }
                     }
                     else -> {
                         when (val popular = repo.loadPopular()) {
                             is NovaStreamRepository.RepoResult.Success -> {
                                 if (ActiveProvider.id == expected) {
-                                    _state.update { it.copy(trending = popular.data.take(20), trendingError = null) }
+                                    _state.update {
+                                        it.copy(
+                                            trending = KidsContentFilter.filterSeries(popular.data, kidsMode).take(20),
+                                            trendingError = null
+                                        )
+                                    }
                                 }
                             }
                             is NovaStreamRepository.RepoResult.Error -> {
@@ -202,9 +225,12 @@ class SearchViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             loading = false,
-                            results = res.data.filter {
-                                it.providerId == null || it.providerId == expectedProvider
-                            },
+                            results = KidsContentFilter.filterSeries(
+                                res.data.filter {
+                                    it.providerId == null || it.providerId == expectedProvider
+                                },
+                                kidsMode
+                            ),
                             error = null
                         )
                     }

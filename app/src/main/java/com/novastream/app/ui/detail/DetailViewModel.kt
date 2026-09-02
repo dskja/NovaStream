@@ -24,7 +24,9 @@ import com.novastream.app.data.repository.NovaStreamRepository.RepoResult
 import com.novastream.app.data.repository.WatchRepository
 import com.novastream.app.download.DownloadForegroundService
 import com.novastream.app.download.DownloadManagerHelper
+import com.novastream.app.R
 import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
@@ -233,6 +235,19 @@ class DetailViewModel @Inject constructor(
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id != expectedProvider) return@launch
                         val (series, seasons) = res.data
+                        if (profileManager.getActiveProfile().isKids && !KidsContentFilter.isKidsSafe(series)) {
+                            _state.update {
+                                it.copy(
+                                    loading = false,
+                                    series = null,
+                                    seasons = emptyList(),
+                                    error = appContext.getString(R.string.kids_content_blocked),
+                                    loadedProviderId = expectedProvider,
+                                    providerMismatch = false
+                                )
+                            }
+                            return@launch
+                        }
                         loadedProviderId = expectedProvider
                         _state.update {
                             it.copy(
@@ -500,6 +515,7 @@ class DetailViewModel @Inject constructor(
                             .distinctBy { it.id }
                             .take(20)
                             .toList()
+                            .let { KidsContentFilter.filterSeries(it, profileManager.getActiveProfile().isKids) }
                     }
                     else -> emptyList()
                 }

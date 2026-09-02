@@ -29,3 +29,29 @@ jobs:
           name: provider-smoke-report
           path: scripts/provider-smoke.ps1
           retention-days: 14
+
+  integration:
+    name: Kotlin provider integration smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run AllProvidersIntegrationTest
+        run: >
+          NOVASTREAM_LIVE_PROVIDER_TEST=1
+          ./gradlew :app:testDebugUnitTest
+          --tests "com.novastream.app.data.provider.AllProvidersIntegrationTest"
+          --stacktrace --no-daemon

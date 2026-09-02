@@ -12,6 +12,8 @@ import com.novastream.app.data.provider.ContentLanguageGenres
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.capabilities
 import com.novastream.app.data.repository.NovaStreamRepository
+import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import androidx.annotation.StringRes
 import com.novastream.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,19 +59,29 @@ class BrowseViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repo: NovaStreamRepository,
     private val providerController: ProviderController,
-    private val appSettings: AppSettings
+    private val appSettings: AppSettings,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
     private val _state = MutableStateFlow(BrowseUiState(loading = true))
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
 
     private var loadJob: Job? = null
     private var activeProviderId: String = ActiveProvider.id
+    private var kidsMode: Boolean = false
     private var allItems: List<Series> = emptyList()
     private val initialSection: String? = Companion.decodeNavArg(savedStateHandle.get<String>("section"))
     private val initialGenre: String? = Companion.decodeNavArg(savedStateHandle.get<String>("genre"))
     private val initialFilter: BrowseContentFilter = parseContentFilter(savedStateHandle.get<String>("filter"))
 
     init {
+        viewModelScope.launch {
+            profileManager.isKidsProfile().collect { isKids ->
+                if (kidsMode != isKids) {
+                    kidsMode = isKids
+                    publishItems(reset = false, page = _state.value.page, hasMore = _state.value.hasMore)
+                }
+            }
+        }
         viewModelScope.launch {
             providerController.isReady.first { it }
             var isFirstEmission = true
@@ -308,7 +320,8 @@ class BrowseViewModel @Inject constructor(
         val filter = _state.value.contentFilter
         val sort = _state.value.sort
         val items = withContext(Dispatchers.Default) {
-            applySort(applyContentFilter(allItems, filter), sort)
+            val sorted = applySort(applyContentFilter(allItems, filter), sort)
+            KidsContentFilter.filterSeries(sorted, kidsMode)
         }
         _state.update { current ->
             current.copy(

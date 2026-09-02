@@ -407,6 +407,7 @@
     <string name="settings_profile_switched">Profil „%1$s“ aktiv</string>
     <string name="settings_profile_pin_wrong">PIN falsch</string>
     <string name="settings_profile_kids">Kinderprofil</string>
+    <string name="kids_content_blocked">Dieser Inhalt ist im Kinderprofil nicht verfügbar.</string>
     <string name="settings_profile_pin_protected">PIN-geschützt</string>
     <string name="settings_profile_enter_pin">PIN für %1$s</string>
     <string name="settings_profile_pin">PIN</string>

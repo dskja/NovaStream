@@ -73,7 +73,9 @@ class VoeWebViewResolver {
                                 capturedUrls.add(url)
                             }
                         }
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        DebugLog.w("VoeWebViewResolver", "intercept request failed", e)
+                    }
                     return null
                 }
 
@@ -148,7 +150,9 @@ class VoeWebViewResolver {
                                 } catch(e) {}
                             })();
                         """.trimIndent(), null)
-                    } catch (_: Exception) {}
+                    } catch (e: Exception) {
+                        DebugLog.w("VoeWebViewResolver", "intercept request failed", e)
+                    }
                 }
 
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
@@ -183,11 +187,11 @@ class VoeWebViewResolver {
                 }
             } finally {
                 // Cleanup - destroy als letztes
-                try { webView.stopLoading() } catch (_: Exception) {}
-                try { webView.removeJavascriptInterface("AndroidVoe") } catch (_: Exception) {}
-                try { webView.clearHistory() } catch (_: Exception) {}
-                try { webView.loadUrl("about:blank") } catch (_: Exception) {}
-                try { webView.destroy() } catch (_: Exception) {}
+                try { webView.stopLoading() } catch (e: Exception) { DebugLog.w("VoeWebViewResolver", "stopLoading failed", e) }
+                try { webView.removeJavascriptInterface("AndroidVoe") } catch (e: Exception) { DebugLog.w("VoeWebViewResolver", "removeJavascriptInterface failed", e) }
+                try { webView.clearHistory() } catch (e: Exception) { DebugLog.w("VoeWebViewResolver", "clearHistory failed", e) }
+                try { webView.loadUrl("about:blank") } catch (e: Exception) { DebugLog.w("VoeWebViewResolver", "loadUrl blank failed", e) }
+                try { webView.destroy() } catch (e: Exception) { DebugLog.w("VoeWebViewResolver", "destroy failed", e) }
             }
 
             videoUrls?.map { url ->

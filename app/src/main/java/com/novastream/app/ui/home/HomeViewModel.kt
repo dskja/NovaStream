@@ -14,7 +14,9 @@ import com.novastream.app.data.provider.ContentLanguageGenres
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.profile.ProfileManager
 import com.novastream.app.util.ErrorMapper
+import com.novastream.app.util.KidsContentFilter
 import com.novastream.app.util.ProviderLoadMetrics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -68,7 +70,8 @@ class HomeViewModel @Inject constructor(
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
@@ -77,6 +80,7 @@ class HomeViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var genreJob: Job? = null
     private var activeProviderId: String? = null
+    private var kidsMode: Boolean = false
 
     init {
         viewModelScope.launch {
@@ -140,6 +144,18 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "iptvEnabled flow error", e)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                profileManager.isKidsProfile().collect { isKids ->
+                    if (kidsMode != isKids) {
+                        kidsMode = isKids
+                        if (activeProviderId != null) load(force = true)
+                    }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "kids profile flow error", e)
             }
         }
         viewModelScope.launch {
@@ -231,7 +247,7 @@ class HomeViewModel @Inject constructor(
                     when (val catalogRes = catalogDef.await()) {
                         is NovaStreamRepository.RepoResult.Success -> {
                             if (ActiveProvider.id != expectedProvider) return@coroutineScope
-                            val catalog = catalogRes.data
+                            val catalog = KidsContentFilter.filterHomeCatalog(catalogRes.data, kidsMode)
                             val processed = withContext(Dispatchers.Default) {
                                 val popular = catalog.popular.ifEmpty { catalog.all.take(24) }
                                 val newest = catalog.newest.ifEmpty { catalog.all.drop(8).take(24) }
@@ -284,8 +300,9 @@ class HomeViewModel @Inject constructor(
                                 launch {
                                     val latest = deferred.await().okList()
                                     if (ActiveProvider.id != expectedProvider) return@launch
-                                    if (latest.isNotEmpty()) {
-                                        _state.update { it.copy(latestEpisodes = latest) }
+                                    val safe = KidsContentFilter.filterLatestEpisodes(latest, kidsMode)
+                                    if (safe.isNotEmpty()) {
+                                        _state.update { it.copy(latestEpisodes = safe) }
                                     }
                                 }
                             }
@@ -340,7 +357,8 @@ class HomeViewModel @Inject constructor(
                             when (val res = repo.loadGenre(genre.slug)) {
                                 is NovaStreamRepository.RepoResult.Success -> {
                                     val list = res.data.filter { it.belongsToActiveProvider() || it.providerId == null }
-                                    if (list.isEmpty()) null else genre to list
+                                    val safe = KidsContentFilter.filterSeries(list, kidsMode)
+                                    if (safe.isEmpty()) null else genre to safe
                                 }
                                 else -> null
                             }

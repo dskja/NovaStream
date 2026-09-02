@@ -5,6 +5,7 @@ import com.novastream.app.download.DownloadManagerHelper
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.db.ProfileEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.ConcurrentHashMap
 
@@ -24,6 +25,13 @@ class ProfileManager(
     fun activeProfileId(): Flow<String> = profileDao.observeAll().map { list ->
         list.firstOrNull { it.isActive }?.profileId ?: ProfileEntity.DEFAULT_ID
     }
+
+    fun observeActiveProfile(): Flow<ProfileEntity> = profileDao.observeAll().map { list ->
+        list.firstOrNull { it.isActive } ?: ProfileEntity.defaultProfile()
+    }
+
+    fun isKidsProfile(): Flow<Boolean> =
+        observeActiveProfile().map { it.isKids }.distinctUntilChanged()
 
     suspend fun ensureDefaultProfile() {
         if (profileDao.count() == 0) {

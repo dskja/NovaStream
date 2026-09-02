@@ -329,7 +329,9 @@ class HosterResolver(
                             isHls = urlMatch.value.contains(".m3u8")))
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                DebugLog.w("HosterResolver", "base64 decode failed", e)
+            }
         }
 
         // Strategie 3: Direct m3u8/mp4/webm URLs in the page
@@ -541,7 +543,9 @@ class HosterResolver(
             try {
                 val decoded = String(Base64.decode(m.groupValues[1], Base64.DEFAULT))
                 Regex("""https?://[^\s"']+\.(?:m3u8|mp4)[^\s"']*""").findAll(decoded).forEach { addUrl(it.value) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                DebugLog.w("HosterResolver", "base64 decode failed", e)
+            }
         }
         // Packed eval fallback: raw m3u8/mp4 in page
         Regex("""https?://[^\s"'<>]+\\.m3u8[^\s"'<>]*""").findAll(html).forEach { addUrl(it.value) }

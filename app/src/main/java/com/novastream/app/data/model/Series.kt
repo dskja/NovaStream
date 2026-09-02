@@ -15,6 +15,8 @@ data class Series(
     val status: String? = null,
     val seasonCount: Int? = null,
     val isMovie: Boolean = false,
+    /** Provider-supplied or scraped adult flag (18+). */
+    val isAdult: Boolean? = null,
     /** Provider der diesen Eintrag geliefert hat – verhindert Cross-Provider-Leaks. */
     val providerId: String? = null,
     /** External IDs for cross-provider dedup (free sources only). */

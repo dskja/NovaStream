@@ -166,7 +166,9 @@ fun PlayerScreen(
                 .setAutoEnterEnabled(exoPlayer.isPlaying)
                 .build()
             activity.setPictureInPictureParams(params)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            com.novastream.app.util.DebugLog.w("PlayerScreen", "PiP auto-enter update failed", e)
+        }
     }
 
     DisposableEffect(playerVisible, currentSource) {
@@ -296,7 +298,9 @@ fun PlayerScreen(
         exoPlayer.playWhenReady = true
         try {
             exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(state.playbackSpeed)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            com.novastream.app.util.DebugLog.w("PlayerScreen", "playback speed apply failed", e)
+        }
 
         lastLoadedSourceKey = sourceKey
         playerVisible = true
