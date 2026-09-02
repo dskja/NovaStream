@@ -53,11 +53,13 @@ class WatchRepository @Inject constructor(
         positionMs: Long,
         durationMs: Long,
         isMovie: Boolean = false,
-        providerId: String = ActiveProvider.id
+        providerId: String = ActiveProvider.id,
+        isAdult: Boolean? = null
     ) {
         try {
             val profileId = activeProfileId()
             val key = WatchProgress.key(profileId, providerId, slug, season, episode)
+            val existing = progressDao.get(key)
             progressDao.upsert(
                 WatchProgress(
                     episodeKey = key,
@@ -71,7 +73,8 @@ class WatchRepository @Inject constructor(
                     episodeTitle = episodeTitle,
                     positionMs = positionMs,
                     durationMs = durationMs,
-                    isMovie = isMovie
+                    isMovie = isMovie,
+                    isAdult = isAdult ?: existing?.isAdult
                 )
             )
         } catch (e: Exception) {

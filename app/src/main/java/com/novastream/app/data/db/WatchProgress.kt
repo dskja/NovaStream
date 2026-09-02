@@ -32,7 +32,9 @@ data class WatchProgress(
     val positionMs: Long,
     val durationMs: Long,
     val isMovie: Boolean = false,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    /** Adult flag from meta when progress was saved (kids filter). */
+    val isAdult: Boolean? = null
 ) {
     val progressPercent: Float
         get() = if (durationMs > 0 && positionMs >= 0) (positionMs.toFloat() / durationMs * 100f).coerceIn(0f, 100f) else 0f

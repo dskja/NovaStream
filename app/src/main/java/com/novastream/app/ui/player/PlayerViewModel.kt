@@ -208,6 +208,7 @@ class PlayerViewModel @Inject constructor(
     private var adjacentEpisodesJob: Job? = null
     private var saveProgressJob: Job? = null
     private var lastSavedProgressBucket = -1L
+    private var contentIsAdult: Boolean? = null
 
     init {
         viewModelScope.launch {
@@ -247,11 +248,26 @@ class PlayerViewModel @Inject constructor(
             providerId = ActiveProvider.id
         )
         MetaEnrichmentCache.get(MetaEnrichmentCache.cacheKey(stub))?.let { cached ->
-            return KidsContentFilter.isKidsSafe(catalogMetaEnricher.applyEnrichment(stub, cached))
+            val enriched = catalogMetaEnricher.applyEnrichment(stub, cached)
+            contentIsAdult = enriched.isAdult
+            return KidsContentFilter.isKidsSafe(enriched)
         }
         val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
         val enriched = catalogMetaEnricher.enrichOne(stub, language, ActiveProvider.isAniWorld)
+        contentIsAdult = enriched.isAdult
         return KidsContentFilter.isKidsSafe(enriched)
+    }
+
+    private suspend fun resolveContentIsAdult(): Boolean? {
+        contentIsAdult?.let { return it }
+        val stub = Series(id = slug, title = seriesTitle, isMovie = isMovie, providerId = ActiveProvider.id)
+        MetaEnrichmentCache.get(MetaEnrichmentCache.cacheKey(stub))?.let { cached ->
+            contentIsAdult = catalogMetaEnricher.applyEnrichment(stub, cached).isAdult
+            return contentIsAdult
+        }
+        val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+        contentIsAdult = catalogMetaEnricher.enrichOne(stub, language, ActiveProvider.isAniWorld).isAdult
+        return contentIsAdult
     }
 
     private fun load() {
@@ -450,6 +466,7 @@ class PlayerViewModel @Inject constructor(
         saveProgressJob = viewModelScope.launch {
             delay(750)
             lastSavedProgressBucket = bucket
+            val isAdult = resolveContentIsAdult()
             watchRepo.saveProgress(
                 slug = slug,
                 seriesTitle = seriesTitle,
@@ -459,7 +476,8 @@ class PlayerViewModel @Inject constructor(
                 episodeTitle = title,
                 positionMs = safePosition,
                 durationMs = durationMs,
-                isMovie = isMovie
+                isMovie = isMovie,
+                isAdult = isAdult
             )
             _state.update { it.copy(resumePositionMs = safePosition, durationMs = durationMs) }
         }
@@ -470,6 +488,7 @@ class PlayerViewModel @Inject constructor(
         saveProgressJob?.cancel()
         val safePosition = positionMs.coerceIn(0L, durationMs)
         viewModelScope.launch {
+            val isAdult = resolveContentIsAdult()
             watchRepo.saveProgress(
                 slug = slug,
                 seriesTitle = seriesTitle,
@@ -479,7 +498,8 @@ class PlayerViewModel @Inject constructor(
                 episodeTitle = title,
                 positionMs = safePosition,
                 durationMs = durationMs,
-                isMovie = isMovie
+                isMovie = isMovie,
+                isAdult = isAdult
             )
             _state.update { it.copy(resumePositionMs = safePosition, durationMs = durationMs) }
         }

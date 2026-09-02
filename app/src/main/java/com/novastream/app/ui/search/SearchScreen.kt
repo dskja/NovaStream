@@ -326,7 +326,9 @@ fun SearchScreen(
 
     androidx.compose.runtime.LaunchedEffect(state.query.isEmpty()) {
         if (state.query.isEmpty()) {
-            try { focusRequester.requestFocus() } catch (_: Exception) {}
+            try { focusRequester.requestFocus() } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("SearchScreen", "focus request failed", e)
+            }
         }
     }
 

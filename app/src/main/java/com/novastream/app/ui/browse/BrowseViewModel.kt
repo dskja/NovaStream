@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.meta.CatalogMetaEnricher
+import com.novastream.app.data.meta.MetaEnrichmentCache
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -91,6 +92,7 @@ class BrowseViewModel @Inject constructor(
                 if (isFirstEmission || activeProviderId != providerId) {
                     isFirstEmission = false
                     activeProviderId = providerId
+                    MetaEnrichmentCache.clear()
                     resetAndLoad()
                 }
             }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import com.novastream.app.util.DebugLog
 
 /**
  * Koordiniert PlayerScreen-Registrierung, MediaSession, Foreground-Service und ExoPlayer-Stop.
@@ -72,7 +73,8 @@ object PlayerPlaybackController {
             player.pause()
             player.stop()
             player.clearMediaItems()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            DebugLog.w("PlayerPlaybackController", "stopPlayback failed", e)
         }
     }
 

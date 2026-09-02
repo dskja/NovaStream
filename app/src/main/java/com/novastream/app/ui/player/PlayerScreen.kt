@@ -372,10 +372,16 @@ fun PlayerScreen(
                     if (dur > 0 && pos > 0) {
                         vm.saveProgressImmediate(pos, dur)
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    com.novastream.app.util.DebugLog.w("PlayerScreen", "save progress on dispose failed", e)
+                }
             }
-            try { exoPlayer.removeListener(episodeEndListener) } catch (_: Exception) {}
-            try { exoPlayer.release() } catch (_: Exception) {}
+            try { exoPlayer.removeListener(episodeEndListener) } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("PlayerScreen", "remove listener failed", e)
+            }
+            try { exoPlayer.release() } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("PlayerScreen", "release player failed", e)
+            }
             playerVisible = false
             showHosters = false
             lastLoadedSourceKey = null

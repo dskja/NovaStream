@@ -58,7 +58,9 @@ fun BrowseScreen(
         if (!state.loading && state.items.isNotEmpty()) {
             try {
                 initialFocus.requestFocus()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("BrowseScreen", "focus request failed", e)
+            }
         }
     }
 

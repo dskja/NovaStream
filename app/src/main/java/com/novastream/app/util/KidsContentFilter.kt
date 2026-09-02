@@ -85,8 +85,10 @@ object KidsContentFilter {
         return true
     }
 
-    fun isKidsSafeProgress(progress: WatchProgress): Boolean =
-        !isBlockedForKidsPlayback(progress.slug, progress.seriesTitle, progress.episodeTitle)
+    fun isKidsSafeProgress(progress: WatchProgress): Boolean {
+        if (progress.isAdult == true) return false
+        return !isBlockedForKidsPlayback(progress.slug, progress.seriesTitle, progress.episodeTitle)
+    }
 
     /** Blocks direct playback when only slug/title metadata is available (e.g. player deep links). */
     fun isBlockedForKidsPlayback(slug: String, seriesTitle: String, episodeTitle: String = ""): Boolean {

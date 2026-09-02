@@ -109,7 +109,9 @@ class MainActivity : ComponentActivity() {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
             try {
                 coil.Coil.imageLoader(this).memoryCache?.clear()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("MainActivity", "coil cache clear failed", e)
+            }
         }
     }
 }

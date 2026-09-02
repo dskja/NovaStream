@@ -346,7 +346,8 @@ class DetailViewModel @Inject constructor(
                     episodeTitle = episodeTitle,
                     positionMs = 1L,
                     durationMs = 1L,
-                    isMovie = series?.isMovie == true
+                    isMovie = series?.isMovie == true,
+                    isAdult = series?.isAdult
                 )
             }
         }
@@ -369,7 +370,8 @@ class DetailViewModel @Inject constructor(
                         episodeTitle = ep.title,
                         positionMs = 1L,
                         durationMs = 1L,
-                        isMovie = series.isMovie
+                        isMovie = series.isMovie,
+                        isAdult = series.isAdult
                     )
                 }
             }

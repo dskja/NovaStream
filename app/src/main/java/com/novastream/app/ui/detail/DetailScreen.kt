@@ -1067,6 +1067,17 @@ private fun PremiumEpisodeRow(
                     fontSize = 11.sp
                 )
             }
+            episode.summary?.takeIf { it.isNotBlank() }?.let { summary ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    summary,
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (episode.hosters.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -96,7 +96,9 @@ fun HomeScreen(
         if (!state.loading && (state.hero.isNotEmpty() || state.popular.isNotEmpty())) {
             try {
                 initialFocus.requestFocus()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("HomeScreen", "focus request failed", e)
+            }
         }
     }
 

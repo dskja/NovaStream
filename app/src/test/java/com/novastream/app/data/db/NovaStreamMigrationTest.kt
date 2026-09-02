@@ -147,4 +147,61 @@ class NovaStreamMigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun migrate15To16_addsWatchProgressIsAdult() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_15_16_test"
+        context.deleteDatabase(dbName)
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(15) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE watch_progress (
+                            episodeKey TEXT NOT NULL PRIMARY KEY,
+                            profileId TEXT NOT NULL DEFAULT 'default',
+                            providerId TEXT NOT NULL,
+                            slug TEXT NOT NULL,
+                            seriesTitle TEXT NOT NULL,
+                            coverUrl TEXT,
+                            season INTEGER NOT NULL,
+                            episode INTEGER NOT NULL,
+                            episodeTitle TEXT NOT NULL,
+                            positionMs INTEGER NOT NULL,
+                            durationMs INTEGER NOT NULL,
+                            isMovie INTEGER NOT NULL DEFAULT 0,
+                            updatedAt INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO watch_progress (
+                            episodeKey, profileId, providerId, slug, seriesTitle, coverUrl,
+                            season, episode, episodeTitle, positionMs, durationMs, isMovie, updatedAt
+                        ) VALUES (
+                            'default|p1|dark-1-1', 'default', 'p1', 'dark', 'Dark', NULL,
+                            1, 1, 'Pilot', 5000, 3600000, 0, 1000
+                        )
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+        val db = helper.writableDatabase
+        NovaStreamDatabase.ALL_MIGRATIONS
+            .filter { it.startVersion == 15 && it.endVersion == 16 }
+            .forEach { migration -> migration.migrate(db) }
+        db.query("SELECT isAdult FROM watch_progress").use { cursor ->
+            assertEquals(1, cursor.count)
+            cursor.moveToFirst()
+            assertTrue(cursor.isNull(0))
+        }
+        db.close()
+    }
 }

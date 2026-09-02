@@ -6,6 +6,7 @@ import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.LatestEpisode
+import com.novastream.app.data.meta.MetaEnrichmentCache
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.meta.CatalogMetaEnricher
 import com.novastream.app.data.prefs.AppSettings
@@ -192,6 +193,7 @@ class HomeViewModel @Inject constructor(
     private fun clearCatalogForProviderSwitch(providerId: String) {
         loadJob?.cancel()
         genreJob?.cancel()
+        MetaEnrichmentCache.clear()
         val provider = ActiveProvider.get()
         _state.update {
             it.copy(
