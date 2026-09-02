@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.ContentDao
 import com.novastream.app.data.db.ContentEntity
 import com.novastream.app.data.db.WatchProgress
+import com.novastream.app.data.meta.AgeRatingResolver
 import com.novastream.app.data.meta.ExternalIds
 import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.meta.FreeMetaService
@@ -490,7 +491,8 @@ class DetailViewModel @Inject constructor(
         genres = series.genres.ifEmpty { meta.genres },
         year = series.year ?: meta.year,
         rating = series.rating ?: meta.rating?.let { String.format("%.1f", it) },
-        status = series.status ?: meta.status
+        status = series.status ?: meta.status,
+        isAdult = AgeRatingResolver.mergeIsAdult(series.isAdult, meta.isAdult)
     )
 
     private fun loadRelatedTitles(series: Series) {

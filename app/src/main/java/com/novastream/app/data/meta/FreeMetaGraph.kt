@@ -28,19 +28,22 @@ class FreeMetaGraph @Inject constructor() {
         language: ContentLanguage = ContentLanguage.EN,
         tvmazeIdHint: String? = null,
         imdbHint: String? = null,
-        anilistIdHint: Int? = null
+        anilistIdHint: Int? = null,
+        scrapedIsAdult: Boolean? = null
     ): MetaEnrichment? {
         if (title.isBlank() && tvmazeIdHint.isNullOrBlank() && anilistIdHint == null) return null
 
         val langTag = ContentRegionResolver.wikidataLanguageFor(language)
 
         if (anilistIdHint != null && anilistIdHint > 0) {
-            AniListMetaService.mediaById(anilistIdHint)?.let { return buildEnrichment(it, preferAnime, langTag) }
+            AniListMetaService.mediaById(anilistIdHint)?.let {
+                return buildEnrichment(it, preferAnime, langTag, language, scrapedIsAdult)
+            }
         }
 
         if (preferAnime) {
             val animeMatch = pickBestAnime(title)
-            if (animeMatch != null) return buildEnrichment(animeMatch, preferAnime = true, langTag)
+            if (animeMatch != null) return buildEnrichment(animeMatch, preferAnime = true, langTag, language, scrapedIsAdult)
         }
 
         val tvmazeShow = when {
@@ -52,11 +55,11 @@ class FreeMetaGraph @Inject constructor() {
             val withCast = if (tvmazeShow.cast.isEmpty()) {
                 FreeMetaService.show(tvmazeShow.id) ?: tvmazeShow
             } else tvmazeShow
-            return buildEnrichmentFromTvmaze(withCast, langTag, imdbHint)
+            return buildEnrichmentFromTvmaze(withCast, langTag, imdbHint, language, scrapedIsAdult)
         }
 
         if (!isMovie && preferAnime) {
-            pickBestAnime(title)?.let { return buildEnrichment(it, preferAnime = true, langTag) }
+            pickBestAnime(title)?.let { return buildEnrichment(it, preferAnime = true, langTag, language, scrapedIsAdult) }
         }
 
         val wikidataIds = WikidataMetaService.resolveExternalIds(
@@ -70,12 +73,15 @@ class FreeMetaGraph @Inject constructor() {
                 title = title,
                 imdbId = wikidataIds.imdbId,
                 tmdbId = wikidataIds.tmdbId,
+                wikidataId = wikidataIds.wikidataId,
                 mediaType = if (isMovie) "movie" else "tv"
             )
+            val (ratedShow, ageRating) = attachAgeRating(stub, wikidataIds, language, scrapedIsAdult)
             return MetaEnrichment(
-                show = stub,
+                show = ratedShow,
                 externalIds = wikidataIds,
-                canonicalKey = wikidataIds.canonicalKey()
+                canonicalKey = wikidataIds.canonicalKey(),
+                ageRating = ageRating
             )
         }
 
@@ -92,7 +98,8 @@ class FreeMetaGraph @Inject constructor() {
             language = language,
             tvmazeIdHint = tvmazeHint,
             imdbHint = series.imdbId,
-            anilistIdHint = anilistHint
+            anilistIdHint = anilistHint,
+            scrapedIsAdult = series.isAdult
         )
     }
 
@@ -150,7 +157,8 @@ class FreeMetaGraph @Inject constructor() {
             anilistId = ids.anilistId,
             canonicalKey = ids.canonicalKey(),
             tmdbId = ids.tmdbId,
-            originalTitle = show.title
+            originalTitle = show.title,
+            isAdult = show.isAdult
         )
     }
 
@@ -174,7 +182,9 @@ class FreeMetaGraph @Inject constructor() {
     private suspend fun buildEnrichment(
         show: MetaShow,
         preferAnime: Boolean,
-        langTag: String
+        langTag: String,
+        language: ContentLanguage,
+        scrapedIsAdult: Boolean? = null
     ): MetaEnrichment {
         val ids = externalIdsFromShow(show)
         val wikidata = if (ids.imdbId != null || ids.wikidataId != null) {
@@ -184,23 +194,28 @@ class FreeMetaGraph @Inject constructor() {
                 .merge(ids)
         }
         val similar = similar(show)
+        val mergedShow = show.copy(
+            imdbId = wikidata.imdbId ?: show.imdbId,
+            tmdbId = wikidata.tmdbId ?: show.tmdbId,
+            wikidataId = wikidata.wikidataId ?: show.wikidataId
+        )
+        val (ratedShow, ageRating) = attachAgeRating(mergedShow, wikidata, language, scrapedIsAdult)
         return MetaEnrichment(
-            show = show.copy(
-                imdbId = wikidata.imdbId ?: show.imdbId,
-                tmdbId = wikidata.tmdbId ?: show.tmdbId,
-                wikidataId = wikidata.wikidataId ?: show.wikidataId
-            ),
+            show = ratedShow,
             cast = show.cast,
             similar = similar,
             externalIds = wikidata,
-            canonicalKey = wikidata.canonicalKey() ?: ids.canonicalKey()
+            canonicalKey = wikidata.canonicalKey() ?: ids.canonicalKey(),
+            ageRating = ageRating
         )
     }
 
     private suspend fun buildEnrichmentFromTvmaze(
         show: MetaShow,
         langTag: String,
-        imdbHint: String?
+        imdbHint: String?,
+        language: ContentLanguage,
+        scrapedIsAdult: Boolean? = null
     ): MetaEnrichment {
         val baseIds = ExternalIds(
             imdbId = show.imdbId ?: imdbHint,
@@ -221,13 +236,40 @@ class FreeMetaGraph @Inject constructor() {
         )
         val similar = FreeMetaService.search(show.genres.firstOrNull() ?: show.title, limit = 15)
             .filter { it.id != show.id }
+        val (ratedShow, ageRating) = attachAgeRating(enrichedShow, wikidata, language, scrapedIsAdult)
         return MetaEnrichment(
-            show = enrichedShow,
+            show = ratedShow,
             cast = enrichedShow.cast,
             similar = similar,
             externalIds = wikidata,
-            canonicalKey = wikidata.canonicalKey()
+            canonicalKey = wikidata.canonicalKey(),
+            ageRating = ageRating
         )
+    }
+
+    private suspend fun attachAgeRating(
+        show: MetaShow,
+        ids: ExternalIds,
+        language: ContentLanguage,
+        scrapedIsAdult: Boolean? = null
+    ): Pair<MetaShow, AgeRatingResult> {
+        val rating = AgeRatingService.resolve(
+            title = show.title,
+            isMovie = show.mediaType == "movie",
+            language = language,
+            imdbId = ids.imdbId ?: show.imdbId,
+            wikidataId = ids.wikidataId ?: show.wikidataId,
+            anilistIsAdult = show.isAdult,
+            idMal = show.idMal,
+            scrapedIsAdult = scrapedIsAdult
+        )
+        val isAdult = AgeRatingResolver.mergeIsAdult(show.isAdult, rating.isAdult)
+        val enriched = show.copy(
+            isAdult = isAdult,
+            contentRating = rating.primaryCertification ?: show.contentRating,
+            contentRatingSource = rating.source ?: show.contentRatingSource
+        )
+        return enriched to rating
     }
 
     private fun normalizeTitle(title: String): String =

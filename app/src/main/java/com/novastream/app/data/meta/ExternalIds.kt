@@ -33,5 +33,6 @@ data class MetaEnrichment(
     val cast: List<MetaPerson> = emptyList(),
     val similar: List<MetaShow> = emptyList(),
     val externalIds: ExternalIds = ExternalIds(),
-    val canonicalKey: String? = externalIds.canonicalKey()
+    val canonicalKey: String? = externalIds.canonicalKey(),
+    val ageRating: AgeRatingResult? = null
 )

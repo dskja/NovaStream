@@ -19,27 +19,33 @@ object AniListMetaService {
     private const val ENDPOINT = "https://graphql.anilist.co"
     private val client get() = NetworkModule.okHttpClient
 
+    private val mediaFields = """
+        id
+        idMal
+        isAdult
+        title { romaji english native }
+        description(asHtml: false)
+        coverImage { large extraLarge }
+        bannerImage
+        averageScore
+        startDate { year }
+        genres
+        status
+        characters(perPage: 12, sort: ROLE) {
+          edges {
+            role
+            node { name { full } image { medium } }
+          }
+        }
+    """.trimIndent()
+
     suspend fun search(query: String, limit: Int = 10): List<MetaShow> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val gql = """
             query(${ '$' }search: String, ${ '$' }perPage: Int) {
               Page(page: 1, perPage: ${ '$' }perPage) {
                 media(search: ${ '$' }search, type: ANIME, sort: SEARCH_MATCH) {
-                  id
-                  title { romaji english native }
-                  description(asHtml: false)
-                  coverImage { large extraLarge }
-                  bannerImage
-                  averageScore
-                  startDate { year }
-                  genres
-                  status
-                  characters(perPage: 12, sort: ROLE) {
-                    edges {
-                      role
-                      node { name { full } image { medium } }
-                    }
-                  }
+                  $mediaFields
                 }
               }
             }
@@ -64,26 +70,14 @@ object AniListMetaService {
         val gql = """
             query(${ '$' }id: Int) {
               Media(id: ${ '$' }id, type: ANIME) {
-                id
-                title { romaji english native }
-                description(asHtml: false)
-                coverImage { large extraLarge }
-                bannerImage
-                averageScore
-                startDate { year }
-                genres
-                status
-                characters(perPage: 12, sort: ROLE) {
-                  edges {
-                    role
-                    node { name { full } image { medium } }
-                  }
-                }
+                $mediaFields
                 relations(perPage: 12) {
                   edges {
                     relationType
                     node {
                       id
+                      idMal
+                      isAdult
                       title { romaji english }
                       coverImage { large }
                       bannerImage
@@ -111,15 +105,7 @@ object AniListMetaService {
             query(${ '$' }perPage: Int) {
               Page(page: 1, perPage: ${ '$' }perPage) {
                 media(type: ANIME, sort: TRENDING_DESC) {
-                  id
-                  title { romaji english native }
-                  description(asHtml: false)
-                  coverImage { large extraLarge }
-                  bannerImage
-                  averageScore
-                  startDate { year }
-                  genres
-                  status
+                  $mediaFields
                 }
               }
             }
@@ -153,6 +139,9 @@ object AniListMetaService {
         val genres = parseStringArray(obj.optJSONArray("genres"))
         val cast = parseCharacters(obj.optJSONObject("characters"))
         val similar = if (withRelations) parseRelations(obj.optJSONObject("relations")) else emptyList()
+        val isAdultFlag = obj.optBoolean("isAdult", false) ||
+            genres.any { it.equals("Hentai", ignoreCase = true) }
+        val idMal = obj.optInt("idMal", -1).takeIf { it > 0 }
         return MetaShow(
             id = "anilist-$id",
             title = title,
@@ -166,8 +155,11 @@ object AniListMetaService {
             language = "Japanese",
             cast = cast,
             anilistId = id,
+            idMal = idMal,
             mediaType = "anime",
-            similar = similar
+            similar = similar,
+            isAdult = if (isAdultFlag) true else null,
+            contentRatingSource = if (isAdultFlag) "anilist" else null
         )
     }
 

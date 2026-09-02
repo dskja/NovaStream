@@ -17,7 +17,11 @@ object AdultContentDetector {
         Pattern.compile("""\b18\s*\+\b"""),
         Pattern.compile("""\bNC-?17\b""", Pattern.CASE_INSENSITIVE),
         Pattern.compile("""\bTV-?MA\b""", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("""\bTV-?14\b.*\b(?:violence|sexual|language)\b""", Pattern.CASE_INSENSITIVE),
         Pattern.compile("""\bR[- ]rated\b""", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("""\bRated\s+R\b""", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("""\bBBFC\s*18\b""", Pattern.CASE_INSENSITIVE),
+        Pattern.compile("""\bkeine\s*jugendfreigabe\b""", Pattern.CASE_INSENSITIVE),
         Pattern.compile("""\badults?\s*only\b""", Pattern.CASE_INSENSITIVE),
         Pattern.compile("""\bma[- ]?rating\b""", Pattern.CASE_INSENSITIVE),
         Pattern.compile("""\bage[- ]?restriction\b.*\b18\b""", Pattern.CASE_INSENSITIVE)
