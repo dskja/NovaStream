@@ -42,7 +42,7 @@ import com.novastream.app.ui.tv.tvFocusable
 import com.novastream.app.util.LocaleManager
 import kotlinx.coroutines.launch
 
-private const val TOTAL_STEPS = 5
+private const val TOTAL_STEPS = 6
 
 @Composable
 fun OnboardingScreen(
@@ -99,6 +99,7 @@ fun OnboardingScreen(
                         1 -> stringResource(R.string.onboarding_ui_language)
                         2 -> stringResource(R.string.onboarding_content_language)
                         3 -> stringResource(R.string.onboarding_provider)
+                        4 -> stringResource(R.string.onboarding_permissions_title)
                         else -> stringResource(R.string.onboarding_features_title)
                     },
                     style = MaterialTheme.typography.headlineLarge,
@@ -112,6 +113,7 @@ fun OnboardingScreen(
                         1 -> stringResource(R.string.onboarding_ui_language_sub)
                         2 -> stringResource(R.string.onboarding_content_language_sub)
                         3 -> stringResource(R.string.onboarding_provider_hint)
+                        4 -> stringResource(R.string.onboarding_permissions_sub)
                         else -> stringResource(R.string.onboarding_features_sub)
                     },
                     style = MaterialTheme.typography.bodyLarge,
@@ -188,6 +190,11 @@ fun OnboardingScreen(
                                 onClick = { selectedId = providerInfo.id }
                             )
                         }
+                    }
+                }
+                4 -> {
+                    item {
+                        OnboardingPermissionsStep()
                     }
                 }
                 else -> {
@@ -272,6 +279,7 @@ fun OnboardingScreen(
                                     step = 3
                                 }
                                 3 -> step = 4
+                                4 -> step = 5
                                 else -> {
                                     finishing = true
                                     try {

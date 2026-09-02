@@ -154,6 +154,20 @@
     <string name="onboarding_ready_provider">Provider: %1$s</string>
     <string name="onboarding_profile_name">Profilname (optional)</string>
     <string name="onboarding_profile_hint">z. B. Max</string>
+    <string name="onboarding_permissions_title">Berechtigungen</string>
+    <string name="onboarding_permissions_sub">Erlaube Benachrichtigungen und Hintergrund-Downloads für das beste Erlebnis.</string>
+    <string name="onboarding_perm_notifications_title">Benachrichtigungen</string>
+    <string name="onboarding_perm_notifications_sub">Wiedergabe und Download-Fortschritt im Hintergrund anzeigen.</string>
+    <string name="onboarding_perm_battery_title">Akku-Optimierung</string>
+    <string name="onboarding_perm_battery_sub">Downloads im Hintergrund zuverlässig abschließen.</string>
+    <string name="onboarding_perm_battery_action">Einstellungen</string>
+    <string name="onboarding_perm_network_title">Internet</string>
+    <string name="onboarding_perm_network_sub">Für Streaming, Suche und Downloads erforderlich.</string>
+    <string name="onboarding_perm_allow">Erlauben</string>
+    <string name="onboarding_perm_status_granted">Erlaubt</string>
+    <string name="onboarding_perm_status_denied">Nicht erlaubt</string>
+    <string name="onboarding_perm_status_not_required">Nicht nötig</string>
+    <string name="onboarding_perm_optional_hint">Du kannst auch ohne diese Berechtigungen fortfahren – einige Funktionen sind dann eingeschränkt.</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Downloads</string>
