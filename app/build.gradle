@@ -65,7 +65,7 @@ android {
         }
     }
     lint {
-        disable 'UnsafeOptInUsageError'
+        disable 'UnsafeOptInUsageError', 'MissingTranslation'
     }
     testOptions {
         unitTests.all {
@@ -73,6 +73,10 @@ android {
                 excludeTestsMatching "com.novastream.app.data.provider.AllProvidersIntegrationTest"
             }
         }
+    }
+
+    sourceSets {
+        test.assets.srcDirs += "$projectDir/schemas"
     }
 }
 
@@ -128,6 +132,7 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-dash:1.5.1'
     implementation 'androidx.media3:media3-cast:1.5.1'
     implementation 'com.google.android.gms:play-services-cast-framework:22.0.0'
+    implementation 'androidx.mediarouter:mediarouter:1.7.0'
 
     // JSON
     implementation 'com.google.code.gson:gson:2.11.0'

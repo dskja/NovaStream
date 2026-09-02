@@ -7,7 +7,9 @@ data class StreamSource(
     val mimeType: String = "application/x-mpegURL",
     val isHls: Boolean = true,
     val subtitleUrl: String? = null,
-    val qualityLabel: String? = null
+    val qualityLabel: String? = null,
+    /** Media3 cache key for offline downloads (progressive streams). */
+    val cacheKey: String? = null
 ) {
     /** True wenn die URL nicht leer und abspielbar ist. */
     val isPlayable: Boolean

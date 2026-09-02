@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DownloadEntity::class,
         ProfileEntity::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = true
 )
 abstract class NovaStreamDatabase : RoomDatabase() {
@@ -244,6 +244,117 @@ abstract class NovaStreamDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS watchlist_new (
+                        itemKey TEXT NOT NULL PRIMARY KEY,
+                        profileId TEXT NOT NULL DEFAULT 'default',
+                        providerId TEXT NOT NULL,
+                        slug TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        coverUrl TEXT,
+                        isMovie INTEGER NOT NULL DEFAULT 0,
+                        addedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO watchlist_new (itemKey, profileId, providerId, slug, title, coverUrl, isMovie, addedAt)
+                    SELECT 'default|' || providerId || '|' || slug, 'default', providerId, slug, title, coverUrl, isMovie, addedAt
+                    FROM watchlist
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE watchlist")
+                db.execSQL("ALTER TABLE watchlist_new RENAME TO watchlist")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watchlist_addedAt ON watchlist(addedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watchlist_providerId ON watchlist(providerId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watchlist_slug ON watchlist(slug)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watchlist_profileId ON watchlist(profileId)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS watch_progress_new (
+                        episodeKey TEXT NOT NULL PRIMARY KEY,
+                        profileId TEXT NOT NULL DEFAULT 'default',
+                        providerId TEXT NOT NULL,
+                        slug TEXT NOT NULL,
+                        seriesTitle TEXT NOT NULL,
+                        coverUrl TEXT,
+                        season INTEGER NOT NULL,
+                        episode INTEGER NOT NULL,
+                        episodeTitle TEXT NOT NULL,
+                        positionMs INTEGER NOT NULL,
+                        durationMs INTEGER NOT NULL,
+                        isMovie INTEGER NOT NULL DEFAULT 0,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO watch_progress_new (
+                        episodeKey, profileId, providerId, slug, seriesTitle, coverUrl,
+                        season, episode, episodeTitle, positionMs, durationMs, isMovie, updatedAt
+                    )
+                    SELECT
+                        'default|' || providerId || '|' || slug || '-' || season || '-' || episode,
+                        'default', providerId, slug, seriesTitle, coverUrl,
+                        season, episode, episodeTitle, positionMs, durationMs, isMovie, updatedAt
+                    FROM watch_progress
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE watch_progress")
+                db.execSQL("ALTER TABLE watch_progress_new RENAME TO watch_progress")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_slug_season_episode ON watch_progress(slug, season, episode)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_updatedAt ON watch_progress(updatedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_slug ON watch_progress(slug)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_providerId ON watch_progress(providerId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_progress_profileId ON watch_progress(profileId)")
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Repair keys from a buggy v11 migration that prefixed old itemKey/episodeKey values.
+                db.execSQL(
+                    """
+                    UPDATE watchlist
+                    SET itemKey = profileId || '|' || providerId || '|' || slug
+                    WHERE itemKey LIKE '%|%|%'
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    UPDATE watch_progress
+                    SET episodeKey = profileId || '|' || providerId || '|' || slug || '-' || season || '-' || episode
+                    WHERE episodeKey LIKE '%|%|%'
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Prefix legacy download IDs (provider|slug|S#|E#) with profileId.
+                db.execSQL(
+                    """
+                    UPDATE downloads
+                    SET downloadId = profileId || '|' || downloadId
+                    WHERE downloadId NOT LIKE profileId || '|%'
+                    """.trimIndent()
+                )
+            }
+        }
+
+        internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+            MIGRATION_11_12, MIGRATION_12_13
+        )
+
         fun get(context: Context): NovaStreamDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -251,15 +362,8 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     NovaStreamDatabase::class.java,
                     "novastream.db"
                 )
-                    .addMigrations(
-                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10
-                    )
-                    .apply {
-                        if (com.novastream.app.BuildConfig.DEBUG) {
-                            fallbackToDestructiveMigration()
-                        }
-                    }
+                    .addMigrations(*ALL_MIGRATIONS)
+                    .fallbackToDestructiveMigration()
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .build().also { INSTANCE = it }
             }

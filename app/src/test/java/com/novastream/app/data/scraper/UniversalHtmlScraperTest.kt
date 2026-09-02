@@ -79,4 +79,25 @@ class UniversalHtmlScraperTest {
         assertTrue(series.any { it.id == "game-of-thrones" })
         assertTrue(series.any { it.id == "breaking-bad" })
     }
+
+    @Test
+    fun parseSeriesList_fallbackFindsGenericMovieLinks() {
+        val html = """
+            <html><body>
+              <a href="/movie/inception-2010">Inception</a>
+              <a href="/tv-show/stranger-things">Stranger Things</a>
+            </body></html>
+        """.trimIndent()
+        val profile = SiteProfile(
+            id = "sflix",
+            displayName = "SFlix",
+            baseUrl = "https://sflix.to",
+            seriesLinkSelector = "a.nonexistent",
+            seriesLinkPattern = "/(?:tv-show|movie)/([\\w-]+)",
+            slugRegex = "/(?:tv-show|movie)/([\\w-]+)"
+        )
+        val series = UniversalHtmlScraper.parseSeriesList(html, profile)
+        assertTrue(series.any { it.id == "inception-2010" })
+        assertTrue(series.any { it.id == "stranger-things" })
+    }
 }

@@ -678,11 +678,13 @@ object NovaStreamScraper {
     }
 
     private fun cleanTitle(title: String): String =
-        title.replace(Regex("\\s+"), " ")
-            .replace(Regex("(?i)\\s*online\\s*stream(en)?"), "")
-            .replace(Regex("(?i)\\s*stream(en)?\\s*kostenlos"), "")
-            .trim()
-            .ifBlank { title.trim() }
+        com.novastream.app.util.MediaUrls.sanitizeTitle(
+            title.replace(Regex("\\s+"), " ")
+                .replace(Regex("(?i)\\s*online\\s*stream(en)?"), "")
+                .replace(Regex("(?i)\\s*stream(en)?\\s*kostenlos"), "")
+                .trim()
+                .ifBlank { title.trim() }
+        ).ifBlank { title.trim() }
 
     private fun slugToTitle(slug: String): String =
         slug.replace('-', ' ').replaceFirstChar { it.uppercase() }

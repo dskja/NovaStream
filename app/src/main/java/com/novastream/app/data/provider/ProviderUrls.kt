@@ -18,7 +18,10 @@ object ProviderUrls {
         "showsst" -> "/watch/tv/${slug.removePrefix("tv-")}"
         "hydrahd" -> "/watchseries/$slug"
         "dramacool" -> "/$slug/"
-        else -> "/serie/$slug"
+        else -> {
+            val resolved = ProviderDetailUrls.resolve(providerId, "", slug)
+            if (resolved.startsWith("/")) resolved else "/$resolved"
+        }
     }
 
     fun movieDetailUrl(providerId: String, slug: String): String = when (providerId) {
@@ -30,7 +33,13 @@ object ProviderUrls {
         "cinezo" -> "/movie/${slug.removePrefix("movie-")}"
         "showsst" -> "/watch/movie/${slug.removePrefix("movie-")}"
         "hydrahd" -> "/movie/$slug"
-        else -> "/movie/$slug"
+        else -> {
+            val resolved = ProviderDetailUrls.resolve(providerId, "", "movie-$slug")
+            when {
+                resolved.contains("/movie") -> resolved.removePrefix("https://example.com").ifBlank { "/movie/$slug" }
+                else -> "/movie/$slug"
+            }
+        }
     }
 
     fun detailUrl(providerId: String, slug: String, isMovie: Boolean): String =

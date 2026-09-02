@@ -29,16 +29,53 @@ object ProviderHttp {
     fun isChallenge(html: String): Boolean {
         if (html.isBlank()) return true
         val lower = html.lowercase()
-        if (html.length < 400) {
-            if (lower.contains("just a moment") || lower.contains("checking your browser")) return true
+        val hasCatalogSignals = lower.contains("/serie") ||
+            lower.contains("/stream/") ||
+            lower.contains("/title/") ||
+            lower.contains("/movie") ||
+            lower.contains("/tv-show") ||
+            lower.contains("/tv/") ||
+            lower.contains("/pelicula") ||
+            lower.contains("/film/") ||
+            lower.contains("/filme") ||
+            lower.contains("/serietv") ||
+            lower.contains("/watch/") ||
+            lower.contains("/anime/") ||
+            lower.contains("/titles/") ||
+            lower.contains("/play/") ||
+            lower.contains("/doramas-online/") ||
+            lower.contains("/serial-online/") ||
+            lower.contains("<article") ||
+            lower.contains("og:title")
+        if (hasCatalogSignals && html.length > 1_500) return false
+        if (html.length < 500) {
+            return lower.contains("just a moment") ||
+                lower.contains("checking your browser") ||
+                lower.contains("cf-challenge") ||
+                lower.contains("challenge-platform") ||
+                lower.contains("attention required") ||
+                lower.contains("ddos-guard")
         }
-        return lower.contains("cf-challenge") ||
-            lower.contains("challenge-platform") ||
-            lower.contains("recaptcha") ||
-            lower.contains("captcha") ||
-            lower.contains("ddos-guard") && html.length < 2_000 && !lower.contains("/serie") ||
-            lower.contains("attention required") ||
-            lower.contains("enable javascript")
+        if (html.length < 2_500) {
+            return (lower.contains("cf-challenge") || lower.contains("challenge-platform")) &&
+                !hasCatalogSignals
+        }
+        return false
+    }
+
+    /** Accept-Language header tuned to provider catalog language. */
+    fun acceptLanguageHeader(providerId: String? = null): String {
+        val lang = providerId?.let { ProviderRegistry.contentLanguageOf(it) } ?: ContentLanguage.EN
+        return when (lang) {
+            ContentLanguage.DE -> "de-DE,de;q=0.9,en;q=0.8"
+            ContentLanguage.FR -> "fr-FR,fr;q=0.9,en;q=0.8"
+            ContentLanguage.ES -> "es-ES,es;q=0.9,en;q=0.8"
+            ContentLanguage.IT -> "it-IT,it;q=0.9,en;q=0.8"
+            ContentLanguage.PL -> "pl-PL,pl;q=0.9,en;q=0.8"
+            ContentLanguage.AR -> "ar,en;q=0.8"
+            ContentLanguage.MULTI -> "en-US,en;q=0.9,de;q=0.8"
+            ContentLanguage.EN -> "en-US,en;q=0.9"
+        }
     }
 
     /** Fetch HTML with optional in-memory cache. */
@@ -46,7 +83,8 @@ object ProviderHttp {
         url: String,
         referer: String? = null,
         useCache: Boolean = true,
-        webViewFallback: Boolean = false
+        webViewFallback: Boolean = false,
+        providerId: String? = null
     ): String {
         if (useCache) {
             cacheMutex.withLock {
@@ -57,12 +95,12 @@ object ProviderHttp {
             }
         }
 
-        var html = fetchNetwork(url, referer)
+        var html = fetchNetwork(url, referer, providerId)
         if (webViewFallback && (html.isBlank() || isChallenge(html))) {
             html = CaptchaWebViewFetcher.fetchHtml(url)
         }
 
-        if (useCache && html.isNotBlank()) {
+        if (useCache && html.isNotBlank() && !isChallenge(html)) {
             cacheMutex.withLock {
                 cache[url] = System.currentTimeMillis() to html
             }
@@ -70,15 +108,21 @@ object ProviderHttp {
         return html
     }
 
+    /** Clears the shared HTTP response cache (e.g. on provider/mirror switch). */
+    suspend fun clearCache() {
+        cacheMutex.withLock { cache.clear() }
+    }
+
     /** Try multiple entry URLs; returns first base URL whose home page looks valid. */
     suspend fun resolveWorkingBase(
         candidates: List<String>,
         contentNeedle: String = "/title/",
-        webViewFallback: Boolean = true
+        webViewFallback: Boolean = true,
+        providerId: String? = null
     ): String? {
         for (candidate in candidates) {
             val base = candidate.trimEnd('/')
-            val html = fetch(base + "/", referer = base + "/", webViewFallback = webViewFallback)
+            val html = fetch(base + "/", referer = base + "/", webViewFallback = webViewFallback, providerId = providerId)
             if (html.isNotBlank() && !isChallenge(html)) {
                 if (contentNeedle.isBlank() || html.contains(contentNeedle, ignoreCase = true)) {
                     return base
@@ -120,14 +164,14 @@ object ProviderHttp {
         null
     }
 
-    private suspend fun fetchNetwork(url: String, referer: String?): String = withContext(Dispatchers.IO) {
+    private suspend fun fetchNetwork(url: String, referer: String?, providerId: String? = null): String = withContext(Dispatchers.IO) {
         val ref = referer ?: url.toHttpUrlOrNull()?.let { "${it.scheme}://${it.host}/" } ?: url
         val req = Request.Builder()
             .url(url)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Referer", ref)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-            .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
+            .header("Accept-Language", acceptLanguageHeader(providerId))
             .build()
         try {
             NetworkModule.okHttpClient.newCall(req).execute().use { resp ->

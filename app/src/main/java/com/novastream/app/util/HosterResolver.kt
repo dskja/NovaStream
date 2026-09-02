@@ -73,10 +73,10 @@ class HosterResolver(
     suspend fun resolve(hosterName: String, redirectUrl: String): List<StreamSource> {
         if (redirectUrl.isBlank()) return emptyList()
         val cacheKey = cacheKey(hosterName, redirectUrl)
-        readCache(cacheKey)?.let { return it }
+        readCache(cacheKey)?.let { return it.withSecureUrls() }
 
         return try {
-            val resolved = resolveUncached(hosterName, redirectUrl)
+            val resolved = resolveUncached(hosterName, redirectUrl).withSecureUrls()
             writeCache(cacheKey, resolved)
             resolved
         } catch (e: Exception) {
@@ -562,4 +562,9 @@ class HosterResolver(
         }
         return out.distinctBy { it.url }
     }
+
+    private fun List<StreamSource>.withSecureUrls(): List<StreamSource> =
+        map { source ->
+            source.copy(url = MediaUrls.secureUrl(source.url))
+        }
 }

@@ -8,6 +8,7 @@ import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderLanguageManager
 import com.novastream.app.data.provider.StreamingProvider
+import com.novastream.app.util.ErrorMapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -59,9 +60,21 @@ class GlobalSearchViewModel @Inject constructor(
         }
     }
 
+    fun onQueryChange(query: String) {
+        val limited = query.take(100)
+        _state.update { it.copy(query = limited, error = null) }
+        val trimmed = limited.trim()
+        if (trimmed.length < 2) {
+            searchJob?.cancel()
+            _state.update { it.copy(results = emptyList(), loading = false, providerCount = 0) }
+            return
+        }
+        search(trimmed)
+    }
+
     fun search(query: String) {
         val trimmed = query.trim().take(100)
-        _state.update { it.copy(query = trimmed, error = null) }
+        _state.update { it.copy(error = null) }
         searchJob?.cancel()
         if (trimmed.length < 2) {
             _state.update { it.copy(results = emptyList(), loading = false, providerCount = 0) }
@@ -70,7 +83,7 @@ class GlobalSearchViewModel @Inject constructor(
         _state.update { it.copy(loading = true) }
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
-            if (_state.value.query != trimmed) return@launch
+            if (_state.value.query.trim() != trimmed) return@launch
             try {
                 val providers = providersForScope()
                 _state.update { it.copy(providerCount = providers.size) }
@@ -80,7 +93,7 @@ class GlobalSearchViewModel @Inject constructor(
                 }
                 _state.update { it.copy(loading = false, results = aggregated, error = null) }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message ?: "Search failed") }
+                _state.update { it.copy(loading = false, error = ErrorMapper.toUserMessage(context, e)) }
             }
         }
     }
