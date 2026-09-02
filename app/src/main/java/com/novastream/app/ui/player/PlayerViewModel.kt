@@ -94,7 +94,14 @@ class PlayerViewModel @Inject constructor(
     private val appSettings: AppSettings
 ) : ViewModel() {
 
-    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+    private val slug: String = run {
+        val raw = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+        try {
+            java.net.URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
+    }
     private val season: Int = savedStateHandle.get<Int>("season") ?: 1
     private val episode: Int = savedStateHandle.get<Int>("episode") ?: 1
     private val title: String = run {
@@ -206,18 +213,23 @@ class PlayerViewModel @Inject constructor(
     private fun load() {
         _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
-            if (isLive && !directStreamUrl.isNullOrBlank()) {
-                val url = com.novastream.app.util.MediaUrls.secureUrl(directStreamUrl)
+            if (!directStreamUrl.isNullOrBlank()) {
+                val url = directPlaybackUrl(directStreamUrl)
+                val label = if (isLive) "Live" else "Offline"
                 val source = StreamSource(
-                    hoster = "Live",
+                    hoster = label,
                     url = url,
-                    mimeType = if (url.contains(".m3u8")) "application/x-mpegURL" else "video/mp4",
-                    isHls = url.contains(".m3u8")
+                    mimeType = when {
+                        url.contains(".m3u8", ignoreCase = true) -> "application/x-mpegURL"
+                        url.startsWith("file://") || url.startsWith("content://") -> "video/mp4"
+                        else -> "video/mp4"
+                    },
+                    isHls = url.contains(".m3u8", ignoreCase = true)
                 )
                 _state.update {
                     it.copy(
                         loading = false,
-                        hosters = listOf(HosterLink(name = "Live", redirectUrl = url, language = "Live", index = 0)),
+                        hosters = listOf(HosterLink(name = label, redirectUrl = url, language = label, index = 0)),
                         sources = listOf(source),
                         selectedHosterIndex = 0,
                         selectedSourceIndex = 0,
@@ -312,6 +324,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun retry() {
+        if (!directStreamUrl.isNullOrBlank()) {
+            load()
+            return
+        }
         val index = _state.value.selectedHosterIndex
         resolveJob?.cancel()
         _state.update { it.copy(error = null, loading = true, hosterFallbackNotice = null) }
@@ -532,5 +548,14 @@ class PlayerViewModel @Inject constructor(
 
     private fun sortSources(sources: List<StreamSource>): List<StreamSource> {
         return sources.sortedByDescending { it.qualityRank }
+    }
+
+    /** Direct navigation stream (live IPTV, offline download, deep link). */
+    private fun directPlaybackUrl(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("file://") || trimmed.startsWith("content://") || trimmed.startsWith("/")) {
+            return if (trimmed.startsWith("/")) "file://$trimmed" else trimmed
+        }
+        return com.novastream.app.util.MediaUrls.playbackUrl(trimmed)
     }
 }

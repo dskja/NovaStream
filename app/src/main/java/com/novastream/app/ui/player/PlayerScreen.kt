@@ -374,7 +374,14 @@ fun PlayerScreen(
             )
     ) {
         val player = exoPlayer
-        if (currentSource != null) {
+        if (state.error != null && !state.loading) {
+            PlayerErrorOverlay(
+                message = state.error ?: stringResource(R.string.error_unknown),
+                canTryAlternateHoster = state.hasAlternateHoster,
+                onRetry = { vm.retry() },
+                onTryAlternateHoster = { vm.tryAlternateHoster() }
+            )
+        } else if (currentSource != null) {
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -455,13 +462,6 @@ fun PlayerScreen(
             )
         } else if (state.loading) {
             PremiumLoading(label = stringResource(R.string.player_resolving_stream))
-        } else if (state.error != null) {
-            PlayerErrorOverlay(
-                message = state.error ?: stringResource(R.string.error_unknown),
-                canTryAlternateHoster = state.hasAlternateHoster,
-                onRetry = { vm.retry() },
-                onTryAlternateHoster = { vm.tryAlternateHoster() }
-            )
         }
 
         if (playerVisible && state.isBuffering && currentSource != null) {

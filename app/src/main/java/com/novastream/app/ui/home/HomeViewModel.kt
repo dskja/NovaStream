@@ -166,6 +166,7 @@ class HomeViewModel @Inject constructor(
         val provider = ActiveProvider.get()
         _state.update {
             it.copy(
+                loading = true,
                 isRefreshing = true,
                 error = null,
                 providerId = providerId,
@@ -173,6 +174,18 @@ class HomeViewModel @Inject constructor(
                 catalogHint = provider.catalogHint,
                 supportsMovies = provider.supportsMovies,
                 supportsSeries = provider.supportsSeries,
+                hero = emptyList(),
+                popular = emptyList(),
+                newest = emptyList(),
+                trending = emptyList(),
+                movies = emptyList(),
+                genreRows = emptyList(),
+                action = emptyList(),
+                comedy = emptyList(),
+                drama = emptyList(),
+                scifi = emptyList(),
+                latestEpisodes = emptyList(),
+                uniqueTitleCount = 0,
                 lastLoadDurationMs = null,
                 showProviderHealthWarning = false
             )

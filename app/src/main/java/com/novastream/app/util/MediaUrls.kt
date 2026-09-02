@@ -10,24 +10,43 @@ import org.jsoup.Jsoup
  */
 object MediaUrls {
 
+    private val cleartextHosts = setOf(
+        "kinoger.to", "kinoger.pw",
+        "serienstream.to", "serienstream.cx",
+        "aniworld.to", "s.to",
+        "voe.sx", "voe-unblock.com", "fsst.online",
+        "streamtape.com", "doodstream.com", "filemoon.sx",
+        "vidoza.net", "vidmoly.to", "mixdrop.co",
+        "localhost", "127.0.0.1"
+    )
+
     fun abs(pathOrUrl: String?, baseUrl: String = ActiveProvider.baseUrl): String? {
         if (pathOrUrl.isNullOrBlank()) return null
         val src = pathOrUrl.trim()
         if (src.contains("data:image") || src.endsWith(".svg", ignoreCase = true)) return null
         return when {
-            src.startsWith("http://") || src.startsWith("https://") -> secureUrl(src)
-            src.startsWith("//") -> secureUrl("https:$src")
-            else -> secureUrl(baseUrl.trimEnd('/') + "/" + src.trimStart('/'))
+            src.startsWith("http://") || src.startsWith("https://") -> src
+            src.startsWith("//") -> "https:$src"
+            else -> baseUrl.trimEnd('/') + "/" + src.trimStart('/')
         }
     }
 
-    /** Prefer HTTPS; many hosters redirect HTTP which Android blocks without cleartext config. */
-    fun secureUrl(url: String): String {
-        if (url.startsWith("http://")) {
-            return "https://" + url.removePrefix("http://")
-        }
-        return url
+    /**
+     * Preserve HTTP for cleartext-allowed hosts and local schemes.
+     * Do not blindly rewrite HTTP→HTTPS for playback URLs — many hosters are HTTP-only.
+     */
+    fun playbackUrl(url: String): String {
+        if (!url.startsWith("http://")) return url
+        val host = url.toHttpUrlOrNull()?.host?.lowercase() ?: return url
+        if (isCleartextHost(host)) return url
+        return "https://" + url.removePrefix("http://")
     }
+
+    /** @deprecated Use [playbackUrl] for streams; kept for call sites that expect scheme normalization. */
+    fun secureUrl(url: String): String = playbackUrl(url)
+
+    private fun isCleartextHost(host: String): Boolean =
+        cleartextHosts.any { allowed -> host == allowed || host.endsWith(".$allowed") }
 
     fun refererFor(imageUrl: String?, fallbackBase: String = ActiveProvider.baseUrl): String {
         val host = imageUrl?.toHttpUrlOrNull()?.host

@@ -326,6 +326,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                 com.novastream.app.ui.downloads.DownloadsScreen(
                     onBack = { nav.popBackStack() },
                     onPlay = { item ->
+                        val playbackUrl = item.localPath?.takeIf { it.isNotBlank() } ?: item.streamUrl
                         nav.navigate(
                             Routes.player(
                                 slug = item.slug,
@@ -335,7 +336,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                                 seriesTitle = item.title,
                                 coverUrl = item.coverUrl,
                                 isMovie = false,
-                                streamUrl = item.streamUrl
+                                streamUrl = playbackUrl
                             )
                         )
                     }

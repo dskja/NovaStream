@@ -2,7 +2,6 @@ package com.novastream.app.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MediaUrlsTest {
@@ -33,7 +32,13 @@ class MediaUrlsTest {
     }
 
     @Test
-    fun secureUrl_upgradesHttpToHttps() {
-        assertEquals("https://kinoger.to/stream", MediaUrls.secureUrl("http://kinoger.to/stream"))
+    fun playbackUrl_preservesCleartextHoster() {
+        assertEquals("http://voe.sx/e/abc", MediaUrls.playbackUrl("http://voe.sx/e/abc"))
+        assertEquals("http://kinoger.to/stream", MediaUrls.playbackUrl("http://kinoger.to/stream"))
+    }
+
+    @Test
+    fun playbackUrl_upgradesUnknownHttpToHttps() {
+        assertEquals("https://example.org/stream", MediaUrls.playbackUrl("http://example.org/stream"))
     }
 }
