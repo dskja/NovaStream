@@ -53,18 +53,22 @@ class MirrorSupport(
     ): String {
         val base = activeBase()
         val ref = referer ?: "$base/"
-        var html = ProviderHttp.fetch(url, referer = ref, webViewFallback = webViewFallback)
-        if (shouldRetryMirror(html)) {
-            val refreshed = activeBase(forceRefresh = true)
-            if (refreshed != base && url.startsWith(base)) {
-                html = ProviderHttp.fetch(
-                    url.replace(base, refreshed),
-                    referer = "$refreshed/",
-                    webViewFallback = webViewFallback
-                )
+        repeat(3) { attempt ->
+            val useWebView = webViewFallback && attempt > 0
+            var fetchUrl = url
+            var fetchRef = ref
+            var html = ProviderHttp.fetch(fetchUrl, referer = fetchRef, webViewFallback = useWebView)
+            if (shouldRetryMirror(html)) {
+                val refreshed = activeBase(forceRefresh = true)
+                if (refreshed != base && url.startsWith(base)) {
+                    fetchUrl = url.replace(base, refreshed)
+                    fetchRef = "$refreshed/"
+                    html = ProviderHttp.fetch(fetchUrl, referer = fetchRef, webViewFallback = useWebView)
+                }
             }
+            if (html.isNotBlank() && !ProviderHttp.isChallenge(html)) return html
         }
-        return html
+        return ProviderHttp.fetch(url, referer = ref, webViewFallback = webViewFallback)
     }
 
     /** For sites with reCAPTCHA (e.g. Burning Series): OkHttp first, then WebView. */

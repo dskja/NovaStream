@@ -9,6 +9,7 @@ import coil.memory.MemoryCache
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.provider.ProviderRegistry
 import com.novastream.app.util.VoeWebViewResolver
 import com.novastream.app.util.CaptchaWebViewFetcher
 import com.novastream.app.data.repository.CatalogCachePurgeWorker
@@ -34,6 +35,7 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun attachBaseContext(base: Context) {
+        ProviderRegistry.initialize(base)
         val localeTag = runBlocking {
             try {
                 com.novastream.app.data.prefs.AppSettings(base).uiLocale.first()

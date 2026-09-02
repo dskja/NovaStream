@@ -37,7 +37,10 @@ object ProviderDetailUrls {
     "serienstream", "serienstream_cx", "burningseries" -> "$base/serie/$slug"
     "filmpalast", "kinoger" -> "$base/stream/$slug"
     "megakino", "hdfilme", "moflix" -> "$base/title/$slug"
-    "streamkiste" -> "$base/serien/$slug"
+    "streamkiste" -> when {
+      slug.startsWith("movie-") -> "$base/filme/${slug.removePrefix("movie-")}"
+      else -> "$base/serien/$slug"
+    }
     "kinoz" -> "$base/Stream/$slug.html"
     "wiflix" -> "$base/serie/$slug"
     "frenchstream" -> "$base/s-tv/$slug"

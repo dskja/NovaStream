@@ -146,11 +146,16 @@ class FilmPalastProvider(
 
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val path = when {
-            page <= 0 -> "/serien/view"
-            else -> "/serien/view?page=${page + 1}"
+        val serienPath = if (page <= 0) "/serien/view" else "/serien/view?page=${page + 1}"
+        val moviesPath = if (page <= 0) "/movies/new" else "/movies/new?page=${page + 1}"
+        val merged = linkedMapOf<String, Series>()
+        for (s in parseFilmPalastList(fetchUrl(base + serienPath))) {
+            merged[s.id] = s.copy(providerId = id)
         }
-        parseFilmPalastList(fetchUrl(base + path))
+        for (s in parseFilmPalastList(fetchUrl(base + moviesPath))) {
+            if (!merged.containsKey(s.id)) merged[s.id] = s.copy(isMovie = true, providerId = id)
+        }
+        merged.values.toList()
     }
 
     override suspend fun loadGenrePage(genre: String, page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {

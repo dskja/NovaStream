@@ -5,17 +5,40 @@ package com.novastream.app.data.provider
  */
 object ProviderUrls {
 
-    fun seriesDetailUrl(providerId: String, slug: String): String {
-        val path = ProviderDetailUrls.resolve(providerId, "", slug).removePrefix("/")
-        return if (path.startsWith("http")) path else "/$path"
+    fun seriesDetailUrl(providerId: String, slug: String): String = when (providerId) {
+        "aniworld" -> "/anime/stream/$slug"
+        "kinoger" -> "/stream/$slug.html"
+        "burningseries" -> "/serie/$slug"
+        "megakino" -> "/title/$slug"
+        "streamkiste" -> "/serien/$slug"
+        "filmpalast" -> "/stream/$slug"
+        "kinoz" -> "/Stream/$slug.html"
+        "freecatalog" -> "/shows/$slug"
+        "cinezo" -> if (slug.startsWith("movie")) "/movie/${slug.removePrefix("movie-")}" else "/tv/${slug.removePrefix("tv-")}"
+        "showsst" -> "/watch/tv/${slug.removePrefix("tv-")}"
+        "hydrahd" -> "/watchseries/$slug"
+        "dramacool" -> "/$slug/"
+        else -> {
+            val resolved = ProviderDetailUrls.resolve(providerId, "", slug)
+            if (resolved.startsWith("/")) resolved else "/$resolved"
+        }
     }
 
     fun movieDetailUrl(providerId: String, slug: String): String = when (providerId) {
         "streamkiste" -> "/filme/$slug"
+        "kinoger" -> "/stream/$slug.html"
+        "filmpalast" -> "/stream/$slug"
+        "megakino" -> "/title/$slug"
+        "kinoz" -> "/Stream/$slug.html"
+        "cinezo" -> "/movie/${slug.removePrefix("movie-")}"
+        "showsst" -> "/watch/movie/${slug.removePrefix("movie-")}"
         "hydrahd" -> "/movie/$slug"
         else -> {
             val resolved = ProviderDetailUrls.resolve(providerId, "", "movie-$slug")
-            if (resolved.contains("/movie")) resolved.removePrefix("https://example.com") else "/movie/$slug"
+            when {
+                resolved.contains("/movie") -> resolved.removePrefix("https://example.com").ifBlank { "/movie/$slug" }
+                else -> "/movie/$slug"
+            }
         }
     }
 

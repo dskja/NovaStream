@@ -159,6 +159,7 @@ class WatchRepository @Inject constructor(
             .flatMapLatest { profileId ->
                 watchlistDao.isInWatchlistForProfile(profileId, ActiveProvider.id, slug)
             }
+            .catch { emit(false) }
 
     suspend fun addToWatchlist(
         slug: String,

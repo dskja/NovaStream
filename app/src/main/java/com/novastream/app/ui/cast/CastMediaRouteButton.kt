@@ -22,9 +22,13 @@ fun CastMediaRouteButton(
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            val themed = ContextThemeWrapper(context, MediaRouterR.style.Theme_MediaRouter)
-            MediaRouteButton(themed).apply {
-                CastButtonFactory.setUpMediaRouteButton(context, this)
+            try {
+                val themed = ContextThemeWrapper(context, MediaRouterR.style.Theme_MediaRouter)
+                MediaRouteButton(themed).apply {
+                    CastButtonFactory.setUpMediaRouteButton(context, this)
+                }
+            } catch (_: Exception) {
+                android.view.View(context)
             }
         }
     )

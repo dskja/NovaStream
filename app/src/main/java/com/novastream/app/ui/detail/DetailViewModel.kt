@@ -123,7 +123,14 @@ class DetailViewModel @Inject constructor(
     private val profileManager: ProfileManager
 ) : ViewModel() {
 
-    private val slug: String = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+    private val slug: String = run {
+        val raw = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
+        try {
+            java.net.URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
+    }
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()

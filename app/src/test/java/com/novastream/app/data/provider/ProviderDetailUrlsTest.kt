@@ -29,7 +29,12 @@ class ProviderDetailUrlsTest {
     }
 
     @Test
-    fun `default fallback`() {
+    fun `streamkiste movie prefix`() {
+        assertEquals("$base/filme/inception", ProviderDetailUrls.resolve("streamkiste", base, "movie-inception"))
+        assertEquals("$base/serien/dark", ProviderDetailUrls.resolve("streamkiste", base, "dark"))
+    }
+
+    @Test
         assertEquals("$base/some-slug", ProviderDetailUrls.resolve("unknown", base, "some-slug"))
     }
 }

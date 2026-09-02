@@ -12,21 +12,32 @@ object ProviderRegistry {
     @Volatile
     private var entriesCache: List<RegisteredProvider>? = null
 
-    /** Called once at app startup from Hilt with @ApplicationContext. */
+    @Volatile
+    private var initializedContext: Context? = null
+
+    /**
+     * Must run before any code reads [providers] (e.g. from [ProviderController] via Hilt).
+     * [NovaStreamApp.attachBaseContext] calls this early; Hilt [com.novastream.app.di.ProviderModule] repeats safely.
+     */
     fun initialize(context: Context) {
-        if (entriesCache == null) {
-            synchronized(this) {
-                if (entriesCache == null) {
-                    val appCtx = context.applicationContext
-                    SiteProfileImporter.bindContext(appCtx)
-                    entriesCache = buildRegistry(appCtx)
-                }
-            }
+        val appCtx = context.applicationContext
+        synchronized(this) {
+            if (initializedContext === appCtx && entriesCache != null) return
+            initializedContext = appCtx
+            SiteProfileImporter.bindContext(appCtx)
+            entriesCache = buildRegistry(appCtx)
         }
     }
 
     private val builtInEntries: List<RegisteredProvider>
-        get() = entriesCache ?: buildRegistry(appContext = null).also { entriesCache = it }
+        get() {
+            entriesCache?.let { return it }
+            synchronized(this) {
+                entriesCache?.let { return it }
+                // Ephemeral fallback if something reads the registry before initialize() — never cache without context.
+                return buildRegistry(initializedContext)
+            }
+        }
 
     private fun allEntries(): List<RegisteredProvider> =
         builtInEntries + SiteProfileImporter.registeredProviders()

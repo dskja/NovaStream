@@ -72,7 +72,10 @@ object Routes {
         return "browse?section=${enc(section)}&genre=${enc(genre.orEmpty())}&filter=${enc(filter.orEmpty())}"
     }
 
-    fun detail(slug: String) = "detail/$slug"
+    fun detail(slug: String): String {
+        fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
+        return "detail/${enc(slug)}"
+    }
     fun player(
         slug: String,
         season: Int,
@@ -89,7 +92,7 @@ object Routes {
         val st = enc(seriesTitle)
         val cu = coverUrl?.let { enc(it) } ?: ""
         val su = streamUrl?.let { enc(it) } ?: ""
-        return "player/$slug/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive"
+        return "player/${enc(slug)}/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive"
     }
 
     /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
