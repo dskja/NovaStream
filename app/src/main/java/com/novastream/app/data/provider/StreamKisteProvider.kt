@@ -135,13 +135,13 @@ class StreamKisteProvider(
         if (genre.trim().isBlank()) emptyList()
         else {
             val base = activeBaseUrl()
-            val name = genre.trim().lowercase()
-            val path = when (name) {
-                "filme", "movies", "movie" -> "/filme"
-                "serien", "series", "serie" -> "/serien"
-                else -> "/serien"
+            val paths = ProviderGenrePaths.pathsFor(id, genre.trim())
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = parseStreamKisteSeriesList(fetchUrl("$base$path")).map { it.copy(providerId = id) }
+                if (results.isNotEmpty()) break
             }
-            parseStreamKisteSeriesList(fetchUrl("$base$path")).map { it.copy(providerId = id) }
+            results
         }
     }
 

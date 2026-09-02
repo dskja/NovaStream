@@ -23,8 +23,14 @@ object ProviderResults {
 /** Run a suspending provider operation with health-tracked [Result] folding. */
 suspend fun <T> StreamingProvider.runCatchingProvider(
     block: suspend () -> T
-): StreamingProvider.ProviderResult<T> =
-    ProviderResults.fold(id, runCatching { block() })
+): StreamingProvider.ProviderResult<T> {
+    if (ProviderHealthMonitor.isInCooldown(id)) {
+        return StreamingProvider.ProviderResult.Error(
+            "Provider vorübergehend nicht verfügbar — bitte in einigen Minuten erneut versuchen."
+        )
+    }
+    return ProviderResults.fold(id, runCatching { block() })
+}
 
 /** Standard localized error for blank search queries (no health penalty). */
 fun StreamingProvider.emptySearchError(): StreamingProvider.ProviderResult<Nothing> =

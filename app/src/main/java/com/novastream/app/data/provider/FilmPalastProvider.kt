@@ -124,12 +124,13 @@ class FilmPalastProvider(
         if (genre.trim().isBlank()) emptyList()
         else {
             val base = activeBaseUrl()
-            val path = when (genre.trim().lowercase()) {
-                "serien", "series", "serie" -> "/serien/view"
-                "filme", "movies", "movie", "neu", "new" -> "/movies/new"
-                else -> "/serien/view"
+            val paths = ProviderGenrePaths.pathsFor(id, genre.trim())
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = parseFilmPalastList(fetchUrl(base + path))
+                if (results.isNotEmpty()) break
             }
-            parseFilmPalastList(fetchUrl(base + path))
+            results
         }
     }
 

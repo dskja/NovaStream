@@ -190,9 +190,13 @@ open class ConfigurableSiteProvider(
         if (genre.trim().isBlank()) emptyList()
         else {
             val base = activeBaseUrl()
-            val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
-            UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
-                .ifEmpty { loadHome().getOrNull().orEmpty() }
+            val paths = ProviderGenrePaths.pathsFor(profile.id, genre.trim(), profile.genrePathTemplate)
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
+                if (results.isNotEmpty()) break
+            }
+            results.ifEmpty { loadHome().getOrNull().orEmpty() }
         }
     }
 
@@ -214,18 +218,19 @@ open class ConfigurableSiteProvider(
         if (genre.trim().isBlank()) emptyList()
         else {
             val base = activeBaseUrl()
-            if (page <= 0) {
-                val path = profile.genrePathTemplate.replace("{genre}", genre.trim())
-                UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
-            } else {
-                val template = profile.genrePageTemplate.ifBlank {
-                    profile.genrePathTemplate + "?page={page}"
-                }
-                val path = template
-                    .replace("{genre}", genre.trim())
-                    .replace("{page}", (page + 1).toString())
-                UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
+            val paths = ProviderGenrePaths.pathsForPage(
+                providerId = profile.id,
+                genre = genre.trim(),
+                page = page,
+                profileDefault = profile.genrePathTemplate,
+                profilePageTemplate = profile.genrePageTemplate
+            )
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = UniversalHtmlScraper.parseSeriesList(fetch(base + path), profile).tagged()
+                if (results.isNotEmpty()) break
             }
+            results
         }
     }
 

@@ -77,7 +77,8 @@ object ProviderRegistry {
     fun getProviderInfos(): List<ProviderInfo> = allEntries().map { it.toProviderInfo() }
 
     fun contentLanguageOf(providerId: String): ContentLanguage =
-        findRegistered(providerId)?.contentLanguage ?: ContentLanguage.MULTI
+        findRegistered(providerId)?.contentLanguage
+            ?: ProviderGenres.contentLanguageOf(providerId)
 
     private fun RegisteredProvider.toProviderInfo(): ProviderInfo = ProviderInfo(
         id = provider.id,

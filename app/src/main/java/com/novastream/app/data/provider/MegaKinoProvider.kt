@@ -116,18 +116,17 @@ class MegaKinoProvider(
         if (genre.trim().isBlank()) emptyList()
         else {
             val base = activeBaseUrl()
-            val name = genre.trim().lowercase()
-            val path = when (name) {
-                "filme", "movies", "movie" -> "/filme"
-                "serien", "series", "serie" -> "/serien"
-                else -> "/serien"
+            val paths = ProviderGenrePaths.pathsFor(id, genre.trim())
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = parseMegaKinoSeriesList(fetchUrl("$base$path"))
+                if (results.isNotEmpty()) break
             }
-            parseMegaKinoSeriesList(fetchUrl("$base$path"))
-                .ifEmpty {
-                    parseMegaKinoSeriesList(fetchUrl(base)).filter {
-                        it.title.contains(genre, ignoreCase = true)
-                    }
+            results.ifEmpty {
+                parseMegaKinoSeriesList(fetchUrl(base)).filter {
+                    it.title.contains(genre, ignoreCase = true)
                 }
+            }
         }
     }
 
