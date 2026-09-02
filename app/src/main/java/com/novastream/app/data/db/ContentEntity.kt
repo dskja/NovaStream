@@ -39,13 +39,15 @@ data class ContentEntity(
             tvmazeId: String? = null,
             anilistId: Int? = null,
             wikidataId: String? = null,
-            tmdbId: Int? = null
+            tmdbId: Int? = null,
+            idMal: Int? = null
         ): ContentEntity? {
             val key = when {
                 !imdbId.isNullOrBlank() -> "imdb:${imdbId.trim()}"
                 tmdbId != null && tmdbId > 0 -> "tmdb:$tmdbId"
                 !tvmazeId.isNullOrBlank() -> "tvmaze:${tvmazeId.trim()}"
                 anilistId != null && anilistId > 0 -> "anilist:$anilistId"
+                idMal != null && idMal > 0 -> "mal:$idMal"
                 !wikidataId.isNullOrBlank() -> "wikidata:${wikidataId.trim()}"
                 else -> return null
             }

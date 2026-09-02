@@ -488,13 +488,16 @@ private fun DetailContent(
                     }
                 }
                 // Free metadata (TVMaze) pills
-                if (series.genres.isNotEmpty() || state.metaRating != null || state.metaNetwork != null || state.imdbId != null) {
+                if (series.genres.isNotEmpty() || state.metaRating != null || state.contentRating != null ||
+                    state.metaNetwork != null || state.imdbId != null
+                ) {
                     Spacer(Modifier.height(12.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
                     ) {
                         state.metaRating?.let { StatPill("★ ${String.format("%.1f", it)}") }
+                        state.contentRating?.let { StatPill(it) }
                         series.year?.let { StatPill(it) }
                         state.metaNetwork?.let { StatPill(it) }
                         state.imdbId?.let { StatPill(it) }

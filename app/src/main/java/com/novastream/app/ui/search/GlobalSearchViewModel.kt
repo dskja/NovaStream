@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.network.ScrapeLimiter
+import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderLanguageManager
@@ -41,7 +42,8 @@ data class GlobalSearchUiState(
 @HiltViewModel
 class GlobalSearchViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val freeMetaGraph: FreeMetaGraph
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GlobalSearchUiState())
@@ -102,8 +104,8 @@ class GlobalSearchViewModel @Inject constructor(
                 val providers = providersForScope()
                 _state.update { it.copy(providerCount = providers.size) }
                 val aggregated = when (_state.value.scope) {
-                    GlobalSearchScope.ACTIVE_PROVIDER -> searchSingle(ActiveProvider.get(), trimmed)
-                    GlobalSearchScope.CONTENT_LANGUAGE -> searchMany(providers, trimmed)
+                    GlobalSearchScope.ACTIVE_PROVIDER -> searchSingleWithMeta(ActiveProvider.get(), trimmed)
+                    GlobalSearchScope.CONTENT_LANGUAGE -> searchManyWithMeta(providers, trimmed)
                 }
                 _state.update {
                     it.copy(
@@ -125,16 +127,12 @@ class GlobalSearchViewModel @Inject constructor(
                 ProviderLanguageManager.getProvidersForLanguage(_state.value.contentLanguage)
         }
 
-    private suspend fun searchSingle(provider: StreamingProvider, query: String): List<com.novastream.app.data.model.Series> {
-        val result = ScrapeLimiter.withPermit { provider.search(query) }
-        return when (result) {
-            is StreamingProvider.ProviderResult.Success ->
-                result.data.map { it.copy(providerId = provider.id) }
-            else -> emptyList()
-        }
+    private suspend fun searchSingleWithMeta(provider: StreamingProvider, query: String): List<com.novastream.app.data.model.Series> {
+        val providerResults = searchSingle(provider, query)
+        return mergeWithFreeMeta(query, listOf(provider.id to providerResults))
     }
 
-    private suspend fun searchMany(
+    private suspend fun searchManyWithMeta(
         providers: List<StreamingProvider>,
         query: String
     ): List<com.novastream.app.data.model.Series> = coroutineScope {
@@ -149,6 +147,29 @@ class GlobalSearchViewModel @Inject constructor(
             }.awaitAll()
             allResults.addAll(partial)
         }
-        SearchResultAggregator.aggregate(allResults)
+        mergeWithFreeMeta(query, allResults)
+    }
+
+    private suspend fun mergeWithFreeMeta(
+        query: String,
+        providerResults: List<Pair<String, List<com.novastream.app.data.model.Series>>>
+    ): List<com.novastream.app.data.model.Series> {
+        val preferAnime = query.contains("anime", ignoreCase = true) ||
+            ActiveProvider.isAniWorld
+        val metaSeries = freeMetaGraph.search(query, preferAnime = preferAnime, limit = 15)
+            .map { freeMetaGraph.toSeries(it, "free-meta") }
+        val combined = if (metaSeries.isNotEmpty()) {
+            providerResults + ("free-meta" to metaSeries)
+        } else providerResults
+        return SearchResultAggregator.aggregate(combined)
+    }
+
+    private suspend fun searchSingle(provider: StreamingProvider, query: String): List<com.novastream.app.data.model.Series> {
+        val result = ScrapeLimiter.withPermit { provider.search(query) }
+        return when (result) {
+            is StreamingProvider.ProviderResult.Success ->
+                result.data.map { it.copy(providerId = provider.id) }
+            else -> emptyList()
+        }
     }
 }

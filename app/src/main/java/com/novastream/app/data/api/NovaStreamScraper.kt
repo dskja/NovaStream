@@ -138,7 +138,8 @@ object NovaStreamScraper {
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(card, doc),
                     detailUrl = "/serie/$slug",
-                    genres = genre?.takeIf { it.isNotBlank() && it.length < 40 }?.let { listOf(it) } ?: emptyList()
+                    genres = genre?.takeIf { it.isNotBlank() && it.length < 40 }?.let { listOf(it) } ?: emptyList(),
+                    isAdult = cardAdultFlag(card)
                 )
             )
         }
@@ -159,7 +160,8 @@ object NovaStreamScraper {
                     id = slug,
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(card, doc),
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(card)
                 )
             )
         }
@@ -183,7 +185,8 @@ object NovaStreamScraper {
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(container, doc),
                     detailUrl = "/serie/$slug",
-                    year = year
+                    year = year,
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -205,7 +208,8 @@ object NovaStreamScraper {
                     id = slug,
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(container, doc),
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -658,6 +662,15 @@ object NovaStreamScraper {
         parseGenres(html).map { it.slug to it.name }
 
     // ─── Hilfsfunktionen ────────────────────────────────────────────────────
+
+    private fun cardAdultFlag(container: Element): Boolean? {
+        val sample = buildString {
+            append(container.text().take(400))
+            append(' ')
+            append(container.select(".badge, .fsk, .age-rating, [class*=fsk], [class*=age]").text())
+        }
+        return AdultContentDetector.detectFromText(sample)
+    }
 
     private fun extractSlug(url: String): String? {
         val m = SLUG_PATTERN.matcher(url)

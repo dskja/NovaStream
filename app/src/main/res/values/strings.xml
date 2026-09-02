@@ -267,6 +267,7 @@
     <string name="detail_no_episodes">Keine Episoden gefunden</string>
     <string name="detail_related_titles">Ähnliche Titel</string>
     <string name="detail_also_on">Auch auf</string>
+    <string name="detail_content_rating_fmt">Altersfreigabe: %1$s</string>
     <string name="detail_continue_watching_header">WEITERSEHEN</string>
     <string name="cd_remove">Entfernen</string>
     <string name="cd_play">Abspielen</string>

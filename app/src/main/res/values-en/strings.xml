@@ -269,6 +269,7 @@
     <string name="detail_no_episodes">No episodes found</string>
     <string name="detail_related_titles">Similar titles</string>
     <string name="detail_also_on">Also on</string>
+    <string name="detail_content_rating_fmt">Content rating: %1$s</string>
     <string name="detail_continue_watching_header">CONTINUE WATCHING</string>
     <string name="cd_remove">Remove</string>
     <string name="cd_play">Play</string>

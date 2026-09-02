@@ -7,6 +7,7 @@ import com.novastream.app.data.db.ContentDao
 import com.novastream.app.data.db.ContentEntity
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.meta.AgeRatingResolver
+import com.novastream.app.data.meta.EpisodeMetaMerger
 import com.novastream.app.data.meta.ExternalIds
 import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.meta.FreeMetaService
@@ -56,6 +57,7 @@ data class DetailUiState(
     val currentProgress: WatchProgress? = null,
     val metaCast: List<com.novastream.app.data.meta.MetaPerson> = emptyList(),
     val metaRating: Double? = null,
+    val contentRating: String? = null,
     val metaNetwork: String? = null,
     val imdbId: String? = null,
     val trailerUrl: String? = null,
@@ -144,6 +146,8 @@ class DetailViewModel @Inject constructor(
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
     private var loadedProviderId: String? = null
+    private var metaTvmazeId: String? = null
+    private var metaEpguidesKey: String? = null
 
     init {
         viewModelScope.launch {
@@ -388,9 +392,10 @@ class DetailViewModel @Inject constructor(
                 when (val res = repo.loadSeason(slug, seasonNum)) {
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id != expectedProvider) return@launch
+                        val enrichedEps = enrichEpisodesWithMeta(res.data, seasonNum)
                         _state.update { current ->
                             val updated = current.seasons.map { s ->
-                                if (s.number == seasonNum) s.copy(episodes = res.data) else s
+                                if (s.number == seasonNum) s.copy(episodes = enrichedEps) else s
                             }
                             current.copy(seasons = updated, loadingSeason = false, seasonError = null)
                         }
@@ -454,8 +459,12 @@ class DetailViewModel @Inject constructor(
             tvmazeId = ids.tvmazeId,
             anilistId = ids.anilistId,
             wikidataId = ids.wikidataId,
-            tmdbId = ids.tmdbId
+            tmdbId = ids.tmdbId,
+            idMal = ids.idMal
         )?.let { contentDao.upsert(it) }
+
+        metaTvmazeId = ids.tvmazeId ?: meta.tvmazeId
+        metaEpguidesKey = ids.epguidesKey ?: meta.epguidesKey
 
         val alsoOn = enrichment.canonicalKey?.let { key ->
             contentDao.findByCanonicalKeyExcluding(key, providerId)
@@ -472,6 +481,7 @@ class DetailViewModel @Inject constructor(
                 series = enriched,
                 metaCast = enrichment.cast.ifEmpty { meta.cast },
                 metaRating = meta.rating,
+                contentRating = meta.contentRating ?: enrichment.ageRating?.primaryCertification,
                 metaNetwork = meta.network,
                 imdbId = ids.imdbId ?: meta.imdbId,
                 trailerUrl = meta.trailerUrl ?: FreeMetaService.trailerUrlFor(meta),
@@ -479,6 +489,18 @@ class DetailViewModel @Inject constructor(
                 alsoOnProviders = alsoOn
             )
         }
+    }
+
+    private suspend fun enrichEpisodesWithMeta(eps: List<Episode>, seasonNum: Int): List<Episode> {
+        if (eps.isEmpty()) return eps
+        val series = _state.value.series ?: return eps
+        val metaEps = freeMetaGraph.episodesForSeason(
+            title = series.title,
+            tvmazeId = metaTvmazeId ?: series.tvmazeId,
+            epguidesKey = metaEpguidesKey,
+            season = seasonNum
+        )
+        return EpisodeMetaMerger.merge(eps, metaEps, seasonNum)
     }
 
     private fun mergeSeriesWithMeta(

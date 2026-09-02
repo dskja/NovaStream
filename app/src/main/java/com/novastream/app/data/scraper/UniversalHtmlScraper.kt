@@ -45,13 +45,15 @@ object UniversalHtmlScraper {
             val title = resolveTitle(a, profile).ifBlank { slugToTitle(slug) }
             if (title.length < 2) continue
             val cover = findCover(a, profile)
+            val isAdult = detectAdultFromElement(a)
 
             results[slug] = Series(
                 id = slug,
                 title = cleanTitle(title),
                 coverUrl = cover,
                 detailUrl = toDetailUrl(href, profile, slug),
-                isMovie = href.contains("/movie", ignoreCase = true)
+                isMovie = href.contains("/movie", ignoreCase = true),
+                isAdult = isAdult
             )
         }
         return results.values.toList()
@@ -331,6 +333,16 @@ object UniversalHtmlScraper {
         val scope = a.closest("div, article, li, figure") ?: a
         val img = scope.selectFirst(profile.coverSelector) ?: a.selectFirst("img")
         return img?.let { absImg(it, profile.baseUrl) }
+    }
+
+    private fun detectAdultFromElement(a: Element): Boolean? {
+        val scope = a.closest("article, .card, .item, li, div, figure") ?: a
+        val sample = buildString {
+            append(a.text().take(200))
+            append(' ')
+            append(scope.select(".badge, .rating, .fsk, .age-rating, [class*=fsk], [class*=age], [class*=adult]").text())
+        }
+        return AdultContentDetector.detectFromText(sample)
     }
 
     private fun absImg(img: Element, base: String): String? {
