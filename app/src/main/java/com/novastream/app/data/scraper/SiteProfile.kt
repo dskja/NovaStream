@@ -48,7 +48,7 @@ object SiteProfiles {
     val hydraHd = SiteProfile(
         id = "hydrahd",
         displayName = "HydraHD",
-        baseUrl = "https://hydrahd.com",
+        baseUrl = "https://hydrahd.cc",
         homePath = "/series/",
         searchPath = "/index.php?s={query}",
         seriesLinkSelector = "a[href*=/watchseries/], a[href*=/movie/]",
@@ -66,7 +66,7 @@ object SiteProfiles {
     val cinezo = SiteProfile(
         id = "cinezo",
         displayName = "Cinezo",
-        baseUrl = "https://cinezo.org",
+        baseUrl = "https://cinezo.net",
         homePath = "/",
         searchPath = "/search?q={query}",
         seriesLinkSelector = "a[href^=/tv/], a[href^=/movie/]",

@@ -251,7 +251,7 @@ object InternationalSiteProfiles {
     val filmyOnline = SiteProfile(
         id = "filmyonline",
         displayName = "FilmyOnline",
-        baseUrl = "https://filmyonline.cc",
+        baseUrl = "https://filmyonline.eu",
         homePath = "/",
         searchPath = "/?s={query}",
         seriesLinkSelector = "a[href*=/titles/]",
@@ -263,7 +263,7 @@ object InternationalSiteProfiles {
     val zaluknij = SiteProfile(
         id = "zaluknij",
         displayName = "Zaluknij",
-        baseUrl = "https://zaluknij.cc",
+        baseUrl = "https://zalukaj.pl",
         homePath = "/",
         searchPath = "/wyszukiwarka?phrase={query}",
         seriesLinkSelector = "a[href*=/serial-online/]",
@@ -323,7 +323,7 @@ object InternationalSiteProfiles {
     val lookmovie2 = SiteProfile(
         id = "lookmovie2",
         displayName = "LookMovie2",
-        baseUrl = "https://www.lookmovie2.to",
+        baseUrl = "https://lookmovie2.la",
         homePath = "/",
         searchPath = "/search?q={query}",
         seriesLinkSelector = "a[href*=/movies/], a[href*=/shows/]",

@@ -19,6 +19,12 @@ object UniversalHtmlScraper {
     fun parseSeriesList(html: String, profile: SiteProfile): List<Series> {
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, profile.baseUrl)
+        val results = parseSeriesListFromDoc(doc, profile)
+        if (results.isNotEmpty()) return results
+        return parseSeriesListFallback(doc, profile)
+    }
+
+    private fun parseSeriesListFromDoc(doc: Document, profile: SiteProfile): List<Series> {
         val results = linkedMapOf<String, Series>()
         val linkPattern = profile.seriesLinkPattern.takeIf { it.isNotBlank() }?.let {
             try { Pattern.compile(it, Pattern.CASE_INSENSITIVE) } catch (_: Exception) { null }
@@ -48,6 +54,26 @@ object UniversalHtmlScraper {
             )
         }
         return results.values.toList()
+    }
+
+    /** Broader link scan when profile-specific selectors return nothing (common on intl FMHY sites). */
+    private fun parseSeriesListFallback(doc: Document, profile: SiteProfile): List<Series> {
+        val fallbackProfile = profile.copy(
+            seriesLinkSelector = buildFallbackSelector(profile),
+            seriesLinkPattern = profile.seriesLinkPattern.ifBlank { """/([\w-]+)""" }
+        )
+        return parseSeriesListFromDoc(doc, fallbackProfile)
+    }
+
+    private fun buildFallbackSelector(profile: SiteProfile): String {
+        val hints = listOf(
+            "/movie/", "/tv/", "/tv-show/", "/watch/", "/serie/", "/serietv/",
+            "/anime/", "/pelicula/", "/film/", "/titles/", "/play/", "/stream/",
+            "/doramas-online/", "/serial-online/", "/show/", "/watchseries/"
+        )
+        val fromProfile = hints.filter { profile.seriesLinkSelector.contains(it.trim('/'), ignoreCase = true) }
+        val chosen = (fromProfile + hints).distinct().take(8)
+        return chosen.joinToString(", ") { "a[href*=$it]" }
     }
 
     fun parseDetail(html: String, profile: SiteProfile, slug: String): Pair<Series, List<Season>> {

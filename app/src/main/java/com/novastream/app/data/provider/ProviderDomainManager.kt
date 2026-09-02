@@ -133,18 +133,18 @@ object ProviderDomainManager {
             "https://streamingcommunity.gratis/"
         ),
         "filmyonline" to listOf(
-            "https://filmyonline.cc/",
+            "https://filmyonline.eu/",
             "https://filmyonline.pl/",
-            "https://filmyonline.eu/"
+            "https://filmyonline.cc/"
         ),
         "zaluknij" to listOf(
-            "https://zaluknij.cc/",
             "https://zalukaj.pl/",
+            "https://zaluknij.cc/",
             "https://zalukaj-film.pl/"
         ),
         "lookmovie2" to listOf(
-            "https://www.lookmovie2.to/",
             "https://lookmovie2.la/",
+            "https://www.lookmovie2.to/",
             "https://lookmovie2.site/"
         ),
         "soap2day" to listOf(
@@ -218,13 +218,13 @@ object ProviderDomainManager {
             "https://animeunity.cc/"
         ),
         "hydrahd" to listOf(
-            "https://hydrahd.sh/",
             "https://hydrahd.cc/",
-            "https://hydrahd.com/"
+            "https://hydrahd.com/",
+            "https://hydrahd.sh/"
         ),
         "cinezo" to listOf(
-            "https://cinezo.to/",
             "https://cinezo.net/",
+            "https://cinezo.to/",
             "https://cinezo.tv/"
         ),
         "showsst" to listOf(

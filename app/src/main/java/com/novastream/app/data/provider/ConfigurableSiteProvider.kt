@@ -55,13 +55,10 @@ open class ConfigurableSiteProvider(
     private fun List<Series>.tagged(): List<Series> =
         map { if (it.providerId == id) it else it.copy(providerId = id) }
 
-    private val mirrorNeedle: String? = mirrorContentNeedle?.takeIf {
-        ProviderMirrorNeedles.hasMirrors(profile.id)
-    }
-
-    private val mirror: MirrorSupport? = mirrorNeedle?.let { needle ->
+    private val mirror: MirrorSupport? = if (ProviderMirrorNeedles.hasMirrors(profile.id)) {
+        val needle = mirrorContentNeedle ?: ProviderMirrorNeedles.needleFor(profile.id, profile)
         MirrorSupport(id, defaultBaseUrl, appContext, needle) { fetchCache.clear() }
-    }
+    } else null
 
     private val fetchCache = object : LinkedHashMap<String, Pair<Long, String>>(FETCH_CACHE_SIZE, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Long, String>>?): Boolean =
@@ -84,18 +81,27 @@ open class ConfigurableSiteProvider(
         HosterResolver(baseUrl = activeBaseUrl())
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        val p = activeProfile()
-        val homeUrl = p.baseUrl + profile.homePath
-        UniversalHtmlScraper.parseSeriesList(fetchCached(homeUrl), p).tagged()
+        loadCatalogFromPaths(activeProfile()).tagged()
     }
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> {
         if (!supportsMovies) return StreamingProvider.ProviderResult.Success(emptyList())
         return runCatchingProvider {
             val p = activeProfile()
-            val path = profile.moviePath.ifBlank { profile.homePath }
-            UniversalHtmlScraper.parseSeriesList(fetch(p.baseUrl + path), p)
-                .map { it.copy(isMovie = true, providerId = id) }
+            val moviePaths = buildList {
+                if (profile.moviePath.isNotBlank()) add(profile.moviePath)
+                IntlCatalogPaths.catalogPaths(profile.id, profile)
+                    .filter { it.contains("movie", ignoreCase = true) || it.contains("film", ignoreCase = true) || it.contains("pelicula", ignoreCase = true) }
+                    .forEach { add(it) }
+                if (isEmpty()) add(profile.homePath.ifBlank { "/" })
+            }.distinct()
+            var results = emptyList<Series>()
+            for (path in moviePaths) {
+                results = UniversalHtmlScraper.parseSeriesList(fetch(p.baseUrl + path), p)
+                    .map { it.copy(isMovie = true, providerId = id) }
+                if (results.isNotEmpty()) break
+            }
+            results
         }
     }
 
@@ -217,11 +223,14 @@ open class ConfigurableSiteProvider(
     override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val p = activeProfile()
         if (page <= 0) {
-            UniversalHtmlScraper.parseSeriesList(fetch(p.baseUrl + profile.homePath), p).tagged()
+            loadCatalogFromPaths(p).tagged()
         } else {
-            val template = profile.catalogPageTemplate.ifBlank { "${profile.homePath}?page={page}" }
+            val basePath = profile.homePath.ifBlank { "/" }
+            val template = profile.catalogPageTemplate.ifBlank { "${basePath.trimEnd('/')}?page={page}" }
             val path = template.replace("{page}", (page + 1).toString())
-            UniversalHtmlScraper.parseSeriesList(fetch(p.baseUrl + path), p).tagged()
+            val results = UniversalHtmlScraper.parseSeriesList(fetch(p.baseUrl + path), p)
+            if (results.isNotEmpty()) results.tagged()
+            else loadCatalogFromPaths(p).tagged()
         }
     }
 
@@ -251,6 +260,17 @@ open class ConfigurableSiteProvider(
     private fun slugTmdbId(slug: String): String? {
         val cleaned = slug.removePrefix("tv-").removePrefix("movie-")
         return cleaned.takeIf { it.all { c -> c.isDigit() } && it.isNotBlank() }
+    }
+
+    /** Try multiple catalog entry points (intl mirrors often expose /movie, /tv-show, etc.). */
+    protected suspend fun loadCatalogFromPaths(p: SiteProfile): List<Series> {
+        val paths = IntlCatalogPaths.catalogPaths(profile.id, profile)
+        var results = emptyList<Series>()
+        for (path in paths) {
+            results = UniversalHtmlScraper.parseSeriesList(fetchCached(p.baseUrl + path), p)
+            if (results.isNotEmpty()) break
+        }
+        return results
     }
 
     protected suspend fun fetch(url: String): String = fetchCached(url)
