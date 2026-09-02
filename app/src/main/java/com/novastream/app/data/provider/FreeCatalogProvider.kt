@@ -123,15 +123,18 @@ class FreeCatalogProvider(
         }
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        FreeMetaService.catalogPage(0)
-            .filter { show ->
-                show.genres.any { it.equals(genre, true) } ||
-                    show.genres.any { it.contains(genre, true) }
-            }
-            .map { mapShow(it) }
-            .ifEmpty {
-                FreeMetaService.search(genre).map { mapShow(it) }
-            }
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            FreeMetaService.catalogPage(0)
+                .filter { show ->
+                    show.genres.any { it.equals(genre, true) } ||
+                        show.genres.any { it.contains(genre, true) }
+                }
+                .map { mapShow(it) }
+                .ifEmpty {
+                    FreeMetaService.search(genre).map { mapShow(it) }
+                }
+        }
     }
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {

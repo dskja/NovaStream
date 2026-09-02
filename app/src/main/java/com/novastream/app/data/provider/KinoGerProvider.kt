@@ -65,14 +65,8 @@ class KinoGerProvider(
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
-    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
-        com.novastream.app.data.model.Genre("action", "Action"),
-        com.novastream.app.data.model.Genre("komodie", "Komödie"),
-        com.novastream.app.data.model.Genre("drama", "Drama"),
-        com.novastream.app.data.model.Genre("horror", "Horror"),
-        com.novastream.app.data.model.Genre("thriller", "Thriller"),
-        com.novastream.app.data.model.Genre("fantasy", "Fantasy")
-    )
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(id)
 
     // LRU Cache mit maximal 20 Einträgen (verhindert unbounded Memory Growth)
     private val detailCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {

@@ -37,20 +37,8 @@ class AniWorldProvider(
 
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
 
-    override val availableGenres: List<Genre> = listOf(
-        Genre("action", "Action"),
-        Genre("adventure", "Abenteuer"),
-        Genre("comedy", "Comedy"),
-        Genre("drama", "Drama"),
-        Genre("fantasy", "Fantasy"),
-        Genre("horror", "Horror"),
-        Genre("romance", "Romance"),
-        Genre("sci-fi", "Sci-Fi"),
-        Genre("slice-of-life", "Slice of Life"),
-        Genre("supernatural", "Supernatural"),
-        Genre("thriller", "Thriller"),
-        Genre("mystery", "Mystery")
-    )
+    override val availableGenres: List<Genre>
+        get() = ProviderGenres.forId(id)
 
     private fun tag(series: Series): Series = series.copy(
         providerId = id,

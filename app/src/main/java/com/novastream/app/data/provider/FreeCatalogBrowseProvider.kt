@@ -58,7 +58,8 @@ class FreeCatalogBrowseProvider(
         StreamingProvider.ProviderResult.Error("Browse only")
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        coroutineScope {
+        if (genre.trim().isBlank()) emptyList()
+        else coroutineScope {
             val lang = effectiveLanguage()
             val region = ContentRegionResolver.tvmazeRegionFor(lang)
             val scheduleDef = async {

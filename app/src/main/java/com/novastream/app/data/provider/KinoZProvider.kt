@@ -49,14 +49,8 @@ class KinoZProvider(
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
-    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
-        com.novastream.app.data.model.Genre("Action", "Action"),
-        com.novastream.app.data.model.Genre("Komodie", "Komödie"),
-        com.novastream.app.data.model.Genre("Drama", "Drama"),
-        com.novastream.app.data.model.Genre("Horror", "Horror"),
-        com.novastream.app.data.model.Genre("Thriller", "Thriller"),
-        com.novastream.app.data.model.Genre("Science-Fiction", "Sci-Fi")
-    )
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(id)
 
     private val streamPathRegex = Regex("""/Stream/([^/]+?)\.html""", RegexOption.IGNORE_CASE)
 

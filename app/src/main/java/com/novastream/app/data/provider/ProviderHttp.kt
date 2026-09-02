@@ -70,6 +70,11 @@ object ProviderHttp {
         return html
     }
 
+    /** Clears the shared HTTP response cache (e.g. on provider/mirror switch). */
+    suspend fun clearCache() {
+        cacheMutex.withLock { cache.clear() }
+    }
+
     /** Try multiple entry URLs; returns first base URL whose home page looks valid. */
     suspend fun resolveWorkingBase(
         candidates: List<String>,

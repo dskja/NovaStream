@@ -37,6 +37,9 @@ class BurningSeriesProvider(
 
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
 
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(id)
+
     private val mirror = MirrorSupport(id, baseUrl, appContext, "/serie/")
 
     private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())

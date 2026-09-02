@@ -49,6 +49,9 @@ open class ConfigurableSiteProvider(
     override val catalogHint: String?
         get() = ProviderCatalogHints.forId(profile.id)
 
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(profile.id)
+
     private fun List<Series>.tagged(): List<Series> =
         map { if (it.providerId == id) it else it.copy(providerId = id) }
 

@@ -49,14 +49,8 @@ class FilmPalastProvider(
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
-    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
-        com.novastream.app.data.model.Genre("action", "Action"),
-        com.novastream.app.data.model.Genre("comedy", "Comedy"),
-        com.novastream.app.data.model.Genre("drama", "Drama"),
-        com.novastream.app.data.model.Genre("horror", "Horror"),
-        com.novastream.app.data.model.Genre("thriller", "Thriller"),
-        com.novastream.app.data.model.Genre("science-fiction", "Sci-Fi")
-    )
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(id)
 
     private val episodeSlugRegex = Regex("""-s(\d+)e(\d+)$""", RegexOption.IGNORE_CASE)
     private val streamSlugRegex = Regex("""/stream/([\w%.-]+)""", RegexOption.IGNORE_CASE)

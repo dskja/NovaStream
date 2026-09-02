@@ -35,20 +35,8 @@ open class SerienStreamProvider(
 
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
 
-    override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
-        com.novastream.app.data.model.Genre("action", "Action"),
-        com.novastream.app.data.model.Genre("comedy", "Comedy"),
-        com.novastream.app.data.model.Genre("drama", "Drama"),
-        com.novastream.app.data.model.Genre("science-fiction", "Sci-Fi"),
-        com.novastream.app.data.model.Genre("thriller", "Thriller"),
-        com.novastream.app.data.model.Genre("horror", "Horror"),
-        com.novastream.app.data.model.Genre("fantasy", "Fantasy"),
-        com.novastream.app.data.model.Genre("krimi", "Krimi"),
-        com.novastream.app.data.model.Genre("mystery", "Mystery"),
-        com.novastream.app.data.model.Genre("anime", "Anime"),
-        com.novastream.app.data.model.Genre("romantik", "Romantik"),
-        com.novastream.app.data.model.Genre("abenteuer", "Abenteuer")
-    )
+    override val availableGenres: List<com.novastream.app.data.model.Genre>
+        get() = ProviderGenres.forId(id)
 
     private val mirror = MirrorSupport(id, baseUrl, appContext, "/serie/") {
         cachedApi = null
