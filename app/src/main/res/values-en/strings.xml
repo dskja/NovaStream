@@ -203,6 +203,7 @@
     <string name="search_trending">Trending now</string>
     <string name="search_empty">Search for movies &amp; series</string>
     <string name="search_no_results">No results for \'%1$s\'</string>
+    <string name="search_providers_count_fmt">%1$d providers</string>
     <string name="search_bs_blocked">No results. Burning Series often blocks bot searches (Captcha) – try again later.</string>
     <string name="press_back_again">Press back again to exit</string>
     <string name="invalid_playback_params">Invalid playback parameters</string>

@@ -99,4 +99,52 @@ class NovaStreamMigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun migrate14To15_addsWatchlistMetaColumns() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_14_15_test"
+        context.deleteDatabase(dbName)
+        val config = androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(14) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE watchlist (
+                            itemKey TEXT NOT NULL PRIMARY KEY,
+                            profileId TEXT NOT NULL DEFAULT 'default',
+                            providerId TEXT NOT NULL,
+                            slug TEXT NOT NULL,
+                            title TEXT NOT NULL,
+                            coverUrl TEXT,
+                            isMovie INTEGER NOT NULL DEFAULT 0,
+                            addedAt INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO watchlist (itemKey, profileId, providerId, slug, title, coverUrl, isMovie, addedAt)
+                        VALUES ('default|p1|dark', 'default', 'p1', 'dark', 'Dark', NULL, 0, 1000)
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(config)
+        val db = helper.writableDatabase
+        NovaStreamDatabase.ALL_MIGRATIONS
+            .filter { it.startVersion == 14 && it.endVersion == 15 }
+            .forEach { migration -> migration.migrate(db) }
+        db.query("SELECT isAdult, genres FROM watchlist WHERE slug = 'dark'").use { cursor ->
+            assertEquals(1, cursor.count)
+            cursor.moveToFirst()
+            assertTrue(cursor.isNull(0))
+            assertTrue(cursor.isNull(1))
+        }
+        db.close()
+    }
 }

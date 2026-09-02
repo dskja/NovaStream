@@ -15,7 +15,9 @@ object EpisodeMetaMerger {
             ep.copy(
                 title = ep.title.takeIf { it.isNotBlank() && !it.equals("Episode ${ep.number}", true) }
                     ?: meta.title.ifBlank { ep.title },
-                thumbnailUrl = ep.thumbnailUrl ?: meta.imageUrl
+                thumbnailUrl = ep.thumbnailUrl ?: meta.imageUrl,
+                summary = ep.summary?.takeIf { it.isNotBlank() } ?: meta.summary?.takeIf { it.isNotBlank() },
+                airdate = ep.airdate ?: meta.airdate
             )
         }
     }

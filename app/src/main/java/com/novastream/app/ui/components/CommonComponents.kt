@@ -285,6 +285,25 @@ fun SeriesPosterCard(
                 }
             }
 
+            val providerCount = series.availableProviderCount
+            if (providerCount != null && providerCount > 1) {
+                Box(
+                    Modifier
+                        .align(if (series.isMovie) Alignment.BottomStart else Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Primary.copy(alpha = 0.92f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.search_providers_count_fmt, providerCount),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             // Watchlist indicator badge (top-right corner)
             if (inWatchlist && showWatchlistBadge) {
                 Box(

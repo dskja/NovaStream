@@ -166,7 +166,9 @@ class WatchRepository @Inject constructor(
         title: String,
         coverUrl: String?,
         isMovie: Boolean = false,
-        providerId: String = ActiveProvider.id
+        providerId: String = ActiveProvider.id,
+        isAdult: Boolean? = null,
+        genres: List<String> = emptyList()
     ) {
         try {
             val profileId = activeProfileId()
@@ -178,11 +180,21 @@ class WatchRepository @Inject constructor(
                     slug = slug,
                     title = title,
                     coverUrl = coverUrl,
-                    isMovie = isMovie
+                    isMovie = isMovie,
+                    isAdult = isAdult,
+                    genres = WatchlistItem.genresToCsv(genres)
                 )
             )
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "addToWatchlist failed", e)
+        }
+    }
+
+    suspend fun upsertWatchlistItem(item: WatchlistItem) {
+        try {
+            watchlistDao.upsert(item)
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "upsertWatchlistItem failed", e)
         }
     }
 

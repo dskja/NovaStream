@@ -30,9 +30,11 @@ object SearchResultAggregator {
         return buckets.values
             .map { entries ->
                 val merged = mergeSeriesFields(entries.map { it.second })
+                val providerCount = entries.map { it.first }.toSet().size
                 val tagged = merged.copy(
                     providerId = entries.first().first,
-                    title = merged.title.ifBlank { entries.first().second.title }
+                    title = merged.title.ifBlank { entries.first().second.title },
+                    availableProviderCount = providerCount.takeIf { it > 1 }
                 )
                 AggregatedResult(
                     series = tagged,

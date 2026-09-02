@@ -317,7 +317,9 @@ class DetailViewModel @Inject constructor(
                     slug = series.id,
                     title = series.title,
                     coverUrl = series.coverUrl,
-                    isMovie = series.isMovie
+                    isMovie = series.isMovie,
+                    isAdult = series.isAdult,
+                    genres = series.genres
                 )
             }
         }

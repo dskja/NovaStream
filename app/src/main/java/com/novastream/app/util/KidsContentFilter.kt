@@ -66,6 +66,20 @@ object KidsContentFilter {
     }
 
     fun isKidsSafeWatchlist(item: WatchlistItem): Boolean {
+        if (item.isAdult == true) return false
+        val genres = item.parseGenres()
+        if (genres.isNotEmpty()) {
+            return isKidsSafe(
+                Series(
+                    id = item.slug,
+                    title = item.title,
+                    genres = genres,
+                    isAdult = item.isAdult,
+                    providerId = item.providerId,
+                    isMovie = item.isMovie
+                )
+            )
+        }
         if (isBlockedTitle(item.title)) return false
         if (isBlockedSlug(item.slug)) return false
         return true

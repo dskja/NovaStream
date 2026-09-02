@@ -201,6 +201,7 @@
     <string name="search_trending">Beliebt jetzt</string>
     <string name="search_empty">Suche nach Filmen &amp; Serien</string>
     <string name="search_no_results">Keine Treffer für \'%1$s\'</string>
+    <string name="search_providers_count_fmt">%1$d Provider</string>
     <string name="search_bs_blocked">Keine Treffer. Burning Series blockiert oft Bot-Suchen (Captcha) – bitte später erneut versuchen.</string>
     <string name="press_back_again">Nochmal zurück drücken zum Beenden</string>
     <string name="invalid_playback_params">Ungültige Wiedergabeparameter</string>

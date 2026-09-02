@@ -26,7 +26,9 @@ data class Series(
     /** Primary dedup key, e.g. imdb:tt0903747 or tvmaze:169. */
     val canonicalKey: String? = null,
     /** TMDB ID from Wikidata cross-refs only — not from TMDB API. */
-    val tmdbId: Int? = null
+    val tmdbId: Int? = null,
+    /** Number of providers this title was found on (search aggregation). */
+    val availableProviderCount: Int? = null
 ) {
     val absoluteDetailUrl: String
         get() {

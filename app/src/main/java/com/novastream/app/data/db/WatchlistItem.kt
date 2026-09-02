@@ -29,7 +29,11 @@ data class WatchlistItem(
     val title: String,
     val coverUrl: String?,
     val isMovie: Boolean = false,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    /** Tri-state adult flag from scraper/meta when added or enriched. */
+    val isAdult: Boolean? = null,
+    /** Comma-separated genre list for kids filtering. */
+    val genres: String? = null
 ) {
     fun toSeries(): Series = Series(
         id = slug,
@@ -37,8 +41,15 @@ data class WatchlistItem(
         coverUrl = coverUrl,
         detailUrl = ProviderUrls.detailUrl(providerId.ifBlank { "unknown" }, slug, isMovie),
         isMovie = isMovie,
-        providerId = providerId
+        providerId = providerId,
+        genres = parseGenres(),
+        isAdult = isAdult
     )
+
+    fun parseGenres(): List<String> = genres?.split(',')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: emptyList()
 
     val hasCover: Boolean get() = !coverUrl.isNullOrBlank()
 
@@ -51,5 +62,10 @@ data class WatchlistItem(
     companion object {
         fun key(profileId: String, providerId: String, slug: String): String =
             "$profileId|$providerId|$slug"
+
+        fun genresToCsv(genres: List<String>): String? =
+            genres.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString(",")
     }
 }

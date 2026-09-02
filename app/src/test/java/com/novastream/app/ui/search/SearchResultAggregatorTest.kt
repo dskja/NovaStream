@@ -91,4 +91,12 @@ class SearchResultAggregatorTest {
         val merged = SearchResultAggregator.mergeSeriesFields(listOf(safe, risky))
         assertEquals(true, merged.isAdult)
     }
+
+    @Test
+    fun `aggregate sets provider count when multiple providers`() {
+        val s1 = Series(id = "a", title = "Dark", providerId = "p1")
+        val s2 = Series(id = "b", title = "Dark", providerId = "p2")
+        val detailed = SearchResultAggregator.aggregateDetailed(listOf("p1" to listOf(s1), "p2" to listOf(s2)))
+        assertEquals(2, detailed.first().series.availableProviderCount)
+    }
 }

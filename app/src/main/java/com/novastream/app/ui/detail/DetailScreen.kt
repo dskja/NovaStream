@@ -1058,6 +1058,15 @@ private fun PremiumEpisodeRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
+            episode.airdate?.takeIf { it.isNotBlank() }?.let { date ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    date,
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp
+                )
+            }
             if (episode.hosters.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

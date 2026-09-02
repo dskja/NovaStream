@@ -36,6 +36,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.novastream.app.data.db.WatchlistItem
+import com.novastream.app.data.meta.CatalogMetaEnricher
+import com.novastream.app.data.prefs.AppSettings
+import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
@@ -58,6 +62,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 enum class WatchlistProviderFilter(@StringRes val labelRes: Int) {
@@ -87,7 +92,9 @@ class WatchlistViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
     private val providerController: ProviderController,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val catalogMetaEnricher: CatalogMetaEnricher,
+    private val appSettings: AppSettings
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WatchlistUiState())
@@ -122,6 +129,7 @@ class WatchlistViewModel @Inject constructor(
                             loading = false
                         )
                     }
+                    enrichWatchlistMetadata(items)
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
@@ -188,6 +196,39 @@ class WatchlistViewModel @Inject constructor(
         _state.update { it.copy(items = sorted) }
     }
 
+    private fun enrichWatchlistMetadata(items: List<WatchlistItem>) {
+        val needsEnrich = items.any { it.isAdult == null && it.genres.isNullOrBlank() }
+        if (!needsEnrich) return
+        viewModelScope.launch {
+            try {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val preferAnime = ActiveProvider.isAniWorld
+                var changed = false
+                val enriched = items.map { item ->
+                    if (item.isAdult != null && !item.genres.isNullOrBlank()) return@map item
+                    val series = catalogMetaEnricher.enrichOne(item.toSeries(), language, preferAnime)
+                    val updated = item.copy(
+                        coverUrl = series.coverUrl ?: item.coverUrl,
+                        isAdult = series.isAdult ?: item.isAdult,
+                        genres = WatchlistItem.genresToCsv(series.genres) ?: item.genres
+                    )
+                    if (updated != item) {
+                        changed = true
+                        watchRepo.upsertWatchlistItem(updated)
+                    }
+                    updated
+                }
+                if (!changed) return@launch
+                val pid = providerController.activeProviderId.value
+                val filtered = filterByProvider(enriched, _state.value.providerFilter, pid)
+                val sorted = sortItems(KidsContentFilter.filterWatchlist(filtered, kidsMode), _state.value.sortOption)
+                _state.update { it.copy(allItems = enriched, items = sorted) }
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("WatchlistVM", "enrichWatchlistMetadata failed", e)
+            }
+        }
+    }
+
     fun switchToProvider(providerId: String) {
         viewModelScope.launch {
             if (ProviderManager.getProviderOrNull(providerId) == null) return@launch
@@ -241,7 +282,9 @@ fun WatchlistScreen(
         if (!state.loading && state.items.isNotEmpty()) {
             try {
                 initialFocus.requestFocus()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("WatchlistScreen", "focus request failed", e)
+            }
         }
     }
 
