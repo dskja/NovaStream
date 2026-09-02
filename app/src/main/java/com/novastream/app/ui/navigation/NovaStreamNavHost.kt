@@ -65,7 +65,7 @@ object Routes {
     const val SETTINGS_PLAYBACK = "settings/playback"
     const val SETTINGS_APPEARANCE = "settings/appearance"
     const val SETTINGS_ADVANCED = "settings/advanced"
-    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}&streamUrl={streamUrl}&isLive={isLive}&downloadId={downloadId}"
+    const val PLAYER = "player/{slug}/{season}/{episode}?title={title}&seriesTitle={seriesTitle}&coverUrl={coverUrl}&isMovie={isMovie}&streamUrl={streamUrl}&isLive={isLive}&downloadId={downloadId}&playbackId={playbackId}"
 
     fun browse(section: String = "", genre: String? = null, filter: String? = null): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
@@ -86,7 +86,8 @@ object Routes {
         isMovie: Boolean = false,
         streamUrl: String? = null,
         isLive: Boolean = false,
-        downloadId: String? = null
+        downloadId: String? = null,
+        playbackId: String? = null
     ): String {
         fun enc(s: String) = try { java.net.URLEncoder.encode(s, "UTF-8") } catch (_: Exception) { s }
         val t = enc(title)
@@ -94,7 +95,8 @@ object Routes {
         val cu = coverUrl?.let { enc(it) } ?: ""
         val su = streamUrl?.let { enc(it) } ?: ""
         val did = downloadId?.let { enc(it) } ?: ""
-        return "player/${enc(slug)}/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive&downloadId=$did"
+        val pid = playbackId?.let { enc(it) } ?: ""
+        return "player/${enc(slug)}/$season/$episode?title=$t&seriesTitle=$st&coverUrl=$cu&isMovie=$isMovie&streamUrl=$su&isLive=$isLive&downloadId=$did&playbackId=$pid"
     }
 
     /** Liste aller Haupt-Routes (für Nav-Bar Anzeige). */
@@ -123,6 +125,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
     }
     val navVm: NavHostViewModel = hiltViewModel()
     val watchlistCount by navVm.watchlistCount.collectAsStateWithLifecycle()
+    val playbackRequestStore = navVm.playbackRequestStore
     val uiLocale by appSettings.uiLocale.collectAsStateWithLifecycle(initialValue = LocaleManager.SYSTEM_LOCALE)
 
     if (onboardingComplete == null) {
@@ -393,7 +396,8 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                     navArgument("isMovie") { type = NavType.BoolType; defaultValue = false },
                     navArgument("streamUrl") { type = NavType.StringType; defaultValue = "" },
                     navArgument("isLive") { type = NavType.BoolType; defaultValue = false },
-                    navArgument("downloadId") { type = NavType.StringType; defaultValue = "" }
+                    navArgument("downloadId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("playbackId") { type = NavType.StringType; defaultValue = "" }
                 ),
                 enterTransition = {
                     androidx.compose.animation.slideInVertically(
@@ -448,6 +452,11 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                 LiveTvScreen(
                     onBack = { nav.popBackStack() },
                     onPlayChannel = { channel ->
+                        val playbackId = playbackRequestStore.put(
+                            streamUrl = channel.streamUrl,
+                            isLive = true,
+                            title = channel.name
+                        )
                         nav.navigate(
                             Routes.player(
                                 slug = "live_${channel.id.take(32)}",
@@ -457,8 +466,8 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                                 seriesTitle = channel.group ?: context.getString(R.string.live_tv_title),
                                 coverUrl = channel.logoUrl,
                                 isMovie = false,
-                                streamUrl = channel.streamUrl,
-                                isLive = true
+                                isLive = true,
+                                playbackId = playbackId
                             )
                         )
                     }

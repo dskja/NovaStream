@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.ui.navigation.NovaStreamNavHost
+import com.novastream.app.ui.player.PlayerPlaybackController
 import com.novastream.app.ui.theme.NovaStreamTheme
 import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.util.VoeWebViewResolver
@@ -80,6 +81,13 @@ class MainActivity : ComponentActivity() {
             java.net.URLDecoder.decode(raw, "UTF-8")
         } catch (_: Exception) {
             raw
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            PlayerPlaybackController.requestPictureInPicture()
         }
     }
 

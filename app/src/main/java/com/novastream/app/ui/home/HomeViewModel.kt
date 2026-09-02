@@ -144,6 +144,7 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
+                providerController.isReady.first { it }
                 providerController.activeProviderId.collect { providerId ->
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId

@@ -28,18 +28,24 @@ class ProviderController @Inject constructor(
     private val _isSwitching = MutableStateFlow(false)
     val isSwitching: StateFlow<Boolean> = _isSwitching.asStateFlow()
 
+    /** True after the first DataStore provider id has been applied (avoids default-provider flash). */
+    private val _isReady = MutableStateFlow(false)
+    val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
+
     fun startObserving(scope: CoroutineScope) {
         scope.launch {
             withContext(Dispatchers.Default) { ProviderRegistry.ensureBuilt() }
             try {
                 ProviderManager.activeProviderIdFlow(context).collect { providerId ->
                     syncFromStore(providerId)
+                    if (!_isReady.value) _isReady.value = true
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) {
                     android.util.Log.e("ProviderController", "Provider sync failed", e)
                 }
                 syncFromStore(ProviderManager.defaultProviderId)
+                if (!_isReady.value) _isReady.value = true
             }
         }
     }

@@ -140,16 +140,54 @@ fun PlayerScreen(
         }
     }
 
-    fun enterPipIfSupported() {
-        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
-        if (currentSource == null) return
+    fun enterPipIfSupported(): Boolean {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return false
+        if (currentSource == null) return false
+        try {
+            val builder = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setAutoEnterEnabled(exoPlayer.isPlaying)
+            }
+            activity.enterPictureInPictureMode(builder.build())
+            return activity.isInPictureInPictureMode
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    fun updatePipAutoEnter() {
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        if (!playerVisible || currentSource == null) return
         try {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
+                .setAutoEnterEnabled(exoPlayer.isPlaying)
                 .build()
-            activity.enterPictureInPictureMode(params)
+            activity.setPictureInPictureParams(params)
         } catch (_: Exception) {}
+    }
+
+    DisposableEffect(playerVisible, currentSource) {
+        val pipListener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePipAutoEnter()
+            }
+        }
+        exoPlayer.addListener(pipListener)
+        PlayerPlaybackController.pipEnterHandler = {
+            if (playerVisible && currentSource != null && exoPlayer.isPlaying) {
+                enterPipIfSupported()
+            } else {
+                false
+            }
+        }
+        updatePipAutoEnter()
+        onDispose {
+            exoPlayer.removeListener(pipListener)
+            PlayerPlaybackController.pipEnterHandler = null
+        }
     }
 
     DisposableEffect(lifecycleOwner, currentSource) {
@@ -264,6 +302,7 @@ fun PlayerScreen(
         playerVisible = true
         showHosters = false
         vm.ensureAdjacentEpisodesLoaded()
+        updatePipAutoEnter()
 
         val playbackTitle = state.episodeTitle.ifBlank { state.seriesTitle }.ifBlank { "NovaStream" }
         if (notificationReady || com.novastream.app.util.hasNotificationPermission(context)) {
@@ -319,7 +358,7 @@ fun PlayerScreen(
 
     DisposableEffect(exoPlayer, episodeEndListener) {
         exoPlayer.addListener(episodeEndListener)
-        PlayerPlaybackController.attach(exoPlayer)
+        PlayerPlaybackController.attach(context, exoPlayer)
         onDispose {
             PlayerPlaybackController.detach(exoPlayer)
             if (!state.isLive) {

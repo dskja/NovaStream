@@ -10,13 +10,15 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaStyleNotificationHelper
 import com.novastream.app.MainActivity
 import com.novastream.app.R
 
 /**
- * Minimaler Foreground-Service für Hintergrund-Wiedergabe (Audio).
- * Hält die App im Vordergrund während Video/Audio läuft.
+ * Foreground-Service für Hintergrund-Wiedergabe mit MediaSession-Benachrichtigung.
  */
+@UnstableApi
 class PlaybackForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -80,6 +82,14 @@ class PlaybackForegroundService : Service() {
             .addAction(0, getString(R.string.playback_stop), stopIntent)
             .setOngoing(true)
             .setSilent(true)
+            .apply {
+                PlayerPlaybackController.mediaSession()?.let { session ->
+                    setStyle(
+                        MediaStyleNotificationHelper.MediaStyle(session)
+                            .setShowActionsInCompactView(0)
+                    )
+                }
+            }
             .build()
     }
 

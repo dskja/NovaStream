@@ -71,6 +71,7 @@ class BrowseViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            providerController.isReady.first { it }
             var isFirstEmission = true
             providerController.activeProviderId.collect { providerId ->
                 if (isFirstEmission || activeProviderId != providerId) {

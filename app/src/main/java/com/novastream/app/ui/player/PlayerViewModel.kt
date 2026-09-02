@@ -9,6 +9,7 @@ import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.data.playback.PlaybackRequestStore
 import com.novastream.app.download.DownloadManagerHelper
 import android.content.Context
 import com.novastream.app.R
@@ -99,7 +100,8 @@ class PlayerViewModel @Inject constructor(
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
-    private val downloadHelper: DownloadManagerHelper
+    private val downloadHelper: DownloadManagerHelper,
+    private val playbackRequestStore: PlaybackRequestStore
 ) : ViewModel() {
 
     private val slug: String = run {
@@ -129,9 +131,15 @@ class PlayerViewModel @Inject constructor(
     private val downloadId: String? = savedStateHandle.get<String>("downloadId")?.let {
         try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     }?.takeIf { it.isNotBlank() }
-    private val directStreamUrl: String? = savedStateHandle.get<String>("streamUrl")?.let {
+    private val playbackId: String? = savedStateHandle.get<String>("playbackId")?.let {
         try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
     }?.takeIf { it.isNotBlank() }
+    private val storedPlayback = playbackId?.let { playbackRequestStore.get(it) }
+    private val directStreamUrl: String? = storedPlayback?.streamUrl
+        ?: savedStateHandle.get<String>("streamUrl")?.let {
+            try { java.net.URLDecoder.decode(it, "UTF-8") } catch (_: Exception) { it }
+        }?.takeIf { it.isNotBlank() }
+    private val resolvedIsLive: Boolean = isLive || (storedPlayback?.isLive == true)
 
     private val _state = MutableStateFlow(PlayerUiState(
         episodeTitle = title,
@@ -140,7 +148,7 @@ class PlayerViewModel @Inject constructor(
         season = season,
         episode = episode,
         isMovie = isMovie,
-        isLive = isLive
+        isLive = resolvedIsLive
     ))
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
@@ -250,7 +258,7 @@ class PlayerViewModel @Inject constructor(
 
             if (!directStreamUrl.isNullOrBlank()) {
                 val url = directPlaybackUrl(directStreamUrl)
-                val label = if (isLive) "Live" else "Offline"
+                val label = if (resolvedIsLive) "Live" else "Offline"
                 val source = StreamSource(
                     hoster = label,
                     url = url,
@@ -616,5 +624,10 @@ class PlayerViewModel @Inject constructor(
             return if (trimmed.startsWith("/")) "file://$trimmed" else trimmed
         }
         return com.novastream.app.util.MediaUrls.playbackUrl(trimmed)
+    }
+
+    override fun onCleared() {
+        playbackId?.let { playbackRequestStore.remove(it) }
+        super.onCleared()
     }
 }

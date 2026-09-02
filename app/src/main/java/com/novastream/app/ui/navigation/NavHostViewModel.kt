@@ -2,6 +2,7 @@ package com.novastream.app.ui.navigation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.novastream.app.data.playback.PlaybackRequestStore
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.WatchRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,7 +15,8 @@ import javax.inject.Inject
 @HiltViewModel
 class NavHostViewModel @Inject constructor(
     watchRepository: WatchRepository,
-    providerController: ProviderController
+    providerController: ProviderController,
+    val playbackRequestStore: PlaybackRequestStore
 ) : ViewModel() {
 
     val watchlistCount: StateFlow<Int> = combine(

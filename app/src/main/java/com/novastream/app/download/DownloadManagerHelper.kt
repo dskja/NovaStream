@@ -179,8 +179,8 @@ class DownloadManagerHelper @Inject constructor(
         val mimeType = request.mimeType?.takeIf { it.isNotBlank() }
             ?: inferMimeType(url)
         val isHls = isHlsMime(mimeType) || url.contains(".m3u8", ignoreCase = true)
-        val cacheKey = request.customCacheKey?.takeIf { it.isNotBlank() }
-            ?: if (!isHls) downloadId else null
+        // Media3 keys HLS + progressive offline segments by download request id.
+        val cacheKey = request.customCacheKey?.takeIf { it.isNotBlank() } ?: downloadId
         return StreamSource(
             hoster = "Offline",
             url = url,
