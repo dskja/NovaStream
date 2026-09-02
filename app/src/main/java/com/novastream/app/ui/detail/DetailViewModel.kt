@@ -11,6 +11,7 @@ import com.novastream.app.data.meta.EpisodeMetaMerger
 import com.novastream.app.data.meta.ExternalIds
 import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.meta.FreeMetaService
+import com.novastream.app.data.meta.TrailerMetaService
 import com.novastream.app.data.meta.MetaEnrichment
 import com.novastream.app.data.model.Episode
 import com.novastream.app.data.model.Season
@@ -58,7 +59,10 @@ data class DetailUiState(
     val metaCast: List<com.novastream.app.data.meta.MetaPerson> = emptyList(),
     val metaRating: Double? = null,
     val contentRating: String? = null,
+    val contentRatingSource: String? = null,
+    val metaRuntime: Int? = null,
     val metaNetwork: String? = null,
+    val officialSite: String? = null,
     val imdbId: String? = null,
     val trailerUrl: String? = null,
     val relatedTitles: List<Series> = emptyList(),
@@ -437,14 +441,18 @@ class DetailViewModel @Inject constructor(
                     return@launch
                 }
 
-                applyGraphEnrichment(series, enrichment)
+                applyGraphEnrichment(series, enrichment, language)
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("DetailVM", "meta enrich failed", e)
             }
         }
     }
 
-    private suspend fun applyGraphEnrichment(series: Series, enrichment: MetaEnrichment) {
+    private suspend fun applyGraphEnrichment(
+        series: Series,
+        enrichment: MetaEnrichment,
+        language: ContentLanguage
+    ) {
         val meta = enrichment.show
         val ids = enrichment.externalIds
         val enriched = mergeSeriesWithMeta(series, meta).copy(
@@ -494,15 +502,25 @@ class DetailViewModel @Inject constructor(
             return
         }
 
+        val trailerUrl = meta.trailerUrl
+            ?: TrailerMetaService.resolve(meta, ids)
+            ?: FreeMetaService.trailerUrlFor(meta)
+        val contentRating = meta.contentRating
+            ?: enrichment.ageRating?.primaryForLanguage(language)
+            ?: enrichment.ageRating?.primaryCertification
+
         _state.update {
             it.copy(
                 series = enriched,
                 metaCast = enrichment.cast.ifEmpty { meta.cast },
                 metaRating = meta.rating,
-                contentRating = meta.contentRating ?: enrichment.ageRating?.primaryCertification,
+                contentRating = contentRating,
+                contentRatingSource = meta.contentRatingSource ?: enrichment.ageRating?.source,
+                metaRuntime = meta.runtime,
                 metaNetwork = meta.network,
+                officialSite = meta.officialSite,
                 imdbId = ids.imdbId ?: meta.imdbId,
-                trailerUrl = meta.trailerUrl ?: FreeMetaService.trailerUrlFor(meta),
+                trailerUrl = trailerUrl,
                 relatedTitles = similar.ifEmpty { it.relatedTitles },
                 alsoOnProviders = alsoOn
             )

@@ -37,6 +37,8 @@ object AniListMetaService {
             node { name { full } image { medium } }
           }
         }
+        trailer { id site }
+        duration
     """.trimIndent()
 
     suspend fun search(query: String, limit: Int = 10): List<MetaShow> = withContext(Dispatchers.IO) {
@@ -100,6 +102,22 @@ object AniListMetaService {
         show.similar.take(limit)
     }
 
+    suspend fun trailerForMedia(anilistId: Int): String? = withContext(Dispatchers.IO) {
+        if (anilistId <= 0) return@withContext null
+        val gql = """
+            query(${ '$' }id: Int) {
+              Media(id: ${ '$' }id, type: ANIME) {
+                trailer { id site }
+              }
+            }
+        """.trimIndent()
+        val body = postGraphQl(gql, JSONObject().put("id", anilistId)) ?: return@withContext null
+        val trailer = body.optJSONObject("data")
+            ?.optJSONObject("Media")
+            ?.optJSONObject("trailer")
+        TrailerMetaService.parseAniListTrailer(trailer)
+    }
+
     suspend fun trending(limit: Int = 20): List<MetaShow> = withContext(Dispatchers.IO) {
         val gql = """
             query(${ '$' }perPage: Int) {
@@ -142,6 +160,8 @@ object AniListMetaService {
         val isAdultFlag = obj.optBoolean("isAdult", false) ||
             genres.any { it.equals("Hentai", ignoreCase = true) }
         val idMal = obj.optInt("idMal", -1).takeIf { it > 0 }
+        val trailerUrl = TrailerMetaService.parseAniListTrailer(obj.optJSONObject("trailer"))
+        val runtime = obj.optInt("duration", -1).takeIf { it > 0 }
         return MetaShow(
             id = "anilist-$id",
             title = title,
@@ -153,6 +173,8 @@ object AniListMetaService {
             posterUrl = poster,
             backdropUrl = obj.optString("bannerImage").takeIf { it.isNotBlank() && it != "null" },
             language = "Japanese",
+            runtime = runtime,
+            trailerUrl = trailerUrl,
             cast = cast,
             anilistId = id,
             idMal = idMal,

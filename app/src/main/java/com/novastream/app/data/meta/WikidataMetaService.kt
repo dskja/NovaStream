@@ -127,6 +127,20 @@ object WikidataMetaService {
         parseExternalIdsFromEntity(entityId, raw)
     }
 
+    /** Official trailer URL via Wikidata P1651 (often YouTube). */
+    suspend fun resolveTrailerUrl(
+        imdbId: String? = null,
+        wikidataId: String? = null
+    ): String? = withContext(Dispatchers.IO) {
+        val qid = wikidataId?.let { if (it.startsWith("Q")) it else "Q$it" }
+            ?: imdbId?.let { lookupByImdb(it)?.wikidataId }
+        if (qid == null) return@withContext null
+        val raw = entityDataRaw(qid) ?: return@withContext null
+        val claims = raw.optJSONObject("claims") ?: return@withContext null
+        val url = claimString(claims, "P1651") ?: return@withContext null
+        if (TrailerMetaService.isDirectPlayable(url)) url else null
+    }
+
     suspend fun resolveAgeRatingLabels(
         imdbId: String? = null,
         entityId: String? = null,

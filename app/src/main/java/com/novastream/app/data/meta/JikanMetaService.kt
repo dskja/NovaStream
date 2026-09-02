@@ -46,6 +46,13 @@ object JikanMetaService {
             ?.takeIf { it.isNotBlank() && it != "null" }
     }
 
+    suspend fun trailerForAnime(malId: Int): String? = withContext(Dispatchers.IO) {
+        if (malId <= 0) return@withContext null
+        val json = get("$BASE/anime/$malId/full") ?: get("$BASE/anime/$malId") ?: return@withContext null
+        val data = JSONObject(json).optJSONObject("data") ?: return@withContext null
+        TrailerMetaService.parseJikanTrailer(data.optJSONObject("trailer"))
+    }
+
     fun isAdultFromRating(rating: String?): Boolean? {
         if (rating.isNullOrBlank()) return null
         val sample = rating.lowercase()
@@ -75,6 +82,8 @@ object JikanMetaService {
         val rating = obj.optString("rating").takeIf { it.isNotBlank() && it != "null" }
         val isAdult = isAdultFromRating(rating)
         val episodes = obj.optInt("episodes", -1).takeIf { it > 0 }
+        val runtime = obj.optInt("duration", -1).takeIf { it > 0 }
+        val trailerUrl = TrailerMetaService.parseJikanTrailer(obj.optJSONObject("trailer"))
         return MetaShow(
             id = "mal-$malId",
             title = title,
@@ -85,6 +94,8 @@ object JikanMetaService {
             rating = score,
             posterUrl = poster,
             backdropUrl = banner,
+            runtime = runtime,
+            trailerUrl = trailerUrl,
             seasonCount = episodes,
             idMal = malId,
             mediaType = if (obj.optString("type").equals("movie", true)) "movie" else "anime",

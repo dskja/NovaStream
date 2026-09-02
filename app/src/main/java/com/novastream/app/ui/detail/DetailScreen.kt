@@ -203,9 +203,10 @@ private fun DetailContent(
                     .height(320.dp)
             ) {
                 if (!series.coverUrl.isNullOrBlank() && !imageError) {
+                    val heroUrl = series.backdropUrl?.takeIf { it.isNotBlank() } ?: series.coverUrl
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(series.coverUrl)
+                            .data(heroUrl)
                             .crossfade(true)
                             .build(),
                         contentDescription = series.title,
@@ -489,7 +490,7 @@ private fun DetailContent(
                 }
                 // Free metadata (TVMaze) pills
                 if (series.genres.isNotEmpty() || state.metaRating != null || state.contentRating != null ||
-                    state.metaNetwork != null || state.imdbId != null
+                    state.metaRuntime != null || state.metaNetwork != null || state.imdbId != null
                 ) {
                     Spacer(Modifier.height(12.dp))
                     Row(
@@ -498,9 +499,18 @@ private fun DetailContent(
                     ) {
                         state.metaRating?.let { StatPill("★ ${String.format("%.1f", it)}") }
                         state.contentRating?.let { StatPill(it) }
+                        state.metaRuntime?.let { StatPill(stringResource(R.string.detail_runtime_fmt, it)) }
                         series.year?.let { StatPill(it) }
                         state.metaNetwork?.let { StatPill(it) }
                         state.imdbId?.let { StatPill(it) }
+                    }
+                    state.contentRatingSource?.takeIf { it.isNotBlank() }?.let { source ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.detail_rating_source_fmt, source),
+                            color = TextTertiary,
+                            fontSize = 11.sp
+                        )
                     }
                     if (series.genres.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
@@ -514,16 +524,67 @@ private fun DetailContent(
                 if (state.metaCast.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))
                     Text(stringResource(R.string.detail_cast), color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        state.metaCast.take(8).joinToString(" · ") {
-                            if (!it.character.isNullOrBlank()) "${it.name} (${it.character})" else it.name
-                        },
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        items(state.metaCast.take(12), key = { it.name }) { person ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.width(72.dp)
+                            ) {
+                                val photoUrl = person.imageUrl?.takeIf { it.isNotBlank() }
+                                if (photoUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(photoUrl)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = person.name,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                    )
+                                } else {
+                                    Box(
+                                        Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(BgSurfaceElevated),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            person.name.take(1).uppercase(),
+                                            color = Accent,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    person.name,
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                person.character?.takeIf { it.isNotBlank() }?.let { role ->
+                                    Text(
+                                        role,
+                                        color = TextTertiary,
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
                 if (state.alsoOnProviders.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))

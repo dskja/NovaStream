@@ -257,6 +257,8 @@
     <string name="detail_seasons_count_fmt">%1$d seasons</string>
     <string name="detail_episodes_count_fmt">%1$d episodes</string>
     <string name="detail_watched_count_fmt">%1$d watched (%2$d%%)</string>
+    <string name="detail_runtime_fmt">%1$d min</string>
+    <string name="detail_rating_source_fmt">Source: %1$s</string>
     <string name="detail_season_label_fmt">Season %1$d</string>
     <string name="detail_seasons_header">Seasons</string>
     <string name="detail_episodes_header">Episodes</string>

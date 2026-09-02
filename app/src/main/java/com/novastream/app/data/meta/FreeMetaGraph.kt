@@ -250,7 +250,8 @@ class FreeMetaGraph @Inject constructor() {
             tmdbId = wikidata.tmdbId ?: mergedAnime.tmdbId,
             wikidataId = wikidata.wikidataId ?: mergedAnime.wikidataId
         )
-        val (ratedShow, ageRating) = attachAgeRating(mergedShow, wikidata, language, scrapedIsAdult)
+        val withTrailer = attachTrailer(mergedShow, wikidata)
+        val (ratedShow, ageRating) = attachAgeRating(withTrailer, wikidata, language, scrapedIsAdult)
         return MetaEnrichment(
             show = ratedShow,
             cast = mergedAnime.cast,
@@ -290,7 +291,8 @@ class FreeMetaGraph @Inject constructor() {
         )
         val similar = FreeMetaService.search(show.genres.firstOrNull() ?: show.title, limit = 15)
             .filter { it.id != show.id }
-        val (ratedShow, ageRating) = attachAgeRating(enrichedShow, wikidata, language, scrapedIsAdult)
+        val withTrailer = attachTrailer(enrichedShow, wikidata)
+        val (ratedShow, ageRating) = attachAgeRating(withTrailer, wikidata, language, scrapedIsAdult)
         return MetaEnrichment(
             show = ratedShow,
             cast = enrichedShow.cast,
@@ -299,6 +301,13 @@ class FreeMetaGraph @Inject constructor() {
             canonicalKey = wikidata.canonicalKey(),
             ageRating = ageRating
         )
+    }
+
+    private suspend fun attachTrailer(show: MetaShow, ids: ExternalIds): MetaShow {
+        val existing = show.trailerUrl
+        if (!existing.isNullOrBlank() && TrailerMetaService.isDirectPlayable(existing)) return show
+        val resolved = TrailerMetaService.resolve(show, ids) ?: return show
+        return show.copy(trailerUrl = resolved)
     }
 
     private suspend fun attachAgeRating(
@@ -319,9 +328,10 @@ class FreeMetaGraph @Inject constructor() {
             scrapedIsAdult = scrapedIsAdult
         )
         val isAdult = AgeRatingResolver.mergeIsAdult(show.isAdult, rating.isAdult)
+        val primaryCert = rating.primaryForLanguage(language) ?: rating.primaryCertification
         val enriched = show.copy(
             isAdult = isAdult,
-            contentRating = rating.primaryCertification ?: show.contentRating,
+            contentRating = primaryCert ?: show.contentRating,
             contentRatingSource = rating.source ?: show.contentRatingSource
         )
         return enriched to rating

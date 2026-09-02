@@ -21,14 +21,17 @@ object KitsuMetaService {
     suspend fun search(query: String, limit: Int = 10): List<MetaShow> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val q = URLEncoder.encode(query.trim(), "UTF-8")
-        val json = get("$BASE/anime?filter[text]=$q&page[limit]=${limit.coerceIn(1, 20)}") ?: return@withContext emptyList()
+        val json = get("$BASE/anime?filter[text]=$q&page[limit]=${limit.coerceIn(1, 20)}&include=categories")
+            ?: return@withContext emptyList()
         parseAnimeList(JSONObject(json))
     }
 
     suspend fun animeById(id: Int): MetaShow? = withContext(Dispatchers.IO) {
         if (id <= 0) return@withContext null
-        val json = get("$BASE/anime/$id") ?: return@withContext null
-        JSONObject(json).optJSONObject("data")?.let { parseAnime(it) }
+        val json = get("$BASE/anime/$id?include=categories") ?: return@withContext null
+        val root = JSONObject(json)
+        val genres = parseIncludedCategoriesMap(root.optJSONArray("included"))
+        root.optJSONObject("data")?.let { parseAnime(it, genres) }
     }
 
     fun isAdultFromAgeRating(ageRating: String?): Boolean? {
@@ -42,14 +45,31 @@ object KitsuMetaService {
 
     fun parseAnimeList(root: JSONObject): List<MetaShow> {
         val data = root.optJSONArray("data") ?: return emptyList()
+        val genreMap = parseIncludedCategoriesMap(root.optJSONArray("included"))
         return buildList {
             for (i in 0 until data.length()) {
-                parseAnime(data.getJSONObject(i))?.let { add(it) }
+                parseAnime(data.getJSONObject(i), genreMap)?.let { add(it) }
             }
         }
     }
 
-    fun parseAnime(node: JSONObject): MetaShow? {
+    fun parseIncludedCategories(included: JSONArray?): List<String> =
+        parseIncludedCategoriesMap(included).values.distinct()
+
+    private fun parseIncludedCategoriesMap(included: JSONArray?): Map<String, String> {
+        if (included == null) return emptyMap()
+        return buildMap {
+            for (i in 0 until included.length()) {
+                val item = included.getJSONObject(i)
+                if (item.optString("type") != "categories") continue
+                val id = item.optString("id")
+                val name = item.optJSONObject("attributes")?.optString("title")
+                if (id.isNotBlank() && !name.isNullOrBlank()) put(id, name)
+            }
+        }
+    }
+
+    fun parseAnime(node: JSONObject, genreMap: Map<String, String> = emptyMap()): MetaShow? {
         val id = node.optString("id").toIntOrNull() ?: return null
         val attrs = node.optJSONObject("attributes") ?: return null
         val title = attrs.optString("canonicalTitle").takeIf { it.isNotBlank() && it != "null" }
@@ -63,11 +83,22 @@ object KitsuMetaService {
         val ageRating = attrs.optString("ageRating").takeIf { it.isNotBlank() && it != "null" }
         val isAdult = isAdultFromAgeRating(ageRating)
         val startDate = attrs.optString("startDate").takeIf { it.isNotBlank() && it != "null" }
+        val relData = node.optJSONObject("relationships")
+            ?.optJSONObject("categories")
+            ?.optJSONArray("data")
+        val genres = buildList {
+            if (relData != null) {
+                for (i in 0 until relData.length()) {
+                    val catId = relData.getJSONObject(i).optString("id")
+                    genreMap[catId]?.let { add(it) }
+                }
+            }
+        }
         return MetaShow(
             id = "kitsu-$id",
             title = title,
             summary = attrs.optString("synopsis").takeIf { it.isNotBlank() && it != "null" },
-            genres = emptyList(),
+            genres = genres,
             status = attrs.optString("status").takeIf { it.isNotBlank() && it != "null" },
             premiered = startDate,
             rating = rating,
