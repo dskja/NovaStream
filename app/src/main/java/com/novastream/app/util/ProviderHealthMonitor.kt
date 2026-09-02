@@ -18,6 +18,14 @@ object ProviderHealthMonitor {
         states.remove(providerId)
     }
 
+    fun recordEmptyResult(providerId: String) {
+        val state = states.getOrPut(providerId) { HealthState() }
+        state.failures++
+        if (state.failures >= 3) {
+            state.cooldownUntil = System.currentTimeMillis() + COOLDOWN_MS
+        }
+    }
+
     fun recordFailure(providerId: String) {
         val state = states.getOrPut(providerId) { HealthState() }
         state.failures++

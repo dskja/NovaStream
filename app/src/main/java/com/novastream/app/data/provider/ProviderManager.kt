@@ -59,7 +59,7 @@ object ProviderManager {
     val providerCount: Int get() = providers.size
     val hasMultipleProviders: Boolean get() = providers.size > 1
     fun getProviderDisplayNames(): List<String> = providers.map { it.displayName }
-    val defaultProviderId: String get() = defaultProvider.id
+    val defaultProviderId: String get() = ProviderRegistry.DEFAULT_PROVIDER_ID
     fun seriesProviders(): List<StreamingProvider> = providers.filter { it.supportsSeries }
     fun movieProviders(): List<StreamingProvider> = providers.filter { it.supportsMovies }
 

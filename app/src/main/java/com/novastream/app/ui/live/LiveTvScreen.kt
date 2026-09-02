@@ -30,13 +30,16 @@ import com.novastream.app.data.iptv.XmlTvEpgParser
 import com.novastream.app.data.prefs.AppSettings
 import java.net.URL
 import com.novastream.app.ui.navigation.Routes
+import com.novastream.app.util.ErrorMapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class LiveTvUiState(
@@ -47,7 +50,8 @@ data class LiveTvUiState(
     val error: String? = null,
     val iptvEnabled: Boolean = false,
     val epgPrograms: List<EpgProgram> = emptyList(),
-    val epgLoading: Boolean = false
+    val epgLoading: Boolean = false,
+    val epgError: String? = null
 )
 
 @HiltViewModel
@@ -60,28 +64,48 @@ class LiveTvViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val enabled = appSettings.iptvEnabled.first()
-            _state.update { it.copy(iptvEnabled = enabled) }
-            if (enabled) {
-                loadChannels()
-                loadEpg()
-            } else _state.update { it.copy(loading = false) }
+            appSettings.iptvEnabled.collect { enabled ->
+                _state.update { it.copy(iptvEnabled = enabled) }
+                if (enabled && _state.value.groups.isEmpty()) {
+                    loadChannels()
+                    loadEpg()
+                }
+            }
+        }
+    }
+
+    fun refresh() {
+        if (_state.value.iptvEnabled) {
+            loadChannels()
+            loadEpg()
         }
     }
 
     fun loadEpg() {
         viewModelScope.launch {
-            _state.update { it.copy(epgLoading = true) }
+            _state.update { it.copy(epgLoading = true, epgError = null) }
             try {
                 val url = appSettings.epgUrl.first().trim()
                 if (url.isBlank()) {
-                    _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
+                    _state.update { it.copy(epgLoading = false, epgPrograms = emptyList(), epgError = null) }
                     return@launch
                 }
-                val xml = URL(url).readText()
-                _state.update { it.copy(epgLoading = false, epgPrograms = XmlTvEpgParser.parse(xml)) }
+                val xml = withContext(Dispatchers.IO) { URL(url).readText() }
+                _state.update {
+                    it.copy(
+                        epgLoading = false,
+                        epgPrograms = XmlTvEpgParser.parse(xml),
+                        epgError = null
+                    )
+                }
             } catch (e: Exception) {
-                _state.update { it.copy(epgLoading = false, epgPrograms = emptyList()) }
+                _state.update {
+                    it.copy(
+                        epgLoading = false,
+                        epgPrograms = emptyList(),
+                        epgError = ErrorMapper.toUserMessage(e)
+                    )
+                }
             }
         }
     }
@@ -99,7 +123,7 @@ class LiveTvViewModel @Inject constructor(
                 val groups = providers.flatMap { it.loadChannelGroups() }
                 _state.update { it.copy(loading = false, groups = groups) }
             } catch (e: Exception) {
-                _state.update { it.copy(loading = false, error = e.message) }
+                _state.update { it.copy(loading = false, error = ErrorMapper.toUserMessage(e)) }
             }
         }
     }
@@ -164,11 +188,23 @@ fun LiveTvScreen(
                     CircularProgressIndicator()
                 }
             } else if (uiState.error != null) {
-                Text(uiState.error!!, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+                Column(
+                    Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        uiState.error ?: stringResource(R.string.error_unknown),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = viewModel::refresh) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
             } else {
-                val channels = if (uiState.searchQuery.isNotBlank()) uiState.searchResults
-                else uiState.groups.flatMap { it.channels }
-
+                val showSearch = uiState.searchQuery.isNotBlank()
                 LazyColumn(Modifier.fillMaxSize()) {
                     if (uiState.epgLoading) {
                         item {
@@ -179,12 +215,58 @@ fun LiveTvScreen(
                             )
                         }
                     }
-                    items(channels, key = { it.id }) { channel ->
-                        LiveChannelRow(
-                            channel = channel,
-                            epgTitle = viewModel.epgNow(channel)?.title,
-                            onClick = { onPlayChannel(channel) }
-                        )
+                    uiState.epgError?.let { epgError ->
+                        item {
+                            Text(
+                                epgError,
+                                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                    if (showSearch) {
+                        if (uiState.searchResults.isEmpty()) {
+                            item {
+                                Box(
+                                    Modifier.fillMaxWidth().padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        stringResource(R.string.live_tv_search_empty),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        } else {
+                            items(uiState.searchResults, key = { it.id }) { channel ->
+                                LiveChannelRow(
+                                    channel = channel,
+                                    epgTitle = viewModel.epgNow(channel)?.title,
+                                    onClick = { onPlayChannel(channel) }
+                                )
+                            }
+                        }
+                    } else {
+                        uiState.groups.forEach { group ->
+                            item {
+                                Text(
+                                    group.name,
+                                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            items(group.channels, key = { it.id }) { channel ->
+                                LiveChannelRow(
+                                    channel = channel,
+                                    epgTitle = viewModel.epgNow(channel)?.title,
+                                    onClick = { onPlayChannel(channel) }
+                                )
+                            }
+                        }
                     }
                 }
             }

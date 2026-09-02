@@ -36,7 +36,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.novastream.app.data.db.WatchlistItem
-import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.provider.ProviderManager
 import com.novastream.app.data.repository.WatchRepository
@@ -52,6 +51,7 @@ import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.ui.tv.rememberInitialFocusRequester
 import com.novastream.app.ui.tv.tvFocusRing
 import com.novastream.app.ui.tv.tvFocusable
+import com.novastream.app.util.ErrorMapper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,9 +92,16 @@ class WatchlistViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            providerController.activeProviderId.collect { providerId ->
+                val filtered = filterByProvider(_state.value.allItems, _state.value.providerFilter, providerId)
+                val sorted = sortItems(filtered, _state.value.sortOption)
+                _state.update { it.copy(items = sorted) }
+            }
+        }
+        viewModelScope.launch {
             try {
                 watchRepo.watchlist().collect { items ->
-                    val pid = ActiveProvider.id
+                    val pid = providerController.activeProviderId.value
                     val filtered = filterByProvider(items, _state.value.providerFilter, pid)
                     val sorted = sortItems(filtered, _state.value.sortOption)
                     _state.update {
@@ -107,13 +114,15 @@ class WatchlistViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchlistVM", "flow error", e)
-                _state.update { it.copy(loading = false, error = context.getString(R.string.watchlist_error_loading)) }
+                _state.update {
+                    it.copy(loading = false, error = ErrorMapper.toUserMessage(e))
+                }
             }
         }
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progressList ->
-                    val pid = ActiveProvider.id
+                    val pid = providerController.activeProviderId.value
                     val slugs = progressList
                         .filter {
                             !it.isCompleted &&
@@ -155,7 +164,7 @@ class WatchlistViewModel @Inject constructor(
     }
 
     fun setProviderFilter(filter: WatchlistProviderFilter) {
-        val pid = ActiveProvider.id
+        val pid = providerController.activeProviderId.value
         val filtered = filterByProvider(_state.value.allItems, filter, pid)
         val sorted = sortItems(filtered, _state.value.sortOption)
         _state.update { it.copy(providerFilter = filter, items = sorted) }
@@ -377,7 +386,7 @@ fun WatchlistScreen(
             }
         }
 
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.error != null -> PremiumError(
                     state.error ?: stringResource(R.string.watchlist_error_loading),
@@ -416,6 +425,7 @@ fun WatchlistScreen(
                                     series = item.toSeries(),
                                     onClick = { onSeriesClick(item.slug) },
                                     inWatchlist = true,
+                                    showWatchlistBadge = false,
                                     cardWidth = if (isTv) 160 else 130,
                                     focusRequester = if (isFirst) initialFocus else null
                                 )

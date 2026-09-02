@@ -6,12 +6,15 @@ package com.novastream.app.data.provider
  */
 object ActiveProvider {
     @Volatile
-    private var current: StreamingProvider = ProviderManager.defaultProvider
+    private var current: StreamingProvider? = null
 
     @Volatile
     private var initialized: Boolean = false
 
-    fun get(): StreamingProvider = current
+    fun get(): StreamingProvider {
+        current?.let { return it }
+        return ProviderManager.defaultProvider.also { current = it }
+    }
 
     fun isInitialized(): Boolean = initialized
 
@@ -20,7 +23,7 @@ object ActiveProvider {
             val previous = current
             current = provider
             initialized = true
-            if (previous.id != provider.id) {
+            if (previous != null && previous.id != provider.id) {
                 when (previous) {
                     is KinoGerProvider -> previous.clearCache()
                     is KinoZProvider -> previous.clearCache()
@@ -35,7 +38,7 @@ object ActiveProvider {
             val next = ProviderManager.getProviderOrNull(id) ?: ProviderManager.defaultProvider
             current = next
             initialized = true
-            if (previous.id != next.id) {
+            if (previous != null && previous.id != next.id) {
                 when (previous) {
                     is KinoGerProvider -> previous.clearCache()
                     is KinoZProvider -> previous.clearCache()
@@ -44,26 +47,26 @@ object ActiveProvider {
         }
     }
 
-    val id: String get() = current.id
-    val displayName: String get() = current.displayName
-    val baseUrl: String get() = current.baseUrl
-    val supportsSeries: Boolean get() = current.supportsSeries
-    val supportsMovies: Boolean get() = current.supportsMovies
-    val availableGenres get() = current.availableGenres
-    val catalogHint: String? get() = current.catalogHint
+    val id: String get() = get().id
+    val displayName: String get() = get().displayName
+    val baseUrl: String get() = get().baseUrl
+    val supportsSeries: Boolean get() = get().supportsSeries
+    val supportsMovies: Boolean get() = get().supportsMovies
+    val availableGenres get() = get().availableGenres
+    val catalogHint: String? get() = get().catalogHint
 
-    val isSerienStream: Boolean get() = current.id == "serienstream" || current.id == "serienstream_cx"
-    val isAniWorld: Boolean get() = current.id == "aniworld"
-    val isKinoGer: Boolean get() = current.id == "kinoger"
-    val isBurningSeries: Boolean get() = current.id == "burningseries"
-    val isMegaKino: Boolean get() = current.id == "megakino"
-    val isStreamKiste: Boolean get() = current.id == "streamkiste"
-    val isFilmPalast: Boolean get() = current.id == "filmpalast"
-    val isKinoZ: Boolean get() = current.id == "kinoz"
-    val isFreeCatalog: Boolean get() = current.id == "freecatalog"
+    val isSerienStream: Boolean get() = get().id == "serienstream" || get().id == "serienstream_cx"
+    val isAniWorld: Boolean get() = get().id == "aniworld"
+    val isKinoGer: Boolean get() = get().id == "kinoger"
+    val isBurningSeries: Boolean get() = get().id == "burningseries"
+    val isMegaKino: Boolean get() = get().id == "megakino"
+    val isStreamKiste: Boolean get() = get().id == "streamkiste"
+    val isFilmPalast: Boolean get() = get().id == "filmpalast"
+    val isKinoZ: Boolean get() = get().id == "kinoz"
+    val isFreeCatalog: Boolean get() = get().id == "freecatalog"
 
     fun episodeUrl(slug: String, season: Int, episode: Int): String {
-        return when (current.id) {
+        return when (get().id) {
             "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
             "kinoger" -> "/stream/$slug.html"
             "burningseries" -> "/serie/$slug/$season/$episode"
@@ -87,7 +90,7 @@ object ActiveProvider {
     }
 
     fun seasonUrl(slug: String, season: Int): String {
-        return when (current.id) {
+        return when (get().id) {
             "aniworld" -> "/anime/stream/$slug/staffel-$season"
             "kinoger" -> "/stream/$slug.html"
             "burningseries" -> "/serie/$slug/$season"
@@ -101,8 +104,8 @@ object ActiveProvider {
     }
 
     fun seriesDetailUrl(slug: String): String =
-        ProviderUrls.seriesDetailUrl(current.id, slug)
+        ProviderUrls.seriesDetailUrl(get().id, slug)
 
     fun movieDetailUrl(slug: String): String =
-        ProviderUrls.movieDetailUrl(current.id, slug)
+        ProviderUrls.movieDetailUrl(get().id, slug)
 }

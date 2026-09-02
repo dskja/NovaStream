@@ -1,6 +1,7 @@
 package com.novastream.app.profile
 
 import android.content.Context
+import com.novastream.app.download.DownloadManagerHelper
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.db.ProfileEntity
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,8 @@ import java.security.MessageDigest
  */
 class ProfileManager(
     private val context: Context,
-    private val db: NovaStreamDatabase
+    private val db: NovaStreamDatabase,
+    private val downloadHelper: DownloadManagerHelper? = null
 ) {
     private val profileDao = db.profileDao()
 
@@ -59,6 +61,13 @@ class ProfileManager(
 
     suspend fun deleteProfile(profileId: String) {
         if (profileId == ProfileEntity.DEFAULT_ID) return
+        db.watchlistDao().deleteAllForProfileId(profileId)
+        db.watchProgressDao().deleteForProfile(profileId)
+        if (downloadHelper != null) {
+            downloadHelper.removeDownloadsForProfile(profileId)
+        } else {
+            db.downloadDao().deleteForProfile(profileId)
+        }
         profileDao.delete(profileId)
         ensureDefaultProfile()
     }

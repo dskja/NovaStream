@@ -24,7 +24,7 @@ class FreeCatalogBrowseProvider(
 ) : StreamingProvider {
 
     override val supportsMovies: Boolean = false
-    override val catalogHint: String = "Trending TV & anime via free APIs"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<Genre> = ContentLanguageGenres.forLanguage(
         if (language == ContentLanguage.MULTI) ContentLanguage.EN else language
     )
@@ -32,23 +32,17 @@ class FreeCatalogBrowseProvider(
     private fun effectiveLanguage(): ContentLanguage =
         if (language == ContentLanguage.MULTI) ContentRegionResolver.currentContentLanguage() else language
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         metaGraph.browseRegional(effectiveLanguage(), page = 0)
             .map { metaGraph.toSeries(it, id) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
-        return runCatching {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
             metaGraph.search(query.trim(), preferAnime = false)
                 .map { metaGraph.toSeries(it, id) }
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> =
@@ -63,8 +57,9 @@ class FreeCatalogBrowseProvider(
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> =
         StreamingProvider.ProviderResult.Error("Browse only")
 
-    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        coroutineScope {
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.trim().isBlank()) emptyList()
+        else coroutineScope {
             val lang = effectiveLanguage()
             val region = ContentRegionResolver.tvmazeRegionFor(lang)
             val scheduleDef = async {
@@ -83,27 +78,18 @@ class FreeCatalogBrowseProvider(
                 }
                 .map { metaGraph.toSeries(it, id) }
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
-    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val region = ContentRegionResolver.tvmazeRegionFor(effectiveLanguage())
         com.novastream.app.data.meta.FreeMetaService.schedule(region)
             .map { metaGraph.toSeries(it, id) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         metaGraph.browseRegional(effectiveLanguage(), page = page.coerceAtLeast(0))
             .map { metaGraph.toSeries(it, id) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 }
