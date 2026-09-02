@@ -86,7 +86,11 @@ class HomeViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             continueWatching = progress.filter { p ->
-                                !p.isCompleted && (p.providerId.isBlank() || p.providerId == pid)
+                                !p.isCompleted && (
+                                    p.providerId.isBlank() ||
+                                        p.providerId == pid ||
+                                        p.providerId == "unknown"
+                                    )
                             }
                         )
                     }

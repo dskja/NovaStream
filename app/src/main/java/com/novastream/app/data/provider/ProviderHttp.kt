@@ -73,7 +73,7 @@ object ProviderHttp {
             html = CaptchaWebViewFetcher.fetchHtml(url)
         }
 
-        if (useCache && html.isNotBlank()) {
+        if (useCache && html.isNotBlank() && !isChallenge(html)) {
             cacheMutex.withLock {
                 cache[url] = System.currentTimeMillis() to html
             }

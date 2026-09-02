@@ -56,6 +56,9 @@ interface WatchProgressDao {
      * Verwendet positionMs >= durationMs * 0.9 um floating-point overflow zu vermeiden
      * (positionMs * 100.0 konnte bei großen Werten overflowen).
      */
+    @Query("DELETE FROM watch_progress WHERE profileId = :profileId AND durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9")
+    suspend fun deleteCompletedForProfile(profileId: String)
+
     @Query("DELETE FROM watch_progress WHERE durationMs > 0 AND positionMs >= CAST(durationMs AS REAL) * 0.9")
     suspend fun deleteCompleted()
 

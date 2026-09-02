@@ -64,6 +64,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val android.content.Context.dataStore by preferencesDataStore("search_prefs")
 private val RECENT_SEARCHES_KEY = stringPreferencesKey("recent_searches")
@@ -240,6 +241,12 @@ class SearchViewModel @Inject constructor(
             }
         }
     }
+
+    suspend fun ensureProvider(providerId: String) {
+        if (providerId.isNotBlank() && providerId != ActiveProvider.id) {
+            providerController.setActiveProvider(providerId)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -265,6 +272,7 @@ fun SearchScreen(
     }
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     androidx.compose.runtime.LaunchedEffect(state.query.isEmpty()) {
         if (state.query.isEmpty()) {
@@ -473,10 +481,15 @@ fun SearchScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(displayResults, key = { it.id }) { s ->
+                    items(displayResults, key = { "${it.providerId}:${it.id}" }) { s ->
                         SeriesPosterCard(s, onClick = {
                             vm.saveRecentSearch(state.query)
-                            onSeriesClick(s.id)
+                            scope.launch {
+                                if (useGlobal && s.providerId.isNotBlank()) {
+                                    vm.ensureProvider(s.providerId)
+                                }
+                                onSeriesClick(s.id)
+                            }
                         })
                     }
                 }

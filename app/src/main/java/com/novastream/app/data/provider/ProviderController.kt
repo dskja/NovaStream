@@ -58,6 +58,7 @@ class ProviderController @Inject constructor(
                 if (previousId != resolved.id) {
                     catalogCacheDao.deleteForProvider(previousId)
                     ProviderDomainResolver.invalidate(previousId)
+                    ProviderDomainResolver.invalidate(resolved.id)
                     ProviderHttp.clearCache()
                 }
                 ProviderManager.setActiveProvider(context, resolved.id)

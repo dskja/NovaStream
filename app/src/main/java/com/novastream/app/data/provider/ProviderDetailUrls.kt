@@ -35,7 +35,8 @@ object ProviderDetailUrls {
     "animeflv", "jkanime", "animefenix", "tioanime", "latanime" -> "$base/anime/$slug"
     "aniworld" -> "$base/anime/stream/$slug"
     "serienstream", "serienstream_cx", "burningseries" -> "$base/serie/$slug"
-    "filmpalast", "kinoger" -> "$base/stream/$slug"
+    "filmpalast" -> "$base/stream/$slug"
+    "kinoger" -> "$base/stream/$slug.html"
     "megakino", "hdfilme", "moflix" -> "$base/title/$slug"
     "streamkiste" -> when {
       slug.startsWith("movie-") -> "$base/filme/${slug.removePrefix("movie-")}"

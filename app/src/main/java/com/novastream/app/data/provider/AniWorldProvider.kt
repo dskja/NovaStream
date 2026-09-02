@@ -105,9 +105,9 @@ class AniWorldProvider(
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val home = parseSeriesListAniWorld(fetchUrl(base))
-        val popular = parseSeriesListAniWorld(fetchUrl("$base/beliebte-animes").ifBlank {
-            fetchUrl("$base/animes")
-        })
+        var popularHtml = fetchUrl("$base/beliebte-animes")
+        if (popularHtml.isBlank()) popularHtml = fetchUrl("$base/animes")
+        val popular = parseSeriesListAniWorld(popularHtml)
         tagAll((home + popular).distinctBy { it.id })
     }
 
@@ -119,9 +119,9 @@ class AniWorldProvider(
 
     override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val html = fetchUrl("$base/neue-episode").ifBlank {
-            fetchUrl("$base/neu").ifBlank { fetchUrl(base) }
-        }
+        var html = fetchUrl("$base/neue-episode")
+        if (html.isBlank()) html = fetchUrl("$base/neu")
+        if (html.isBlank()) html = fetchUrl(base)
         tagAll(parseSeriesListAniWorld(html))
     }
 

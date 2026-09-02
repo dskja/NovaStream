@@ -48,6 +48,12 @@ object MediaUrls {
     private fun isCleartextHost(host: String): Boolean =
         cleartextHosts.any { allowed -> host == allowed || host.endsWith(".$allowed") }
 
+    /** True when [host] may use HTTP per network security config (hosters, IPTV, DE mirrors). */
+    fun isCleartextAllowedHost(host: String?): Boolean {
+        if (host.isNullOrBlank()) return false
+        return isCleartextHost(host.lowercase())
+    }
+
     fun refererFor(imageUrl: String?, fallbackBase: String = ActiveProvider.baseUrl): String {
         val host = imageUrl?.toHttpUrlOrNull()?.host
         return if (!host.isNullOrBlank()) "https://$host/" else fallbackBase.trimEnd('/') + "/"

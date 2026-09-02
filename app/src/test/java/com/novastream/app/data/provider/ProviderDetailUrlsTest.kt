@@ -35,7 +35,11 @@ class ProviderDetailUrlsTest {
     }
 
     @Test
-    fun `default fallback`() {
+    fun `kinoger detail uses html suffix`() {
+        assertEquals("$base/stream/dark.html", ProviderDetailUrls.resolve("kinoger", base, "dark"))
+    }
+
+    @Test
         assertEquals("$base/some-slug", ProviderDetailUrls.resolve("unknown", base, "some-slug"))
     }
 }

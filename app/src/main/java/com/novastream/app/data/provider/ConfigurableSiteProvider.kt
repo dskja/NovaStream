@@ -263,8 +263,10 @@ open class ConfigurableSiteProvider(
             }
         }
         val html = fetchNetwork(url)
-        fetchCacheMutex.withLock {
-            fetchCache[url] = System.currentTimeMillis() to html
+        if (html.isNotBlank() && !ProviderHttp.isChallenge(html)) {
+            fetchCacheMutex.withLock {
+                fetchCache[url] = System.currentTimeMillis() to html
+            }
         }
         return html
     }

@@ -1,6 +1,7 @@
 package com.novastream.app.data.api
 
 import com.novastream.app.data.model.NovaStreamConfig
+import com.novastream.app.util.MediaUrls
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.Dns
@@ -24,15 +25,18 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object NetworkModule {
 
-    /** Upgrade http:// to https:// for provider and hoster domains. */
+    /** Upgrade http→https only for hosts that are not cleartext-allowed in network security config. */
     private val httpsUpgradeInterceptor = Interceptor { chain ->
         val request = chain.request()
         val url = request.url
         if (url.scheme == "http") {
-            val upgraded = request.newBuilder()
-                .url(url.newBuilder().scheme("https").build())
-                .build()
-            return@Interceptor chain.proceed(upgraded)
+            val host = url.host
+            if (!MediaUrls.isCleartextAllowedHost(host)) {
+                val upgraded = request.newBuilder()
+                    .url(url.newBuilder().scheme("https").build())
+                    .build()
+                return@Interceptor chain.proceed(upgraded)
+            }
         }
         chain.proceed(request)
     }

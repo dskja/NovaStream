@@ -256,20 +256,29 @@ class PlayerViewModel @Inject constructor(
                 season = season,
                 episodeUrl = epUrl
             )
-            when (val h = repo.loadHosters(ep)) {
-                is NovaStreamRepository.RepoResult.Success -> {
-                    val hosters = h.data
-                    if (hosters.isEmpty()) {
-                        _state.update { it.copy(loading = false, error = context.getString(R.string.player_no_hosters_found)) }
-                        return@launch
+            try {
+                when (val h = repo.loadHosters(ep)) {
+                    is NovaStreamRepository.RepoResult.Success -> {
+                        val hosters = h.data
+                        if (hosters.isEmpty()) {
+                            _state.update { it.copy(loading = false, error = context.getString(R.string.player_no_hosters_found)) }
+                            return@launch
+                        }
+                        val prefs = _state.value
+                        val sorted = sortHosters(hosters, prefs.preferredHoster, prefs.preferredLanguage)
+                        _state.update { it.copy(hosters = sorted, loading = false) }
+                        resolveHoster(0)
                     }
-                    val prefs = _state.value
-                    val sorted = sortHosters(hosters, prefs.preferredHoster, prefs.preferredLanguage)
-                    _state.update { it.copy(hosters = sorted, loading = false) }
-                    resolveHoster(0)
+                    is NovaStreamRepository.RepoResult.Error ->
+                        _state.update { it.copy(loading = false, error = h.message) }
                 }
-                is NovaStreamRepository.RepoResult.Error ->
-                    _state.update { it.copy(loading = false, error = h.message) }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        error = com.novastream.app.util.ErrorMapper.toUserMessage(context, e)
+                    )
+                }
             }
         }
     }

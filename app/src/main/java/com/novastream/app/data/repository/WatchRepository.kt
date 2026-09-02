@@ -133,7 +133,7 @@ class WatchRepository @Inject constructor(
 
     suspend fun removeCompleted() {
         try {
-            progressDao.deleteCompleted()
+            progressDao.deleteCompletedForProfile(activeProfileId())
         } catch (e: Exception) {
             if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("WatchRepository", "removeCompleted failed", e)
         }

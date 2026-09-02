@@ -34,6 +34,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 data class DetailUiState(
@@ -123,14 +126,16 @@ class DetailViewModel @Inject constructor(
     private val profileManager: ProfileManager
 ) : ViewModel() {
 
-    private val slug: String = run {
-        val raw = checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" }
-        try {
+    private fun decodeSlug(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        return try {
             java.net.URLDecoder.decode(raw, "UTF-8")
         } catch (_: Exception) {
             raw
         }
     }
+
+    private var slug: String = decodeSlug(checkNotNull(savedStateHandle.get<String>("slug")) { "slug required" })
 
     private val _state = MutableStateFlow(DetailUiState(loading = true))
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -138,6 +143,28 @@ class DetailViewModel @Inject constructor(
     private var loadedProviderId: String? = null
 
     init {
+        viewModelScope.launch {
+            savedStateHandle.getStateFlow("slug", "")
+                .map { decodeSlug(it) }
+                .filter { it.isNotBlank() }
+                .distinctUntilChanged()
+                .collect { newSlug ->
+                    if (newSlug != slug) {
+                        slug = newSlug
+                        loadedProviderId = null
+                        _state.update {
+                            DetailUiState(
+                                loading = true,
+                                inWatchlist = it.inWatchlist,
+                                episodeProgress = it.episodeProgress,
+                                progressBySeasonEpisode = it.progressBySeasonEpisode,
+                                currentProgress = it.currentProgress
+                            )
+                        }
+                        load()
+                    }
+                }
+        }
         viewModelScope.launch {
             providerController.activeProviderId.collect { providerId ->
                 val previous = loadedProviderId
@@ -339,10 +366,12 @@ class DetailViewModel @Inject constructor(
 
     private fun loadSeasonEpisodes(seasonNum: Int) {
         _state.update { it.copy(loadingSeason = true, seasonError = null) }
+        val expectedProvider = ActiveProvider.id
         viewModelScope.launch {
             try {
                 when (val res = repo.loadSeason(slug, seasonNum)) {
                     is NovaStreamRepository.RepoResult.Success -> {
+                        if (ActiveProvider.id != expectedProvider) return@launch
                         _state.update { current ->
                             val updated = current.seasons.map { s ->
                                 if (s.number == seasonNum) s.copy(episodes = res.data) else s

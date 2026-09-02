@@ -37,7 +37,18 @@ class KinoZProvider(
     private val appContext: Context? = null
 ) : StreamingProvider {
 
-    private val mirror = MirrorSupport(id, baseUrl, appContext, "/Stream/")
+    private val streamPathRegex = Regex("""/Stream/([^/]+?)\.html""", RegexOption.IGNORE_CASE)
+
+    // LRU-Cache für Detail-HTML (Staffel + Hoster nutzen dieselbe Seite)
+    private val detailCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+            size > MAX_CACHE_SIZE
+    }
+    private val cacheLock = Any()
+
+    private val mirror = MirrorSupport(id, baseUrl, appContext, "/Stream/") {
+        synchronized(cacheLock) { detailCache.clear() }
+    }
 
     private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
 
@@ -51,15 +62,6 @@ class KinoZProvider(
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<com.novastream.app.data.model.Genre>
         get() = ProviderGenres.forId(id)
-
-    private val streamPathRegex = Regex("""/Stream/([^/]+?)\.html""", RegexOption.IGNORE_CASE)
-
-    // LRU-Cache für Detail-HTML (Staffel + Hoster nutzen dieselbe Seite)
-    private val detailCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
-            size > MAX_CACHE_SIZE
-    }
-    private val cacheLock = Any()
 
     // ─── Provider Interface ─────────────────────────────────────────────────
 

@@ -58,7 +58,8 @@ class StreamKisteProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val html = fetchUrl("$base/serien").ifBlank { fetchUrl(base) }
+        var html = fetchUrl("$base/serien")
+        if (html.isBlank()) html = fetchUrl(base)
         parseStreamKisteSeriesList(html).map { it.copy(isMovie = false, providerId = id) }
     }
 
@@ -116,12 +117,11 @@ class StreamKisteProvider(
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val url = if (episode.episodeUrl.startsWith("http")) {
-            episode.episodeUrl
-        } else if (episode.episodeUrl.startsWith("/")) {
-            base + episode.episodeUrl
-        } else {
-            "$base/serien/${episode.slug}/staffel-${episode.season}/episode-${episode.number}"
+        val url = when {
+            episode.episodeUrl.startsWith("http") -> episode.episodeUrl
+            episode.episodeUrl.startsWith("/filme/") -> base + episode.episodeUrl
+            episode.episodeUrl.startsWith("/") -> base + episode.episodeUrl
+            else -> "$base/serien/${episode.slug}/staffel-${episode.season}/episode-${episode.number}"
         }
         val html = fetchUrl(url)
         parseStreamKisteHosters(html)
@@ -138,8 +138,11 @@ class StreamKisteProvider(
             val paths = ProviderGenrePaths.pathsFor(id, genre.trim())
             var results = emptyList<Series>()
             for (path in paths) {
-                results = parseStreamKisteSeriesList(fetchUrl("$base$path")).map { it.copy(providerId = id) }
-                if (results.isNotEmpty()) break
+                val list = parseStreamKisteSeriesList(fetchUrl("$base$path")).map { it.copy(providerId = id) }
+                if (list.isNotEmpty()) {
+                    results = list
+                    if (path.contains("/genre/", ignoreCase = true) || path.contains(genre.trim(), ignoreCase = true)) break
+                }
             }
             results
         }

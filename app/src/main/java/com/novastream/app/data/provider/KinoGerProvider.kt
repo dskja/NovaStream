@@ -86,8 +86,9 @@ class KinoGerProvider(
     }
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        val series = KinoGerScraper.parseSeriesList(api().seriesHome())
-        val movies = KinoGerScraper.parseSeriesList(api().movies()).map { it.copy(isMovie = true) }
+        val base = mirror.parseBase()
+        val series = KinoGerScraper.parseSeriesList(api().seriesHome(), base)
+        val movies = KinoGerScraper.parseSeriesList(api().movies(), base).map { it.copy(isMovie = true) }
         (series + movies).distinctBy { it.id }.map { it.copy(providerId = id) }
     }
 
@@ -121,12 +122,12 @@ class KinoGerProvider(
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> = runCatchingProvider {
         val html = fetchDetailPage(slug)
-        KinoGerScraper.parseSeriesDetail(html, slug)
+        KinoGerScraper.parseSeriesDetail(html, slug, mirror.parseBase())
     }
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> = runCatchingProvider {
         val html = fetchDetailPage(slug)
-        val (_, seasons) = KinoGerScraper.parseSeriesDetail(html, slug)
+        val (_, seasons) = KinoGerScraper.parseSeriesDetail(html, slug, mirror.parseBase())
         seasons.find { it.number == season }?.episodes ?: emptyList()
     }
 
@@ -159,7 +160,10 @@ class KinoGerProvider(
             detailCache[slug]?.let { return it }
         }
         // Cache miss - lade
-        val html = api().raw("stream/$slug.html")
+        var html = api().raw("stream/$slug.html")
+        if (html.isBlank() || ProviderHttp.isChallenge(html)) {
+            html = api().raw("series/$slug.html")
+        }
         // Nur cachen wenn HTML nicht leer ist
         if (html.isNotBlank()) {
             synchronized(cacheLock) {

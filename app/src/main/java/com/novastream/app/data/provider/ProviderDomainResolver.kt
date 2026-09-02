@@ -54,10 +54,9 @@ object ProviderDomainResolver {
             candidates,
             contentNeedle = contentNeedle,
             webViewFallback = webViewFallback
-        ) ?: stored ?: defaultBaseUrl.trimEnd('/')
-
-        val trimmed = resolved.trimEnd('/')
-        if (appContext != null && trimmed != stored?.trimEnd('/')) {
+        )
+        val trimmed = (resolved ?: stored ?: defaultBaseUrl).trimEnd('/')
+        if (appContext != null && resolved != null && trimmed != stored?.trimEnd('/')) {
             ProviderDomainManager.setResolvedBaseUrl(appContext, providerId, trimmed)
         }
         return trimmed

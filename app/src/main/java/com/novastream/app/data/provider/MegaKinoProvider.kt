@@ -54,7 +54,7 @@ class MegaKinoProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        parseMegaKinoSeriesList(fetchUrl(base))
+        parseMegaKinoSeriesList(fetchUrl(base)).map { it.copy(providerId = id) }
     }
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
@@ -117,15 +117,19 @@ class MegaKinoProvider(
         else {
             val base = activeBaseUrl()
             val paths = ProviderGenrePaths.pathsFor(id, genre.trim())
+            val genreSlug = genre.trim()
             var results = emptyList<Series>()
             for (path in paths) {
-                results = parseMegaKinoSeriesList(fetchUrl("$base$path"))
-                if (results.isNotEmpty()) break
+                val list = parseMegaKinoSeriesList(fetchUrl("$base$path")).map { it.copy(providerId = id) }
+                if (list.isNotEmpty()) {
+                    results = list
+                    if (path.contains("/genre/", ignoreCase = true) || path.contains(genreSlug, ignoreCase = true)) break
+                }
             }
             results.ifEmpty {
                 parseMegaKinoSeriesList(fetchUrl(base)).filter {
                     it.title.contains(genre, ignoreCase = true)
-                }
+                }.map { it.copy(providerId = id) }
             }
         }
     }
