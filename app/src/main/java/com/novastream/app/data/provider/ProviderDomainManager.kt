@@ -13,12 +13,14 @@ object ProviderDomainManager {
 
     private val domainPatterns: Map<String, List<String>> = mapOf(
         "serienstream" to listOf(
+            "http://186.2.175.5",
             "https://serienstream.to",
             "https://s.to",
             "https://serienstream.cx"
         ),
         "serienstream_cx" to listOf(
             "https://serienstream.cx",
+            "http://186.2.175.5",
             "https://serienstream.to",
             "https://s.to"
         ),
@@ -46,11 +48,11 @@ object ProviderDomainManager {
             "https://frembed.life/"
         ),
         "megakino" to listOf(
+            "https://megakino12.com",
+            "https://megakino17.com",
             "https://megakino6.com",
             "https://megakino.ms",
-            "https://megakino8.com",
-            "https://megakino2.com",
-            "https://megakino.how"
+            "https://megakino1.org"
         ),
         "burningseries" to listOf(
             "https://burningseries.cx",

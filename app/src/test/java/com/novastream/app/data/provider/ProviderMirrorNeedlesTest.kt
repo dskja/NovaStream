@@ -12,7 +12,7 @@ class ProviderMirrorNeedlesTest {
     fun `explicit needles for major DE providers`() {
         assertEquals("/serie/", ProviderMirrorNeedles.needleFor("burningseries"))
         assertEquals("/anime/stream/", ProviderMirrorNeedles.needleFor("aniworld"))
-        assertEquals("/title/", ProviderMirrorNeedles.needleFor("megakino"))
+        assertEquals("/films/", ProviderMirrorNeedles.needleFor("megakino"))
         assertEquals("/stream/", ProviderMirrorNeedles.needleFor("kinoger"))
     }
 

@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
+import okhttp3.Request.Builder
 
 /**
  * Shared HTTP fetch for all streaming providers.
@@ -32,6 +33,10 @@ object ProviderHttp {
         val hasCatalogSignals = lower.contains("/serie") ||
             lower.contains("/stream/") ||
             lower.contains("/title/") ||
+            lower.contains("/films/") ||
+            lower.contains("/serials/") ||
+            lower.contains("dle-content") ||
+            lower.contains("poster grid-item") ||
             lower.contains("/movie") ||
             lower.contains("/tv-show") ||
             lower.contains("/tv/") ||
@@ -164,15 +169,24 @@ object ProviderHttp {
         null
     }
 
-    private suspend fun fetchNetwork(url: String, referer: String?, providerId: String? = null): String = withContext(Dispatchers.IO) {
+    /** Builds a browser-like request (Sec-Fetch headers help Cloudflare/DDoS-Guard). */
+    fun browserRequestBuilder(url: String, referer: String?, providerId: String? = null): Builder {
         val ref = referer ?: url.toHttpUrlOrNull()?.let { "${it.scheme}://${it.host}/" } ?: url
-        val req = Request.Builder()
+        return Request.Builder()
             .url(url)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Referer", ref)
-            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
             .header("Accept-Language", acceptLanguageHeader(providerId))
-            .build()
+            .header("Upgrade-Insecure-Requests", "1")
+            .header("Sec-Fetch-Dest", "document")
+            .header("Sec-Fetch-Mode", "navigate")
+            .header("Sec-Fetch-Site", if (ref.toHttpUrlOrNull()?.host == url.toHttpUrlOrNull()?.host) "same-origin" else "none")
+            .header("Sec-Fetch-User", "?1")
+    }
+
+    private suspend fun fetchNetwork(url: String, referer: String?, providerId: String? = null): String = withContext(Dispatchers.IO) {
+        val req = browserRequestBuilder(url, referer, providerId).get().build()
         try {
             NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) resp.body?.string().orEmpty() else ""

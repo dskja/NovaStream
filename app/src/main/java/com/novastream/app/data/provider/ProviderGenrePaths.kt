@@ -22,7 +22,7 @@ object ProviderGenrePaths {
             // genre slug selects path in resolvePaths via semantic map
         ),
         "kinoz" to Config(listOf("/Genre/{genre}")),
-        "megakino" to Config(listOf("/genre/{genre}", "/filme", "/")),
+        "megakino" to Config(listOf("/films/", "/serials/", "/xfsearch/genres/{genre}/", "/")),
         "streamkiste" to Config(listOf("/serien", "/filme", "/genre/{genre}")),
         // EN
         "sflix" to Config(listOf("/genre/{genre}", "/search/{genre}")),

@@ -13,6 +13,7 @@ object MediaUrls {
     private val cleartextHosts = setOf(
         "kinoger.to", "kinoger.pw",
         "serienstream.to", "serienstream.cx",
+        "186.2.175.5",
         "aniworld.to", "s.to",
         "voe.sx", "voe-unblock.com", "fsst.online",
         "streamtape.com", "doodstream.com", "filemoon.sx",

@@ -88,8 +88,14 @@ class KinoGerProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = mirror.parseBase()
-        val seriesHtml = mirror.requireCatalogHtml(fetchPage = { api().seriesHome() }, fallbackUrl = "$base/")
-        val moviesHtml = mirror.requireCatalogHtml(fetchPage = { api().movies() }, fallbackUrl = "$base/")
+        val seriesHtml = mirror.requireCatalogHtml(
+            fetchPage = { fetchPage(api().seriesHome(), "stream/serie") },
+            fallbackUrl = "$base/"
+        )
+        val moviesHtml = mirror.requireCatalogHtml(
+            fetchPage = { fetchPage(api().movies(), "stream/filme") },
+            fallbackUrl = "$base/"
+        )
         val series = KinoGerScraper.parseSeriesList(seriesHtml, base)
         val movies = KinoGerScraper.parseSeriesList(moviesHtml, base).map { it.copy(isMovie = true) }
         (series + movies).distinctBy { it.id }.map { it.copy(providerId = id) }
@@ -119,7 +125,8 @@ class KinoGerProvider(
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
         guardSearchQuery(query)?.let { return it }
         return runCatchingProvider {
-            KinoGerScraper.parseSeriesList(api().search(query = query.trim()))
+            fetchPage(api().search(query = query.trim()), "?do=search&subaction=search&story=${query.trim()}")
+                .let { KinoGerScraper.parseSeriesList(it, mirror.parseBase()) }
         }
     }
 
@@ -162,9 +169,9 @@ class KinoGerProvider(
             detailCache[slug]?.let { return it }
         }
         val base = activeBaseUrl()
-        var html = mirror.fetch("$base/stream/$slug.html")
+        var html = fetchPage(api().raw("stream/$slug.html"), "stream/$slug.html")
         if (html.isBlank() || ProviderHttp.isChallenge(html)) {
-            html = mirror.fetch("$base/series/$slug.html")
+            html = fetchPage(api().raw("series/$slug.html"), "series/$slug.html")
         }
         if (html.isNotBlank() && !ProviderHttp.isChallenge(html)) {
             synchronized(cacheLock) {
@@ -174,6 +181,13 @@ class KinoGerProvider(
             }
         }
         return html
+    }
+
+    /** OkHttp/Retrofit first, WebView captcha fallback for Cloudflare-protected pages. */
+    private suspend fun fetchPage(primary: String, path: String): String {
+        if (primary.isNotBlank() && !ProviderHttp.isChallenge(primary)) return primary
+        val base = activeBaseUrl()
+        return mirror.fetchWithCaptcha("$base/$path")
     }
 
     /** Leert den Cache (z.B. bei Provider-Wechsel). */

@@ -13,7 +13,7 @@ object ProviderMirrorNeedles {
         "serienstream_cx" to "/serie/",
         "burningseries" to "/serie/",
         "aniworld" to "/anime/stream/",
-        "megakino" to "/title/",
+        "megakino" to "/films/",
         "kinoger" to "/stream/",
         "streamkiste" to "/serien/",
         "filmpalast" to "/stream/",

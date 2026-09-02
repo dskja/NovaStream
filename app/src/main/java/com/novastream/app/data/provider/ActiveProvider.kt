@@ -70,7 +70,10 @@ object ActiveProvider {
             "aniworld" -> "/anime/stream/$slug/staffel-$season/episode-$episode"
             "kinoger" -> "/stream/$slug.html"
             "burningseries" -> "/serie/$slug/$season/$episode"
-            "megakino" -> "/title/$slug/staffel/$season/episode/$episode"
+            "megakino" -> {
+                val path = if (slug.contains("/")) slug.trimStart('/') else "serials/$slug"
+                "/$path#ep$episode"
+            }
             "streamkiste" -> "/serien/$slug/staffel-$season/episode-$episode"
             "filmpalast" -> {
                 val s = season.toString().padStart(2, '0')
@@ -94,7 +97,7 @@ object ActiveProvider {
             "aniworld" -> "/anime/stream/$slug/staffel-$season"
             "kinoger" -> "/stream/$slug.html"
             "burningseries" -> "/serie/$slug/$season"
-            "megakino" -> "/title/$slug/staffel/$season"
+            "megakino" -> "/$slug"
             "streamkiste" -> "/serien/$slug/staffel-$season"
             "filmpalast" -> "/stream/$slug"
             "kinoz" -> "/Stream/$slug.html"

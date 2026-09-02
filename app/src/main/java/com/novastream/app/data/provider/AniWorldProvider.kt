@@ -105,13 +105,13 @@ class AniWorldProvider(
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
         val homeHtml = mirror.requireCatalogHtml(
-            fetchPage = { mirror.fetch(base) },
+            fetchPage = { mirror.fetchWithCaptcha(base) },
             fallbackUrl = "$base/"
         )
         val home = parseSeriesListAniWorld(homeHtml)
-        var popularHtml = mirror.fetch("$base/beliebte-animes")
+        var popularHtml = mirror.fetchWithCaptcha("$base/beliebte-animes")
         if (popularHtml.isBlank() || ProviderHttp.isChallenge(popularHtml)) {
-            popularHtml = mirror.fetch("$base/animes")
+            popularHtml = mirror.fetchWithCaptcha("$base/animes")
         }
         val popular = parseSeriesListAniWorld(popularHtml)
         tagAll((home + popular).distinctBy { it.id })
@@ -261,7 +261,7 @@ class AniWorldProvider(
 
     private suspend fun fetchUrl(url: String): String {
         repeat(3) { attempt ->
-            val body = mirror.fetch(url, webViewFallback = attempt >= 1)
+            val body = mirror.fetchWithCaptcha(url)
             if (body.isNotBlank() && !ProviderHttp.isChallenge(body)) return body
             if (attempt < 2) kotlinx.coroutines.delay(1500L * (attempt + 1))
         }

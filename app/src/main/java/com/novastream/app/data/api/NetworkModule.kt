@@ -47,6 +47,11 @@ object NetworkModule {
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
+            .header("Upgrade-Insecure-Requests", "1")
+            .header("Sec-Fetch-Dest", "document")
+            .header("Sec-Fetch-Mode", "navigate")
+            .header("Sec-Fetch-Site", "none")
+            .header("Sec-Fetch-User", "?1")
 
         if (original.header("Referer") == null) {
             val host = original.url.host
