@@ -7,6 +7,7 @@ import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
+import com.novastream.app.util.AdultContentDetector
 import com.novastream.app.data.model.NovaStreamConfig
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -113,7 +114,8 @@ object NovaStreamScraper {
                     title = cleanTitle(title),
                     coverUrl = cover,
                     backdropUrl = backdrop,
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -137,7 +139,8 @@ object NovaStreamScraper {
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(card, doc),
                     detailUrl = "/serie/$slug",
-                    genres = genre?.takeIf { it.isNotBlank() && it.length < 40 }?.let { listOf(it) } ?: emptyList()
+                    genres = genre?.takeIf { it.isNotBlank() && it.length < 40 }?.let { listOf(it) } ?: emptyList(),
+                    isAdult = cardAdultFlag(card)
                 )
             )
         }
@@ -158,7 +161,8 @@ object NovaStreamScraper {
                     id = slug,
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(card, doc),
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(card)
                 )
             )
         }
@@ -182,7 +186,8 @@ object NovaStreamScraper {
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(container, doc),
                     detailUrl = "/serie/$slug",
-                    year = year
+                    year = year,
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -204,7 +209,8 @@ object NovaStreamScraper {
                     id = slug,
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(container, doc),
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -222,12 +228,14 @@ object NovaStreamScraper {
                 ?: a.attr("title").ifBlank { null }?.substringBefore(" stream")
                 ?: a.text().trim().ifBlank { slugToTitle(slug) }
             if (title.length < 2) continue
+            val container = a.closest("article, .card, .item, li, div, figure") ?: a.parent() ?: a
             out.add(
                 Series(
                     id = slug,
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(a.parent() ?: a, doc),
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -401,6 +409,7 @@ object NovaStreamScraper {
         ) ?: extractYear(doc.text().take(2000))
 
         val rating = extractRating(doc)
+        val isAdult = AdultContentDetector.detectFromDocument(doc)
 
         val series = Series(
             id = slug,
@@ -412,7 +421,8 @@ object NovaStreamScraper {
             genres = genres,
             year = year,
             rating = rating,
-            seasonCount = parseSeasons(doc, slug).size.takeIf { it > 0 }
+            seasonCount = parseSeasons(doc, slug).size.takeIf { it > 0 },
+            isAdult = isAdult
         )
 
         return series to parseSeasons(doc, slug)
@@ -656,6 +666,15 @@ object NovaStreamScraper {
 
     // ─── Hilfsfunktionen ────────────────────────────────────────────────────
 
+    private fun cardAdultFlag(container: Element): Boolean? {
+        val sample = buildString {
+            append(container.text().take(400))
+            append(' ')
+            append(container.select(".badge, .fsk, .age-rating, [class*=fsk], [class*=age]").text())
+        }
+        return AdultContentDetector.detectFromText(sample)
+    }
+
     private fun extractSlug(url: String): String? {
         val m = SLUG_PATTERN.matcher(url)
         if (!m.find()) return null
@@ -678,11 +697,13 @@ object NovaStreamScraper {
     }
 
     private fun cleanTitle(title: String): String =
-        title.replace(Regex("\\s+"), " ")
-            .replace(Regex("(?i)\\s*online\\s*stream(en)?"), "")
-            .replace(Regex("(?i)\\s*stream(en)?\\s*kostenlos"), "")
-            .trim()
-            .ifBlank { title.trim() }
+        com.novastream.app.util.MediaUrls.sanitizeTitle(
+            title.replace(Regex("\\s+"), " ")
+                .replace(Regex("(?i)\\s*online\\s*stream(en)?"), "")
+                .replace(Regex("(?i)\\s*stream(en)?\\s*kostenlos"), "")
+                .trim()
+                .ifBlank { title.trim() }
+        ).ifBlank { title.trim() }
 
     private fun slugToTitle(slug: String): String =
         slug.replace('-', ' ').replaceFirstChar { it.uppercase() }

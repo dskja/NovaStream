@@ -9,8 +9,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.novastream.app.data.prefs.AppSettings
 import java.util.Locale
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 object LocaleManager {
     const val SYSTEM_LOCALE = "system"
@@ -18,13 +16,7 @@ object LocaleManager {
     val supportedUiLocales: List<String> = listOf("de", "en", "es", "fr", "it", "pl", "ar")
 
     fun wrap(context: Context, localeTag: String? = null): Context {
-        val tag = localeTag ?: runBlocking {
-            try {
-                AppSettings(context.applicationContext).uiLocale.first()
-            } catch (_: Exception) {
-                SYSTEM_LOCALE
-            }
-        }
+        val tag = localeTag ?: PrefsCache.uiLocale(context)
         if (tag == SYSTEM_LOCALE) return context
         val locale = Locale.forLanguageTag(tag)
         Locale.setDefault(locale)

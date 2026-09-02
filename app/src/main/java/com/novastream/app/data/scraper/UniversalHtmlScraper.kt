@@ -5,6 +5,7 @@ import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.Season
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ProviderUrls
+import com.novastream.app.util.AdultContentDetector
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -19,6 +20,12 @@ object UniversalHtmlScraper {
     fun parseSeriesList(html: String, profile: SiteProfile): List<Series> {
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, profile.baseUrl)
+        val results = parseSeriesListFromDoc(doc, profile)
+        if (results.isNotEmpty()) return results
+        return parseSeriesListFallback(doc, profile)
+    }
+
+    private fun parseSeriesListFromDoc(doc: Document, profile: SiteProfile): List<Series> {
         val results = linkedMapOf<String, Series>()
         val linkPattern = profile.seriesLinkPattern.takeIf { it.isNotBlank() }?.let {
             try { Pattern.compile(it, Pattern.CASE_INSENSITIVE) } catch (_: Exception) { null }
@@ -38,16 +45,38 @@ object UniversalHtmlScraper {
             val title = resolveTitle(a, profile).ifBlank { slugToTitle(slug) }
             if (title.length < 2) continue
             val cover = findCover(a, profile)
+            val isAdult = detectAdultFromElement(a)
 
             results[slug] = Series(
                 id = slug,
                 title = cleanTitle(title),
                 coverUrl = cover,
                 detailUrl = toDetailUrl(href, profile, slug),
-                isMovie = href.contains("/movie", ignoreCase = true)
+                isMovie = href.contains("/movie", ignoreCase = true),
+                isAdult = isAdult
             )
         }
         return results.values.toList()
+    }
+
+    /** Broader link scan when profile-specific selectors return nothing (common on intl FMHY sites). */
+    private fun parseSeriesListFallback(doc: Document, profile: SiteProfile): List<Series> {
+        val fallbackProfile = profile.copy(
+            seriesLinkSelector = buildFallbackSelector(profile),
+            seriesLinkPattern = profile.seriesLinkPattern.ifBlank { """/([\w-]+)""" }
+        )
+        return parseSeriesListFromDoc(doc, fallbackProfile)
+    }
+
+    private fun buildFallbackSelector(profile: SiteProfile): String {
+        val hints = listOf(
+            "/movie/", "/tv/", "/tv-show/", "/watch/", "/serie/", "/serietv/",
+            "/anime/", "/pelicula/", "/film/", "/titles/", "/play/", "/stream/",
+            "/doramas-online/", "/serial-online/", "/show/", "/watchseries/"
+        )
+        val fromProfile = hints.filter { profile.seriesLinkSelector.contains(it.trim('/'), ignoreCase = true) }
+        val chosen = (fromProfile + hints).distinct().take(8)
+        return chosen.joinToString(", ") { "a[href*=$it]" }
     }
 
     fun parseDetail(html: String, profile: SiteProfile, slug: String): Pair<Series, List<Season>> {
@@ -63,6 +92,8 @@ object UniversalHtmlScraper {
         val cover = doc.selectFirst(profile.detailCoverSelector)?.let { absImg(it, profile.baseUrl) }
             ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
         val year = Regex("""\b((?:19|20)\d{2})\b""").find(title + " " + (description ?: ""))?.groupValues?.get(1)
+        val genres = extractGenres(doc)
+        val isAdult = AdultContentDetector.detectFromDocument(doc)
 
         val episodes = parseEpisodes(doc, profile, slug)
         var seasons = if (episodes.isNotEmpty()) {
@@ -102,11 +133,20 @@ object UniversalHtmlScraper {
             detailUrl = detailPath,
             description = description,
             year = year,
+            genres = genres,
             seasonCount = seasons.size.takeIf { it > 0 },
-            isMovie = isMovie
+            isMovie = isMovie,
+            isAdult = isAdult
         )
         return series to seasons
     }
+
+    private fun extractGenres(doc: Document): List<String> =
+        doc.select("a[href*=/genre/], a[href*=/genres/], .genre a, [class*=genre] a")
+            .mapNotNull { it.text().trim().ifBlank { null } }
+            .filter { it.length in 2..40 }
+            .distinct()
+            .take(12)
 
     private fun isMovieContent(providerId: String, slug: String, detailPath: String): Boolean =
         ProviderUrls.isMovieSlug(providerId, slug) ||
@@ -295,6 +335,16 @@ object UniversalHtmlScraper {
         return img?.let { absImg(it, profile.baseUrl) }
     }
 
+    private fun detectAdultFromElement(a: Element): Boolean? {
+        val scope = a.closest("article, .card, .item, li, div, figure") ?: a
+        val sample = buildString {
+            append(a.text().take(200))
+            append(' ')
+            append(scope.select(".badge, .rating, .fsk, .age-rating, [class*=fsk], [class*=age], [class*=adult]").text())
+        }
+        return AdultContentDetector.detectFromText(sample)
+    }
+
     private fun absImg(img: Element, base: String): String? {
         val src = img.absUrl("data-src").ifBlank { img.attr("data-src") }
             .ifBlank { img.absUrl("src") }.ifBlank { img.attr("src") }
@@ -334,10 +384,12 @@ object UniversalHtmlScraper {
     }
 
     private fun cleanTitle(title: String): String =
-        title.replace(Regex("\\s+"), " ")
-            .replace(Regex("(?i)\\s*online\\s*(free|schauen|stream).*"), "")
-            .replace(Regex("(?i)\\s*watch\\s+"), " ")
-            .trim()
+        com.novastream.app.util.MediaUrls.sanitizeTitle(
+            title.replace(Regex("\\s+"), " ")
+                .replace(Regex("(?i)\\s*online\\s*(free|schauen|stream).*"), "")
+                .replace(Regex("(?i)\\s*watch\\s+"), " ")
+                .trim()
+        ).ifBlank { title.trim() }
 
     private fun slugToTitle(slug: String): String {
         val cleaned = if (slug.matches(Regex("""(?i)(tv|movie)-\d+"""))) {

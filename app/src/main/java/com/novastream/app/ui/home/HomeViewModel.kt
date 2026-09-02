@@ -6,7 +6,9 @@ import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.LatestEpisode
+import com.novastream.app.data.meta.MetaEnrichmentCache
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.meta.CatalogMetaEnricher
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -14,9 +16,15 @@ import com.novastream.app.data.provider.ContentLanguageGenres
 import com.novastream.app.data.provider.ProviderController
 import com.novastream.app.data.repository.NovaStreamRepository
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.ErrorMapper
+import com.novastream.app.util.KidsContentFilter
 import com.novastream.app.util.ProviderLoadMetrics
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -26,6 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 data class HomeUiState(
     val loading: Boolean = false,
@@ -51,6 +60,7 @@ data class HomeUiState(
     val watchlist: List<WatchlistItem> = emptyList(),
     val reduceMotion: Boolean = false,
     val performanceMode: Boolean = false,
+    val iptvEnabled: Boolean = false,
     val lastLoadDurationMs: Long? = null,
     val showProviderHealthWarning: Boolean = false,
     val error: String? = null
@@ -58,10 +68,13 @@ data class HomeUiState(
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val repo: NovaStreamRepository,
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
-    private val providerController: ProviderController
+    private val providerController: ProviderController,
+    private val profileManager: ProfileManager,
+    private val catalogMetaEnricher: CatalogMetaEnricher
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
@@ -70,6 +83,7 @@ class HomeViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var genreJob: Job? = null
     private var activeProviderId: String? = null
+    private var kidsMode: Boolean = false
 
     init {
         viewModelScope.launch {
@@ -78,9 +92,16 @@ class HomeViewModel @Inject constructor(
                     val pid = ActiveProvider.id
                     _state.update {
                         it.copy(
-                            continueWatching = progress.filter { p ->
-                                !p.isCompleted && (p.providerId.isBlank() || p.providerId == pid)
-                            }
+                            continueWatching = KidsContentFilter.filterProgress(
+                                progress.filter { p ->
+                                    !p.isCompleted && (
+                                        p.providerId.isBlank() ||
+                                            p.providerId == pid ||
+                                            p.providerId == "unknown"
+                                        )
+                                },
+                                kidsMode
+                            )
                         )
                     }
                 }
@@ -94,9 +115,12 @@ class HomeViewModel @Inject constructor(
                     val pid = ActiveProvider.id
                     _state.update {
                         it.copy(
-                            watchlist = list.filter { w ->
-                                w.providerId.isBlank() || w.providerId == pid
-                            }
+                            watchlist = KidsContentFilter.filterWatchlist(
+                                list.filter { w ->
+                                    w.providerId.isBlank() || w.providerId == pid
+                                },
+                                kidsMode
+                            )
                         )
                     }
                 }
@@ -124,6 +148,28 @@ class HomeViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
+                appSettings.iptvEnabled.collect { enabled ->
+                    _state.update { it.copy(iptvEnabled = enabled) }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "iptvEnabled flow error", e)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                profileManager.isKidsProfile().collect { isKids ->
+                    if (kidsMode != isKids) {
+                        kidsMode = isKids
+                        if (activeProviderId != null) load(force = true)
+                    }
+                }
+            } catch (e: Exception) {
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "kids profile flow error", e)
+            }
+        }
+        viewModelScope.launch {
+            try {
+                providerController.isReady.first { it }
                 providerController.activeProviderId.collect { providerId ->
                     if (activeProviderId != providerId) {
                         activeProviderId = providerId
@@ -133,7 +179,13 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("HomeVM", "provider flow error", e)
-                load(force = true)
+                _state.update {
+                    it.copy(
+                        loading = false,
+                        isRefreshing = false,
+                        error = ErrorMapper.toUserMessage(e)
+                    )
+                }
             }
         }
     }
@@ -141,17 +193,18 @@ class HomeViewModel @Inject constructor(
     private fun clearCatalogForProviderSwitch(providerId: String) {
         loadJob?.cancel()
         genreJob?.cancel()
+        MetaEnrichmentCache.clear()
         val provider = ActiveProvider.get()
         _state.update {
             it.copy(
                 loading = true,
+                isRefreshing = true,
                 error = null,
                 providerId = providerId,
                 providerName = provider.displayName,
                 catalogHint = provider.catalogHint,
                 supportsMovies = provider.supportsMovies,
                 supportsSeries = provider.supportsSeries,
-                uniqueTitleCount = 0,
                 hero = emptyList(),
                 popular = emptyList(),
                 newest = emptyList(),
@@ -163,6 +216,7 @@ class HomeViewModel @Inject constructor(
                 drama = emptyList(),
                 scifi = emptyList(),
                 latestEpisodes = emptyList(),
+                uniqueTitleCount = 0,
                 lastLoadDurationMs = null,
                 showProviderHealthWarning = false
             )
@@ -192,22 +246,36 @@ class HomeViewModel @Inject constructor(
                     val provider = ActiveProvider.get()
                     if (provider.id != expectedProvider) return@coroutineScope
 
+                    val performanceMode = _state.value.performanceMode
                     val catalogDef = async { repo.loadHomeCatalog() }
-                    val latestDef = async { repo.loadLatestEpisodes() }
+                    val latestDef = if (performanceMode) {
+                        null
+                    } else {
+                        async { repo.loadLatestEpisodes() }
+                    }
 
                     when (val catalogRes = catalogDef.await()) {
                         is NovaStreamRepository.RepoResult.Success -> {
                             if (ActiveProvider.id != expectedProvider) return@coroutineScope
-                            val catalog = catalogRes.data
-                            val latest = latestDef.await().okList()
-
-                            val popular = catalog.popular.ifEmpty { catalog.all.take(24) }
-                            val newest = catalog.newest.ifEmpty { catalog.all.drop(8).take(24) }
-                            val movies = catalog.all.filter { it.isMovie }
-                            val trending = catalog.trending.ifEmpty {
-                                catalog.topShows.ifEmpty { popular.take(20) }
+                            val catalog = KidsContentFilter.filterHomeCatalog(catalogRes.data, kidsMode)
+                            val processed = withContext(Dispatchers.Default) {
+                                val popular = catalog.popular.ifEmpty { catalog.all.take(24) }
+                                val newest = catalog.newest.ifEmpty { catalog.all.drop(8).take(24) }
+                                val movies = catalog.all.filter { it.isMovie }
+                                val trending = catalog.trending.ifEmpty {
+                                    catalog.topShows.ifEmpty { popular.take(20) }
+                                }
+                                val merged = catalog.flattened().distinctBy { it.id }
+                                ProcessedCatalog(
+                                    popular = popular,
+                                    newest = newest,
+                                    movies = movies,
+                                    trending = trending,
+                                    merged = merged,
+                                    hero = catalog.hero.ifEmpty { merged.take(8) },
+                                    fallbackLatest = catalog.latestEpisodes
+                                )
                             }
-                            val merged = catalog.flattened().distinctBy { it.id }
 
                             val durationMs = System.currentTimeMillis() - startedAt
                             ProviderLoadMetrics.recordLoad(expectedProvider, durationMs)
@@ -218,25 +286,43 @@ class HomeViewModel @Inject constructor(
                                     providerId = expectedProvider,
                                     providerName = provider.displayName,
                                     catalogHint = provider.catalogHint,
-                                    uniqueTitleCount = merged.size,
-                                    hero = catalog.hero.ifEmpty { merged.take(8) },
-                                    popular = popular,
-                                    newest = newest,
-                                    trending = trending,
-                                    movies = movies,
+                                    uniqueTitleCount = processed.merged.size,
+                                    hero = processed.hero,
+                                    popular = processed.popular,
+                                    newest = processed.newest,
+                                    trending = processed.trending,
+                                    movies = processed.movies,
                                     genreRows = emptyList(),
                                     action = emptyList(),
                                     comedy = emptyList(),
                                     drama = emptyList(),
                                     scifi = emptyList(),
-                                    latestEpisodes = latest.ifEmpty { catalog.latestEpisodes },
+                                    latestEpisodes = processed.fallbackLatest,
                                     lastLoadDurationMs = durationMs,
                                     showProviderHealthWarning = ProviderLoadMetrics.shouldShowHealthWarning(durationMs, false),
                                     error = null
                                 )
                             }
-                            if (!_state.value.performanceMode) {
+                            if (!performanceMode) {
                                 loadGenreRowsDeferred(provider, expectedProvider)
+                            }
+                            enrichCatalogInBackground(
+                                expectedProvider = expectedProvider,
+                                hero = processed.hero,
+                                popular = processed.popular,
+                                newest = processed.newest,
+                                trending = processed.trending,
+                                movies = processed.movies
+                            )
+                            latestDef?.let { deferred ->
+                                launch {
+                                    val latest = deferred.await().okList()
+                                    if (ActiveProvider.id != expectedProvider) return@launch
+                                    val safe = KidsContentFilter.filterLatestEpisodes(latest, kidsMode)
+                                    if (safe.isNotEmpty()) {
+                                        _state.update { it.copy(latestEpisodes = safe) }
+                                    }
+                                }
                             }
                         }
                         is NovaStreamRepository.RepoResult.Error -> {
@@ -273,6 +359,40 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    private fun enrichCatalogInBackground(
+        expectedProvider: String,
+        hero: List<Series>,
+        popular: List<Series>,
+        newest: List<Series>,
+        trending: List<Series>,
+        movies: List<Series>
+    ) {
+        viewModelScope.launch {
+            try {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val preferAnime = ActiveProvider.isAniWorld
+                val enrichedHero = catalogMetaEnricher.enrichList(hero, language, preferAnime, limit = 8)
+                val enrichedPopular = catalogMetaEnricher.enrichList(popular, language, preferAnime, limit = 24)
+                val enrichedNewest = catalogMetaEnricher.enrichList(newest, language, preferAnime, limit = 24)
+                val enrichedTrending = catalogMetaEnricher.enrichList(trending, language, preferAnime, limit = 20)
+                val enrichedMovies = catalogMetaEnricher.enrichList(movies, language, preferAnime, limit = 24)
+                if (ActiveProvider.id != expectedProvider) return@launch
+                _state.update {
+                    it.copy(
+                        hero = KidsContentFilter.filterSeries(enrichedHero, kidsMode),
+                        popular = KidsContentFilter.filterSeries(enrichedPopular, kidsMode),
+                        newest = KidsContentFilter.filterSeries(enrichedNewest, kidsMode),
+                        trending = KidsContentFilter.filterSeries(enrichedTrending, kidsMode),
+                        movies = KidsContentFilter.filterSeries(enrichedMovies, kidsMode)
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("HomeVM", "catalog enrich failed", e)
+            }
+        }
+    }
+
     private fun loadGenreRowsDeferred(
         provider: com.novastream.app.data.provider.StreamingProvider,
         expectedProvider: String
@@ -289,7 +409,8 @@ class HomeViewModel @Inject constructor(
                             when (val res = repo.loadGenre(genre.slug)) {
                                 is NovaStreamRepository.RepoResult.Success -> {
                                     val list = res.data.filter { it.belongsToActiveProvider() || it.providerId == null }
-                                    if (list.isEmpty()) null else genre to list
+                                    val safe = KidsContentFilter.filterSeries(list, kidsMode)
+                                    if (safe.isEmpty()) null else genre to safe
                                 }
                                 else -> null
                             }
@@ -297,21 +418,26 @@ class HomeViewModel @Inject constructor(
                     }.mapNotNull { it.await() }
                 }
                 if (ActiveProvider.id != expectedProvider) return@launch
-                val action = genreRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()
-                val comedy = genreRows.find {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val preferAnime = ActiveProvider.isAniWorld
+                val enrichedRows = genreRows.map { (genre, list) ->
+                    genre to catalogMetaEnricher.enrichList(list, language, preferAnime, limit = 16)
+                }
+                val action = enrichedRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()
+                val comedy = enrichedRows.find {
                     it.first.slug.contains("comedy", true) || it.first.slug.contains("komödie", true)
                 }?.second.orEmpty()
-                val drama = genreRows.find { it.first.slug.contains("drama", true) }?.second.orEmpty()
-                val scifi = genreRows.find {
+                val drama = enrichedRows.find { it.first.slug.contains("drama", true) }?.second.orEmpty()
+                val scifi = enrichedRows.find {
                     it.first.slug.contains("science", true) || it.first.slug.contains("fantasy", true)
                 }?.second.orEmpty()
                 _state.update {
                     it.copy(
-                        genreRows = genreRows,
-                        action = action,
-                        comedy = comedy,
-                        drama = drama,
-                        scifi = scifi
+                        genreRows = enrichedRows,
+                        action = KidsContentFilter.filterSeries(action, kidsMode),
+                        comedy = KidsContentFilter.filterSeries(comedy, kidsMode),
+                        drama = KidsContentFilter.filterSeries(drama, kidsMode),
+                        scifi = KidsContentFilter.filterSeries(scifi, kidsMode)
                     )
                 }
             } catch (e: Exception) {
@@ -333,3 +459,13 @@ class HomeViewModel @Inject constructor(
     private fun NovaStreamRepository.RepoResult<List<LatestEpisode>>.okList(): List<LatestEpisode> =
         (this as? NovaStreamRepository.RepoResult.Success)?.data.orEmpty()
 }
+
+private data class ProcessedCatalog(
+    val popular: List<com.novastream.app.data.model.Series>,
+    val newest: List<com.novastream.app.data.model.Series>,
+    val movies: List<com.novastream.app.data.model.Series>,
+    val trending: List<com.novastream.app.data.model.Series>,
+    val merged: List<com.novastream.app.data.model.Series>,
+    val hero: List<com.novastream.app.data.model.Series>,
+    val fallbackLatest: List<LatestEpisode>
+)

@@ -73,10 +73,10 @@ class HosterResolver(
     suspend fun resolve(hosterName: String, redirectUrl: String): List<StreamSource> {
         if (redirectUrl.isBlank()) return emptyList()
         val cacheKey = cacheKey(hosterName, redirectUrl)
-        readCache(cacheKey)?.let { return it }
+        readCache(cacheKey)?.let { return it.withSecureUrls() }
 
         return try {
-            val resolved = resolveUncached(hosterName, redirectUrl)
+            val resolved = resolveUncached(hosterName, redirectUrl).withSecureUrls()
             writeCache(cacheKey, resolved)
             resolved
         } catch (e: Exception) {
@@ -329,7 +329,9 @@ class HosterResolver(
                             isHls = urlMatch.value.contains(".m3u8")))
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                DebugLog.w("HosterResolver", "base64 decode failed", e)
+            }
         }
 
         // Strategie 3: Direct m3u8/mp4/webm URLs in the page
@@ -541,7 +543,9 @@ class HosterResolver(
             try {
                 val decoded = String(Base64.decode(m.groupValues[1], Base64.DEFAULT))
                 Regex("""https?://[^\s"']+\.(?:m3u8|mp4)[^\s"']*""").findAll(decoded).forEach { addUrl(it.value) }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                DebugLog.w("HosterResolver", "base64 decode failed", e)
+            }
         }
         // Packed eval fallback: raw m3u8/mp4 in page
         Regex("""https?://[^\s"'<>]+\\.m3u8[^\s"'<>]*""").findAll(html).forEach { addUrl(it.value) }
@@ -562,4 +566,9 @@ class HosterResolver(
         }
         return out.distinctBy { it.url }
     }
+
+    private fun List<StreamSource>.withSecureUrls(): List<StreamSource> =
+        map { source ->
+            source.copy(url = MediaUrls.secureUrl(source.url))
+        }
 }

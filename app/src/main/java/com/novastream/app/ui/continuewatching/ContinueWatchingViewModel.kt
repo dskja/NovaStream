@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,21 +23,28 @@ data class ContinueWatchingUiState(
 
 @HiltViewModel
 class ContinueWatchingViewModel @Inject constructor(
-    private val watchRepo: WatchRepository
+    private val watchRepo: WatchRepository,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ContinueWatchingUiState())
     val state: StateFlow<ContinueWatchingUiState> = _state.asStateFlow()
 
+    private var kidsMode: Boolean = false
+    private var latestProgress: List<WatchProgress> = emptyList()
+
     init {
+        viewModelScope.launch {
+            profileManager.isKidsProfile().collect { isKids ->
+                kidsMode = isKids
+                publishProgress(latestProgress)
+            }
+        }
         viewModelScope.launch {
             try {
                 watchRepo.watchProgress().collect { progress ->
-                    val pid = ActiveProvider.id
-                    val items = progress
-                        .filter { !it.isCompleted && (it.providerId.isBlank() || it.providerId == pid) }
-                        .sortedByDescending { it.updatedAt }
-                    _state.update { it.copy(items = items, loading = false, error = null) }
+                    latestProgress = progress
+                    publishProgress(progress)
                 }
             } catch (e: Exception) {
                 if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.e("ContinueWatchingVM", "flow error", e)
@@ -47,6 +56,18 @@ class ContinueWatchingViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun publishProgress(progress: List<WatchProgress>) {
+        val pid = ActiveProvider.id
+        val items = KidsContentFilter.filterProgress(
+            progress.filter {
+                !it.isCompleted &&
+                    (it.providerId.isBlank() || it.providerId == pid || it.providerId == "unknown")
+            },
+            kidsMode
+        ).sortedByDescending { it.updatedAt }
+        _state.update { it.copy(items = items, loading = false, error = null) }
     }
 
     fun remove(episodeKey: String) {

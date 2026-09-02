@@ -3,6 +3,7 @@ package com.novastream.app.data.meta
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -23,6 +24,28 @@ class WikidataMetaServiceTest {
         assertNotNull(entity)
         assertEquals("Q1079", entity!!.id)
         assertEquals("Breaking Bad", entity.label)
+    }
+
+    @Test
+    fun parseAgeRatingsFromEntity_readsFskClaim() {
+        val entity = JSONObject(
+            """
+            {
+              "claims": {
+                "P1981": [{
+                  "mainsnak": {
+                    "datavalue": {
+                      "value": { "id": "Q23817740" },
+                      "type": "wikibase-entityid"
+                    }
+                  }
+                }]
+              }
+            }
+            """.trimIndent()
+        )
+        val ratings = WikidataMetaService.parseAgeRatingsFromEntity(entity)
+        assertTrue(ratings.contains("FSK 18"))
     }
 
     @Test

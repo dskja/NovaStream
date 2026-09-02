@@ -1,5 +1,6 @@
 package com.novastream.app.provider
 
+import android.content.Context
 import com.google.gson.Gson
 import com.novastream.app.data.provider.ConfigurableSiteProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -11,11 +12,20 @@ import com.novastream.app.data.scraper.SiteProfile
 /**
  * Import custom SiteProfile JSON from Settings (v15).
  * Format: single SiteProfile object or array of SiteProfile objects.
+ * Imported providers receive [appContext] for mirror failover when the registry is initialized.
  */
 object SiteProfileImporter {
 
     private val gson = Gson()
     private val imported = mutableListOf<RegisteredProvider>()
+
+    @Volatile
+    private var appContext: Context? = null
+
+    /** Called from [ProviderRegistry.initialize] so custom profiles get mirror support. */
+    internal fun bindContext(context: Context) {
+        appContext = context.applicationContext
+    }
 
     fun importFromJson(json: String): ImportResult {
         return try {
@@ -27,9 +37,11 @@ object SiteProfileImporter {
                 else -> listOfNotNull(gson.fromJson(trimmed, SiteProfile::class.java))
             }
             if (profiles.isEmpty()) return ImportResult.Error("No profiles found in JSON")
+            val ctx = appContext
             val added = profiles.mapNotNull { profile ->
                 if (profile.id.isBlank() || profile.baseUrl.isBlank()) return@mapNotNull null
-                val provider = ConfigurableSiteProvider(profile)
+                imported.removeAll { it.provider.id == profile.id }
+                val provider = ConfigurableSiteProvider(profile, ctx)
                 RegisteredProvider(
                     provider = provider,
                     support = com.novastream.app.data.provider.ProviderSupport(

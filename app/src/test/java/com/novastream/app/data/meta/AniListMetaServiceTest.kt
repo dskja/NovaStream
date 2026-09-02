@@ -78,4 +78,21 @@ class AniListMetaServiceTest {
         assertEquals(1, show!!.similar.size)
         assertEquals("anilist-2", show.similar.first().id)
     }
+
+    @Test
+    fun parseMedia_setsIsAdultForHentaiGenre() {
+        val json = JSONObject(
+            """
+            {
+              "id": 99,
+              "title": { "romaji": "Test" },
+              "genres": ["Hentai"],
+              "isAdult": false
+            }
+            """.trimIndent()
+        )
+        val show = AniListMetaService.parseMedia(json)
+        assertNotNull(show)
+        assertEquals(true, show!!.isAdult)
+    }
 }

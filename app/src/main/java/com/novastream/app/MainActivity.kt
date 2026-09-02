@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novastream.app.ui.navigation.NovaStreamNavHost
+import com.novastream.app.ui.player.PlayerPlaybackController
 import com.novastream.app.ui.theme.NovaStreamTheme
 import com.novastream.app.ui.tv.TvUtils
 import com.novastream.app.util.VoeWebViewResolver
@@ -73,8 +74,21 @@ class MainActivity : ComponentActivity() {
     private fun parseDetailDeepLink(intent: android.content.Intent?): String? {
         val uri = intent?.data ?: return null
         if (uri.scheme != "novastream" || uri.host != "detail") return null
-        return uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }
+        val raw = uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }
             ?: uri.lastPathSegment?.takeIf { it.isNotBlank() }
+            ?: return null
+        return try {
+            java.net.URLDecoder.decode(raw, "UTF-8")
+        } catch (_: Exception) {
+            raw
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            PlayerPlaybackController.requestPictureInPicture()
+        }
     }
 
     override fun onDestroy() {
@@ -95,7 +109,9 @@ class MainActivity : ComponentActivity() {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
             try {
                 coil.Coil.imageLoader(this).memoryCache?.clear()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                com.novastream.app.util.DebugLog.w("MainActivity", "coil cache clear failed", e)
+            }
         }
     }
 }

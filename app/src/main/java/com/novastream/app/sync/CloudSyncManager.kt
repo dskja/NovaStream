@@ -61,7 +61,9 @@ class CloudSyncManager(
             val json = resp.body?.string() ?: return@withContext SyncResult.Error("Empty response")
             when (val result = backupRestore.importFromJson(json, merge)) {
                 is BackupRestoreManager.ImportResult.Success ->
-                    SyncResult.Success("Restored ${result.watchlistCount} watchlist + ${result.progressCount} progress items")
+                    SyncResult.Success(
+                        "Restored ${result.profileCount} profiles, ${result.watchlistCount} watchlist + ${result.progressCount} progress items"
+                    )
                 is BackupRestoreManager.ImportResult.Error -> SyncResult.Error(result.message)
             }
         } catch (e: Exception) {

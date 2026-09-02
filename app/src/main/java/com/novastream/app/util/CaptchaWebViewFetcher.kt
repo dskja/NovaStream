@@ -36,6 +36,25 @@ object CaptchaWebViewFetcher {
         appContext = context.applicationContext
     }
 
+    /** Release shared WebView memory (e.g. on low memory). */
+    fun clear() {
+        synchronized(rateLimitLock) {
+            requestTimestamps.clear()
+        }
+        destroyWebView()
+    }
+
+    @androidx.annotation.MainThread
+    private fun destroyWebView() {
+        sharedWebView?.let { webView ->
+            runCatching {
+                webView.stopLoading()
+                webView.destroy()
+            }
+        }
+        sharedWebView = null
+    }
+
     private fun acquireRateLimitSlot(): Boolean {
         synchronized(rateLimitLock) {
             val now = System.currentTimeMillis()
@@ -73,7 +92,7 @@ object CaptchaWebViewFetcher {
         }
         return webViewMutex.withLock {
             withContext(Dispatchers.Main) {
-                withTimeoutOrNull(timeoutMs) {
+                val html = withTimeoutOrNull(timeoutMs) {
                     suspendCancellableCoroutine { cont ->
                         val webView = try {
                             getOrCreateWebView(context)
@@ -113,6 +132,8 @@ object CaptchaWebViewFetcher {
                         }
                     }
                 } ?: ""
+                destroyWebView()
+                html
             }
         }
     }
