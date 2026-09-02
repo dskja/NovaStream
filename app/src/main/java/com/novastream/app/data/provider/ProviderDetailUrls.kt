@@ -10,7 +10,10 @@ object ProviderDetailUrls {
     val trimmed = slug.trim()
     return when {
       trimmed.startsWith("tv-") -> "$base/tv/${trimmed.removePrefix("tv-")}"
-      trimmed.startsWith("movie-") -> "$base/movie/${trimmed.removePrefix("movie-")}"
+      trimmed.startsWith("movie-") -> when (providerId) {
+        "streamkiste" -> "$base/filme/${trimmed.removePrefix("movie-")}"
+        else -> "$base/movie/${trimmed.removePrefix("movie-")}"
+      }
       trimmed.startsWith("http") -> trimmed
       trimmed.startsWith("/") -> base + trimmed
       else -> providerSpecific(providerId, base, trimmed)

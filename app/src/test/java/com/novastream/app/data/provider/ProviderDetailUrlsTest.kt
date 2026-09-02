@@ -40,6 +40,7 @@ class ProviderDetailUrlsTest {
     }
 
     @Test
+    fun `default fallback`() {
         assertEquals("$base/some-slug", ProviderDetailUrls.resolve("unknown", base, "some-slug"))
     }
 }
