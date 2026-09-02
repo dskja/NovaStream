@@ -19,7 +19,7 @@ import kotlin.coroutines.resume
  */
 object CaptchaWebViewFetcher {
 
-    private const val MAX_REQUESTS_PER_MINUTE = 3
+    private const val MAX_REQUESTS_PER_MINUTE = 12
     private const val RATE_WINDOW_MS = 60_000L
 
     @Volatile
@@ -103,6 +103,11 @@ object CaptchaWebViewFetcher {
                         webView.webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, finishedUrl: String?) {
                                 if (!cont.isActive) return
+                                // Ensure WebView cookies are flushed so OkHttp CookieJar can read them
+                                try {
+                                    android.webkit.CookieManager.getInstance().flush()
+                                } catch (_: Exception) {
+                                }
                                 try {
                                     view?.evaluateJavascript(
                                         "(function(){return document.documentElement.outerHTML;})();"

@@ -219,7 +219,24 @@ open class SerienStreamProvider(
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         val html = api().episode(episode.slug, episode.season, episode.number)
-        parseWithBase { NovaStreamScraper.parseHosters(html) }
+        val base = activeBaseUrl()
+        val raw = parseWithBase { NovaStreamScraper.parseHosters(html) }
+        // BetterStreamflix: follow /redirect (data-play-url) to final hoster URL before extract
+        raw.map { hoster ->
+            val absolute = when {
+                hoster.redirectUrl.startsWith("http") -> hoster.redirectUrl
+                hoster.redirectUrl.startsWith("/") -> base + hoster.redirectUrl
+                else -> "$base/${hoster.redirectUrl}"
+            }
+            val finalUrl = ProviderHttp.resolveRedirectFinal(absolute, referer = "$base/", providerId = id)
+                ?: absolute
+            hoster.copy(
+                redirectUrl = finalUrl,
+                name = if (hoster.language.isNotBlank()) {
+                    "${hoster.name} (${hoster.language})"
+                } else hoster.name
+            )
+        }
     }
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {

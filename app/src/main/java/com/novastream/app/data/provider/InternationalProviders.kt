@@ -12,9 +12,6 @@ class RidomoviesProvider(appContext: Context? = null) :
 class AnikotoProvider(appContext: Context? = null) :
     ConfigurableSiteProvider(InternationalSiteProfiles.anikoto, appContext)
 
-class HdFilmeProvider(appContext: Context? = null) :
-    ConfigurableSiteProvider(InternationalSiteProfiles.hdfilme, appContext)
-
 class EinschaltenProvider(appContext: Context? = null) :
     ConfigurableSiteProvider(InternationalSiteProfiles.einschalten, appContext)
 

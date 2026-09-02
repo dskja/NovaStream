@@ -54,8 +54,8 @@ object NetworkModule {
             .header("Sec-Fetch-User", "?1")
 
         if (original.header("Referer") == null) {
-            val host = original.url.host
-            builder.header("Referer", "https://$host/")
+            // Scheme-aware Referer (HTTP IP mirrors must not get https://… Referer)
+            builder.header("Referer", "${original.url.scheme}://${original.url.host}/")
         }
 
         chain.proceed(builder.build())
@@ -92,13 +92,42 @@ object NetworkModule {
         maxRequestsPerHost = 6
     }
 
-    /** Session cookies — helps Cloudflare / DDoS-Guard challenges across redirect chains. */
+    /**
+     * Session cookies shared with Android WebView CookieManager (BetterStreamflix NetworkClient pattern).
+     * Cloudflare / DDoS-Guard cookies obtained in WebView become available to OkHttp and vice versa.
+     */
     private val cookieJar: CookieJar = object : CookieJar {
-        private val store = ConcurrentHashMap<String, List<Cookie>>()
+        private val memory = ConcurrentHashMap<String, List<Cookie>>()
+
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            if (cookies.isNotEmpty()) store[url.host] = cookies
+            if (cookies.isEmpty()) return
+            memory[url.host] = cookies
+            try {
+                val cm = android.webkit.CookieManager.getInstance()
+                cookies.forEach { cookie ->
+                    cm.setCookie(url.toString(), cookie.toString())
+                }
+                cm.flush()
+            } catch (_: Throwable) {
+                // CookieManager unavailable in some unit-test environments
+            }
         }
-        override fun loadForRequest(url: HttpUrl): List<Cookie> = store[url.host].orEmpty()
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            val byName = linkedMapOf<String, Cookie>()
+            memory[url.host].orEmpty().forEach { byName[it.name] = it }
+            try {
+                val cookieString = android.webkit.CookieManager.getInstance().getCookie(url.toString())
+                if (!cookieString.isNullOrBlank()) {
+                    cookieString.split(";").forEach { part ->
+                        Cookie.parse(url, part.trim())?.let { byName[it.name] = it }
+                    }
+                }
+            } catch (_: Throwable) {
+                // ignore
+            }
+            return byName.values.toList()
+        }
     }
 
     private fun baseClientBuilder(): OkHttpClient.Builder =
@@ -116,6 +145,13 @@ object NetworkModule {
             .readTimeout(NovaStreamConfig.READ_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .writeTimeout(NovaStreamConfig.WRITE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             .callTimeout(45, TimeUnit.SECONDS)
+            .connectionSpecs(
+                listOf(
+                    okhttp3.ConnectionSpec.MODERN_TLS,
+                    okhttp3.ConnectionSpec.COMPATIBLE_TLS,
+                    okhttp3.ConnectionSpec.CLEARTEXT
+                )
+            )
             .retryOnConnectionFailure(true)
 
     /**

@@ -4,6 +4,7 @@ import android.util.Base64
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.model.NovaStreamConfig
 import com.novastream.app.data.model.StreamSource
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -91,31 +92,32 @@ class HosterResolver(
         return try {
             if (redirectUrl.isBlank()) return emptyList()
 
-            // 1. Redirect-URL absolut machen und Seite laden
+            // 1. Redirect-URL absolut machen und Seite laden (OkHttp follows redirects)
             val absoluteUrl = absUrl(redirectUrl)
-            val redirectHtml = kotlinx.coroutines.withTimeoutOrNull(NovaStreamConfig.REDIRECT_TIMEOUT_MS) {
-                withContext(Dispatchers.IO) { fetchHtml(absoluteUrl) }
+            val fetch = kotlinx.coroutines.withTimeoutOrNull(NovaStreamConfig.REDIRECT_TIMEOUT_MS) {
+                withContext(Dispatchers.IO) { fetchHtmlWithFinalUrl(absoluteUrl) }
             } ?: return emptyList()
 
-            // 2. JS-Redirect-URL aus dem HTML extrahieren (falls vorhanden)
-            val hosterPageUrl = extractJsRedirect(redirectHtml).ifBlank {
-                // OkHttp ist bereits durch followRedirects zur Hoster-Seite gefolgt
-                // Wenn kein JS-Redirect gefunden wurde, verwenden wir die absolute URL
-                absoluteUrl
-            }
+            // 2. Prefer JS redirect if present, otherwise use final URL after HTTP redirects (BetterStreamflix pattern)
+            val hosterPageUrl = extractJsRedirect(fetch.html).ifBlank { fetch.finalUrl }.ifBlank { absoluteUrl }
 
             // 3. VOE: Nutze WebView-Resolver (Bot-Detection + obfuskiertes JS)
             if (hosterName.contains("voe", ignoreCase = true) ||
                 hosterPageUrl.contains("voe", ignoreCase = true)) {
-                val voeResult = voeWebViewResolver.resolve(hosterPageUrl, hosterName)
+                val voeUrl = rewriteVoeEmbed(hosterPageUrl)
+                val voeResult = voeWebViewResolver.resolve(voeUrl, hosterName)
                 if (voeResult.isNotEmpty()) return voeResult
                 // Fallback: versuche HTTP-Extraktion
             }
 
             // 4. Andere Hoster: HTML laden und Stream-URLs extrahieren
-            val html = kotlinx.coroutines.withTimeoutOrNull(NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) {
-                withContext(Dispatchers.IO) { fetchHtml(hosterPageUrl) }
-            } ?: return emptyList()
+            val html = if (hosterPageUrl == fetch.finalUrl && fetch.html.isNotBlank()) {
+                fetch.html
+            } else {
+                kotlinx.coroutines.withTimeoutOrNull(NovaStreamConfig.HOSTER_RESOLVE_TIMEOUT_MS) {
+                    withContext(Dispatchers.IO) { fetchHtmlWithFinalUrl(hosterPageUrl).html }
+                } ?: return emptyList()
+            }
             if (html.isBlank()) return emptyList()
 
             // 5. Stream-URLs extrahieren (hoster-spezifisch)
@@ -124,7 +126,7 @@ class HosterResolver(
 
             // 6. Falls keine direkten URLs gefunden: versuche VOE WebView als letzten Ausweg
             if (hosterPageUrl.contains("voe", ignoreCase = true)) {
-                return voeWebViewResolver.resolve(hosterPageUrl, hosterName)
+                return voeWebViewResolver.resolve(rewriteVoeEmbed(hosterPageUrl), hosterName)
             }
 
             // 7. Letzter Versuch: Generic extraction mit erweiterten Patterns
@@ -137,6 +139,19 @@ class HosterResolver(
                 android.util.Log.e("HosterResolver", "resolveUncached failed for $hosterName url=$redirectUrl", e)
             }
             emptyList()
+        }
+    }
+
+    /** BetterStreamflix VOE rewrite: path → /e/{path} */
+    private fun rewriteVoeEmbed(url: String): String {
+        if (!url.contains("voe", ignoreCase = true)) return url
+        return try {
+            val httpUrl = url.toHttpUrlOrNull() ?: return url
+            val path = httpUrl.encodedPath.trim('/')
+            if (path.startsWith("e/")) return url
+            "https://voe.sx/e/$path"
+        } catch (_: Exception) {
+            url
         }
     }
 
@@ -215,23 +230,28 @@ class HosterResolver(
         return ""
     }
 
-    private suspend fun fetchHtml(url: String): String {
+    private data class FetchResult(val finalUrl: String, val html: String)
+
+    private suspend fun fetchHtmlWithFinalUrl(url: String): FetchResult {
         val req = Request.Builder()
             .url(url)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
-            .header("Referer", baseUrl + "/")
+            .header("Referer", baseUrl.trimEnd('/') + "/")
             .header("Accept", "text/html,application/xhtml+xml,*/*")
             .build()
         return client.newCall(req).execute().use { resp ->
+            val finalUrl = resp.request.url.toString()
             if (!resp.isSuccessful) {
                 if (com.novastream.app.BuildConfig.DEBUG) {
-                    android.util.Log.e("HosterResolver", "HTTP ${resp.code} for $url")
+                    android.util.Log.e("HosterResolver", "HTTP ${resp.code} for $url -> $finalUrl")
                 }
-                return ""
+                return FetchResult(finalUrl, "")
             }
-            resp.body?.string() ?: ""
+            FetchResult(finalUrl, resp.body?.string().orEmpty())
         }
     }
+
+    private suspend fun fetchHtml(url: String): String = fetchHtmlWithFinalUrl(url).html
 
     /** Extrahiert Stream-URLs aus dem Hoster-HTML. */
     private fun extractStreamUrls(html: String, hoster: String, pageUrl: String): List<StreamSource> {

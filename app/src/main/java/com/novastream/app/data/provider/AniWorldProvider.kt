@@ -202,8 +202,22 @@ class AniWorldProvider(
     private suspend fun loadByLetterInternal(letter: String): List<Series> {
         if (letter.isBlank()) return emptyList()
         val base = activeBaseUrl()
+        // BetterStreamflix primary catalog: /animes-alphabet
+        if (letter.equals("A", ignoreCase = true) || letter == "0") {
+            val alphabetHtml = fetchUrl("$base/animes-alphabet")
+            if (alphabetHtml.isNotBlank() && !ProviderHttp.isChallenge(alphabetHtml)) {
+                val all = parseAlphabetCatalog(alphabetHtml)
+                if (all.isNotEmpty()) {
+                    val L = letter.trim().uppercase()
+                    return if (L == "0") all.filter { it.title.firstOrNull()?.isDigit() == true }
+                    else all.filter { it.title.firstOrNull()?.uppercaseChar() == L.first() }
+                        .ifEmpty { all }
+                }
+            }
+        }
         val L = letter.trim().uppercase()
         val paths = listOf(
+            "$base/animes-alphabet",
             "$base/animes?letter=$L",
             "$base/animes?alphabet=$L",
             "$base/animes-$L",
@@ -211,10 +225,37 @@ class AniWorldProvider(
         )
         for (url in paths) {
             val html = fetchUrl(url)
-            val parsed = parseSeriesListAniWorld(html)
+            val parsed = if (url.endsWith("animes-alphabet")) {
+                parseAlphabetCatalog(html).filter {
+                    it.title.firstOrNull()?.uppercaseChar() == L.firstOrNull()
+                }.ifEmpty { parseSeriesListAniWorld(html) }
+            } else {
+                parseSeriesListAniWorld(html)
+            }
             if (parsed.isNotEmpty()) return parsed
         }
         return emptyList()
+    }
+
+    private fun parseAlphabetCatalog(html: String): List<Series> {
+        if (html.isBlank()) return emptyList()
+        val doc = Jsoup.parse(html, parseBase())
+        val results = linkedMapOf<String, Series>()
+        for (a in doc.select(".genre > ul > li a[href*=/anime/stream/], a[href*=/anime/stream/][data-alternative-title]")) {
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractAniWorldSlug(href) ?: continue
+            if (results.containsKey(slug)) continue
+            val title = MediaUrls.sanitizeTitle(
+                a.attr("data-alternative-title").ifBlank { a.text() }
+            ).ifBlank { slugToTitle(slug) }
+            results[slug] = Series(
+                id = slug,
+                title = title,
+                detailUrl = "/anime/stream/$slug",
+                providerId = id
+            )
+        }
+        return results.values.toList()
     }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
@@ -252,7 +293,16 @@ class AniWorldProvider(
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         val base = activeBaseUrl()
         val html = fetchUrl("$base/anime/stream/${episode.slug}/staffel-${episode.season}/episode-${episode.number}")
-        parseAniWorldHosters(html)
+        parseAniWorldHosters(html).map { hoster ->
+            val absolute = when {
+                hoster.redirectUrl.startsWith("http") -> hoster.redirectUrl
+                hoster.redirectUrl.startsWith("/") -> base + hoster.redirectUrl
+                else -> "$base/${hoster.redirectUrl}"
+            }
+            val finalUrl = ProviderHttp.resolveRedirectFinal(absolute, referer = "$base/", providerId = id)
+                ?: absolute
+            hoster.copy(redirectUrl = finalUrl)
+        }
     }
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
@@ -374,27 +424,27 @@ class AniWorldProvider(
         val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
+        val base = parseBase()
 
-        for (li in doc.select("li[data-link-target]")) {
-            val redirectUrl = li.attr("data-link-target")
-            if (redirectUrl.isBlank()) continue
-            val icon = li.selectFirst("i.icon")
-            val name = icon?.attr("title")?.replace("Hoster ", "")?.ifBlank { null }
-                ?: icon?.className()?.substringAfter("icon ")?.ifBlank { null }
-                ?: li.selectFirst("a")?.text()?.trim()
+        // BetterStreamflix selector: div.hosterSiteVideo > ul > li
+        for (li in doc.select("div.hosterSiteVideo > ul > li, div.hosterSiteVideo ul li")) {
+            val a = li.selectFirst("a[href]") ?: continue
+            val href = a.attr("href").trim()
+            if (href.isBlank()) continue
+            val redirectUrl = if (href.startsWith("http")) href else base + href
+            val baseName = li.selectFirst("h4")?.text()?.trim()
+                ?: li.selectFirst("i.icon")?.attr("title")?.replace("Hoster ", "")
+                ?: a.text().trim()
                 ?: "Unknown"
             val langKey = li.attr("data-lang-key")
             val language = when (langKey) {
-                "1" -> "Deutsch"
-                "2" -> "Ger-Sub"
-                "3" -> "Eng-Sub"
-                "4" -> "Eng-Dub"
-                "5" -> "Ger-Dub"
-                "6" -> "Jap-Sub"
+                "1" -> "DUB"
+                "2" -> "SUB English"
+                "3" -> "SUB"
                 else -> langKey.ifBlank { "" }
             }
-            val key = "$name-$redirectUrl"
-            if (seen.add(key)) {
+            val name = if (language.isNotBlank()) "$baseName - $language" else baseName
+            if (seen.add("$name-$redirectUrl")) {
                 hosters.add(
                     HosterLink(
                         name = name,
@@ -404,6 +454,37 @@ class AniWorldProvider(
                         index = hosters.size
                     )
                 )
+            }
+        }
+
+        if (hosters.isEmpty()) {
+            for (li in doc.select("li[data-link-target]")) {
+                val redirectUrl = li.attr("data-link-target")
+                if (redirectUrl.isBlank()) continue
+                val icon = li.selectFirst("i.icon")
+                val name = icon?.attr("title")?.replace("Hoster ", "")?.ifBlank { null }
+                    ?: icon?.className()?.substringAfter("icon ")?.ifBlank { null }
+                    ?: li.selectFirst("a")?.text()?.trim()
+                    ?: "Unknown"
+                val langKey = li.attr("data-lang-key")
+                val language = when (langKey) {
+                    "1" -> "Deutsch"
+                    "2" -> "Ger-Sub"
+                    "3" -> "Eng-Sub"
+                    else -> langKey.ifBlank { "" }
+                }
+                val key = "$name-$redirectUrl"
+                if (seen.add(key)) {
+                    hosters.add(
+                        HosterLink(
+                            name = name,
+                            redirectUrl = redirectUrl,
+                            language = language,
+                            linkId = li.attr("data-link-id"),
+                            index = hosters.size
+                        )
+                    )
+                }
             }
         }
         if (hosters.isEmpty()) {

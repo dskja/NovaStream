@@ -59,11 +59,12 @@ class FilmPalastProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
+        // BetterStreamflix: movies from /movies/new/page/1, series from /serien/view/page/1
+        val moviesHtml = fetchUrl("$base/movies/new/page/1").ifBlank { fetchUrl("$base/movies/new") }
+        val serien = fetchUrl("$base/serien/view/page/1").ifBlank { fetchUrl("$base/serien/view") }
         val home = mirror.requireCatalogHtml(fetchPage = { fetchUrl(base) }, fallbackUrl = "$base/")
-        val serien = fetchUrl("$base/serien/view")
-        val moviesHtml = fetchUrl("$base/movies/new").ifBlank { fetchUrl("$base/movies") }
         val merged = linkedMapOf<String, Series>()
-        for (s in parseFilmPalastList(home) + parseFilmPalastList(serien)) {
+        for (s in parseFilmPalastList(serien) + parseFilmPalastList(home)) {
             if (!merged.containsKey(s.id)) merged[s.id] = s.copy(providerId = id)
         }
         for (s in parseFilmPalastList(moviesHtml)) {
@@ -172,7 +173,14 @@ class FilmPalastProvider(
 
     private suspend fun searchFilmPalast(query: String): String {
         val base = activeBaseUrl()
-        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        // BetterStreamflix primary: GET /search/title/{query}
+        val titleSearch = fetchUrl("$base/search/title/$encoded")
+        if (titleSearch.isNotBlank() && !ProviderHttp.isChallenge(titleSearch) &&
+            (titleSearch.contains("/stream/") || titleSearch.contains("article"))
+        ) {
+            return titleSearch
+        }
         val getHtml = fetchUrl("$base/search?headerSearchText=$encoded")
         if (getHtml.isNotBlank() && !ProviderHttp.isChallenge(getHtml)) return getHtml
         return searchFilmPalastPost(query, base)
@@ -214,6 +222,28 @@ class FilmPalastProvider(
         if (html.isBlank()) return emptyList()
         val doc = Jsoup.parse(html, parseBase())
         val results = linkedMapOf<String, Series>()
+
+        // BetterStreamflix: div#content article → h2 a + img
+        for (article in doc.select("div#content article")) {
+            val a = article.selectFirst("h2 a[href*=/stream/]") ?: article.selectFirst("a[href*=/stream/]") ?: continue
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val rawSlug = extractStreamSlug(href) ?: continue
+            val seriesId = seriesBaseSlug(rawSlug)
+            if (results.containsKey(seriesId)) continue
+            val title = a.text().trim().ifBlank { slugToTitle(rawSlug) }
+            val cover = article.selectFirst("a img")?.let { img ->
+                makeAbsolute(img.attr("src").ifBlank { img.attr("data-src") })
+            } ?: findCoverNear(a)
+            results[seriesId] = Series(
+                id = seriesId,
+                title = cleanEpisodeTitle(title),
+                coverUrl = cover,
+                detailUrl = "/stream/$seriesId",
+                isMovie = !episodeSlugRegex.containsMatchIn(rawSlug) && seriesId == rawSlug
+            )
+        }
+
+        if (results.isNotEmpty()) return results.values.toList()
 
         for (a in doc.select("a[href*=/stream/], a[href*=stream/]")) {
             val href = a.absUrl("href").ifBlank { a.attr("href") }
@@ -338,6 +368,23 @@ class FilmPalastProvider(
         val doc = Jsoup.parse(html, parseBase())
         val hosters = mutableListOf<HosterLink>()
         val seen = mutableSetOf<String>()
+
+        // BetterStreamflix: ul.currentStreamLinks
+        for (block in doc.select("ul.currentStreamLinks")) {
+            val name = block.selectFirst("li.hostBg p.hostName")?.text()?.trim() ?: "Unbekannt"
+            var linkElement = block.selectFirst("a[href]")
+            var url = linkElement?.attr("href")?.trim()
+            if (linkElement == null || url.isNullOrBlank()) {
+                linkElement = block.selectFirst("a[data-player-url]")
+                url = linkElement?.attr("data-player-url")?.trim()
+            }
+            if (url.isNullOrBlank()) continue
+            val redirectUrl = makeAbsolute(url)
+            if (!seen.add("$name-$redirectUrl")) continue
+            hosters.add(HosterLink(name = name, redirectUrl = redirectUrl, index = hosters.size))
+        }
+
+        if (hosters.isNotEmpty()) return hosters
 
         for (li in doc.select("li.streamPlayBtn")) {
             val a = li.selectFirst("a.button.rb.iconPlay")

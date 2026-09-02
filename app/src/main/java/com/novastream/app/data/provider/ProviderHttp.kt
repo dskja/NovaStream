@@ -169,6 +169,19 @@ object ProviderHttp {
         null
     }
 
+    /** Follow redirects and return the final request URL (BetterStreamflix getRedirectLink pattern). */
+    suspend fun resolveRedirectFinal(url: String, referer: String? = null, providerId: String? = null): String? =
+        withContext(Dispatchers.IO) {
+            val req = browserRequestBuilder(url, referer, providerId).get().build()
+            try {
+                NetworkModule.okHttpClient.newCall(req).execute().use { resp ->
+                    resp.request.url.toString().takeIf { it.isNotBlank() }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
     /** Builds a browser-like request (Sec-Fetch headers help Cloudflare/DDoS-Guard). */
     fun browserRequestBuilder(url: String, referer: String?, providerId: String? = null): Builder {
         val ref = referer ?: url.toHttpUrlOrNull()?.let { "${it.scheme}://${it.host}/" } ?: url

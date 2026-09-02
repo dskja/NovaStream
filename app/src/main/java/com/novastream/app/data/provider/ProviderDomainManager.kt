@@ -61,6 +61,7 @@ object ProviderDomainManager {
         ),
         "aniworld" to listOf(
             "https://aniworld.to",
+            "https://aniworld.sx",
             "https://aniworld.gg",
             "https://aniworld.nu"
         ),

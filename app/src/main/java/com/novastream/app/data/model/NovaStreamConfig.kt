@@ -3,12 +3,12 @@ package com.novastream.app.data.model
 /** Konfiguration für NovaStream. */
 object NovaStreamConfig {
     /** Basis-URL des Anbieters. */
-    const val BASE_URL = "https://serienstream.to"
+    const val BASE_URL = "http://186.2.175.5"
     const val SEARCH_PATH = "/suche"
     const val HOME_PATH = "/"
-    /** User-Agent, der für Requests genutzt wird (aktualisiert für 2025). */
-    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+    /** Mobile Chrome UA — matches BetterStreamflix NetworkClient for Cloudflare compatibility. */
+    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
 
     /** Netzwerk-Timeouts in Millisekunden. */
     const val CONNECT_TIMEOUT_MS = 15_000L

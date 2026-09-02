@@ -86,6 +86,8 @@ object NovaStreamScraper {
         val doc = Jsoup.parse(html, siteBase())
         val results = linkedMapOf<String, Series>()
 
+        // BetterStreamflix search results: div.search-results-list div.card.cover-card
+        for (s in parseCoverCardSeries(doc)) results.putIfAbsent(s.id, s)
         for (s in parseHeroSeries(doc)) results.putIfAbsent(s.id, s)
         for (s in parseCardMiniSeries(doc)) results.putIfAbsent(s.id, s)
         for (s in parseTrendSeries(doc)) results.putIfAbsent(s.id, s)
@@ -94,6 +96,29 @@ object NovaStreamScraper {
         for (s in parseGenericSeriesLinks(doc, excludeSeasonLinks = true)) results.putIfAbsent(s.id, s)
 
         return results.values.toList()
+    }
+
+    private fun parseCoverCardSeries(doc: Document): List<Series> {
+        val out = mutableListOf<Series>()
+        for (card in doc.select("div.search-results-list div.card.cover-card, div.card.cover-card")) {
+            val a = card.selectFirst("a[href^=/serie/], a[href*=/serie/]") ?: continue
+            val href = a.absUrl("href").ifBlank { a.attr("href") }
+            val slug = extractSlug(href) ?: continue
+            if (href.contains("/staffel-") || href.contains("/episode-")) continue
+            val title = card.selectFirst("h6.show-title, h6, .show-title")?.text()?.trim()
+                ?: a.attr("title").ifBlank { null }
+                ?: a.text().trim().ifBlank { slugToTitle(slug) }
+            out.add(
+                Series(
+                    id = slug,
+                    title = cleanTitle(title),
+                    coverUrl = findCoverInContainer(card, doc),
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(card)
+                )
+            )
+        }
+        return out.distinctBy { it.id }
     }
 
     private fun parseHeroSeries(doc: Document): List<Series> {
