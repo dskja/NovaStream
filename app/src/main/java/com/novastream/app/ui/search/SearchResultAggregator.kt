@@ -59,6 +59,8 @@ object SearchResultAggregator {
         if (series.tvmazeId != null) score += 3
         if (series.anilistId != null) score += 3
         if (series.tmdbId != null) score += 2
+        if (series.isAdult == false) score += 1
+        if (series.isAdult == true) score -= 5
         if (!series.coverUrl.isNullOrBlank()) score += 2
         if (!series.year.isNullOrBlank()) score += 1
         if (!series.description.isNullOrBlank()) score += 1

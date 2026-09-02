@@ -49,10 +49,10 @@ object AgeRatingService {
 
         var jikanAdult: Boolean? = null
         if (idMal != null && idMal > 0) {
-            val malRating = JikanAgeRatingService.lookup(idMal)
+            val malRating = JikanMetaService.lookupRating(idMal)
             if (!malRating.isNullOrBlank()) {
                 certifications.add(malRating)
-                jikanAdult = JikanAgeRatingService.isAdultFromRating(malRating)
+                jikanAdult = JikanMetaService.isAdultFromRating(malRating)
                 if (source == null) source = "jikan"
             }
         }

@@ -11,7 +11,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
 /**
- * Regional browse-only catalog via free metadata (TVMaze + AniList).
+ * Regional browse-only catalog via free metadata (TVMaze, Epguides, AniList, Kitsu, Wikidata).
  * Playback is not supported — users switch to a streaming provider to watch.
  */
 class FreeCatalogBrowseProvider(
@@ -66,7 +66,7 @@ class FreeCatalogBrowseProvider(
                 com.novastream.app.data.meta.FreeMetaService.schedule(region)
             }
             val searchDef = async {
-                metaGraph.search(genre, preferAnime = genre.contains("anime", true))
+                metaGraph.search(genre.trim(), preferAnime = genre.contains("anime", true) || lang == ContentLanguage.MULTI)
             }
             (scheduleDef.await() + searchDef.await())
                 .filter { show ->

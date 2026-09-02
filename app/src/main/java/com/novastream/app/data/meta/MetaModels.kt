@@ -35,7 +35,11 @@ data class MetaShow(
     val contentRating: String? = null,
     val contentRatingSource: String? = null,
     /** MyAnimeList ID (for Jikan fallback, no key). */
-    val idMal: Int? = null
+    val idMal: Int? = null,
+    val kitsuId: Int? = null,
+    val shikimoriId: Int? = null,
+    /** Epguides.com show key, e.g. "BreakingBad". */
+    val epguidesKey: String? = null
 ) {
     val year: String?
         get() = premiered?.take(4)

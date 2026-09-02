@@ -5,21 +5,36 @@ import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.provider.ContentRegionResolver
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Unified metadata facade over free no-key sources:
- * TVMaze (TV), AniList (anime), Wikidata (cross-language IDs).
+ * TVMaze + Epguides (TV), AniList + Kitsu + Shikimori + Jikan (anime), Wikidata + Wikipedia (IDs/FSK).
  */
 @Singleton
 class FreeMetaGraph @Inject constructor() {
 
-    suspend fun search(query: String, preferAnime: Boolean = false, limit: Int = 30): List<MetaShow> {
-        if (query.isBlank()) return emptyList()
-        val tvmaze = FreeMetaService.search(query, limit = limit)
-        if (!preferAnime) return tvmaze
-        val anime = AniListMetaService.search(query, limit = limit / 2)
-        return (anime + tvmaze).distinctBy { dedupeKeyForShow(it) }
+    suspend fun search(query: String, preferAnime: Boolean = false, limit: Int = 30): List<MetaShow> = coroutineScope {
+        if (query.isBlank()) return@coroutineScope emptyList()
+        if (preferAnime) {
+            val anime = async { AnimeMetaAggregator.search(query, limit) }
+            val tvmaze = async { FreeMetaService.search(query, limit = limit / 2) }
+            return@coroutineScope (anime.await() + tvmaze.await()).distinctBy { dedupeKeyForShow(it) }.take(limit)
+        }
+        val tvmaze = async { FreeMetaService.search(query, limit = limit) }
+        val epguides = async { EpguidesMetaService.search(query, limit / 3) }
+        (tvmaze.await() + epguides.await()).distinctBy { dedupeKeyForShow(it) }.take(limit)
     }
+
+    suspend fun searchAnime(query: String, limit: Int = 20): List<MetaShow> =
+        AnimeMetaAggregator.search(query, limit)
+
+    suspend fun seasonsWithEpisodes(
+        title: String,
+        tvmazeId: String? = null,
+        epguidesKey: String? = null
+    ): List<MetaSeason> = MetaEpisodeResolver.seasonsWithEpisodes(title, tvmazeId, epguidesKey)
 
     suspend fun enrich(
         title: String,
@@ -37,12 +52,13 @@ class FreeMetaGraph @Inject constructor() {
 
         if (anilistIdHint != null && anilistIdHint > 0) {
             AniListMetaService.mediaById(anilistIdHint)?.let {
-                return buildEnrichment(it, preferAnime, langTag, language, scrapedIsAdult)
+                val enriched = AnimeMetaAggregator.enrichAnime(it)
+                return buildEnrichment(enriched, preferAnime, langTag, language, scrapedIsAdult)
             }
         }
 
         if (preferAnime) {
-            val animeMatch = pickBestAnime(title)
+            val animeMatch = AnimeMetaAggregator.pickBest(title)
             if (animeMatch != null) return buildEnrichment(animeMatch, preferAnime = true, langTag, language, scrapedIsAdult)
         }
 
@@ -59,7 +75,23 @@ class FreeMetaGraph @Inject constructor() {
         }
 
         if (!isMovie && preferAnime) {
-            pickBestAnime(title)?.let { return buildEnrichment(it, preferAnime = true, langTag, language, scrapedIsAdult) }
+            AnimeMetaAggregator.pickBest(title)?.let {
+                return buildEnrichment(it, preferAnime = true, langTag, language, scrapedIsAdult)
+            }
+        }
+
+        val epguidesMatch = EpguidesMetaService.search(title, limit = 3)
+            .firstOrNull { FreeMetaService.titlesSimilar(title, it.title) }
+        if (epguidesMatch != null) {
+            val stub = epguidesMatch.copy(mediaType = "tv")
+            val ids = ExternalIds(epguidesKey = stub.epguidesKey)
+            val (ratedShow, ageRating) = attachAgeRating(stub, ids, language, scrapedIsAdult)
+            return MetaEnrichment(
+                show = ratedShow,
+                externalIds = ids,
+                canonicalKey = ids.canonicalKey(),
+                ageRating = ageRating
+            )
         }
 
         val wikidataIds = WikidataMetaService.resolveExternalIds(
@@ -109,20 +141,29 @@ class FreeMetaGraph @Inject constructor() {
             val related = AniListMetaService.similar(id, limit)
             if (related.isNotEmpty()) return related
         }
+        show.idMal?.let { id ->
+            val jikan = JikanMetaService.animeById(id)
+            if (jikan != null && show.genres.isNotEmpty()) {
+                return JikanMetaService.search(show.genres.first(), limit)
+                    .filter { it.idMal != id }
+            }
+        }
         val genre = show.genres.firstOrNull() ?: return emptyList()
         return FreeMetaService.search(genre, limit = limit)
             .filter { it.id != show.id && FreeMetaService.titlesSimilar(genre, it.genres.firstOrNull() ?: "") || show.genres.any { g -> it.genres.any { ig -> ig.equals(g, true) } } }
             .take(limit)
     }
 
-    suspend fun browseRegional(language: ContentLanguage, page: Int = 0): List<MetaShow> {
+    suspend fun browseRegional(language: ContentLanguage, page: Int = 0): List<MetaShow> = coroutineScope {
         val region = ContentRegionResolver.tvmazeRegionFor(language)
-        val schedule = FreeMetaService.schedule(region)
-        val catalog = FreeMetaService.catalogPage(page.coerceAtLeast(0))
+        val schedule = async { FreeMetaService.schedule(region) }
+        val catalog = async { FreeMetaService.catalogPage(page.coerceAtLeast(0)) }
         val anime = if (language == ContentLanguage.MULTI || language == ContentLanguage.EN) {
-            AniListMetaService.trending(limit = 15)
-        } else emptyList()
-        return (schedule + catalog + anime).distinctBy { dedupeKeyForShow(it) }
+            async { AniListMetaService.trending(limit = 10) + KitsuMetaService.search("trending", 5) }
+        } else null
+        val base = schedule.await() + catalog.await()
+        val withAnime = if (anime != null) base + anime.await() else base
+        withAnime.distinctBy { dedupeKeyForShow(it) }
     }
 
     fun externalIdsFromShow(show: MetaShow): ExternalIds = ExternalIds(
@@ -130,7 +171,11 @@ class FreeMetaGraph @Inject constructor() {
         tvmazeId = show.id.takeIf { it.all(Char::isDigit) } ?: show.tvmazeId,
         anilistId = show.anilistId,
         wikidataId = show.wikidataId,
-        tmdbId = show.tmdbId
+        tmdbId = show.tmdbId,
+        idMal = show.idMal,
+        kitsuId = show.kitsuId,
+        shikimoriId = show.shikimoriId,
+        epguidesKey = show.epguidesKey
     )
 
     fun toSeries(show: MetaShow, providerId: String): Series {
@@ -171,13 +216,7 @@ class FreeMetaGraph @Inject constructor() {
     }
 
     private fun dedupeKeyForShow(show: MetaShow): String =
-        externalIdsFromShow(show).canonicalKey() ?: "title:${normalizeTitle(show.title)}"
-
-    private suspend fun pickBestAnime(title: String): MetaShow? {
-        val candidates = AniListMetaService.search(title, limit = 8)
-        return candidates.firstOrNull { FreeMetaService.titlesSimilar(title, it.title) }
-            ?: candidates.firstOrNull()
-    }
+        externalIdsFromShow(show).canonicalKey() ?: AnimeMetaAggregator.dedupeKey(show)
 
     private suspend fun buildEnrichment(
         show: MetaShow,
@@ -186,23 +225,24 @@ class FreeMetaGraph @Inject constructor() {
         language: ContentLanguage,
         scrapedIsAdult: Boolean? = null
     ): MetaEnrichment {
-        val ids = externalIdsFromShow(show)
+        val mergedAnime = if (preferAnime || show.mediaType == "anime") AnimeMetaAggregator.enrichAnime(show) else show
+        val ids = externalIdsFromShow(mergedAnime)
         val wikidata = if (ids.imdbId != null || ids.wikidataId != null) {
             ids
         } else {
-            WikidataMetaService.resolveExternalIds(show.title, langTag, imdbHint = show.imdbId)
+            WikidataMetaService.resolveExternalIds(mergedAnime.title, langTag, imdbHint = mergedAnime.imdbId)
                 .merge(ids)
         }
-        val similar = similar(show)
-        val mergedShow = show.copy(
-            imdbId = wikidata.imdbId ?: show.imdbId,
-            tmdbId = wikidata.tmdbId ?: show.tmdbId,
-            wikidataId = wikidata.wikidataId ?: show.wikidataId
+        val similar = similar(mergedAnime)
+        val mergedShow = mergedAnime.copy(
+            imdbId = wikidata.imdbId ?: mergedAnime.imdbId,
+            tmdbId = wikidata.tmdbId ?: mergedAnime.tmdbId,
+            wikidataId = wikidata.wikidataId ?: mergedAnime.wikidataId
         )
         val (ratedShow, ageRating) = attachAgeRating(mergedShow, wikidata, language, scrapedIsAdult)
         return MetaEnrichment(
             show = ratedShow,
-            cast = show.cast,
+            cast = mergedAnime.cast,
             similar = similar,
             externalIds = wikidata,
             canonicalKey = wikidata.canonicalKey() ?: ids.canonicalKey(),
@@ -217,10 +257,12 @@ class FreeMetaGraph @Inject constructor() {
         language: ContentLanguage,
         scrapedIsAdult: Boolean? = null
     ): MetaEnrichment {
+        val epguidesKey = MetaEpisodeResolver.resolveEpguidesKey(show.title)
         val baseIds = ExternalIds(
             imdbId = show.imdbId ?: imdbHint,
             tvmazeId = show.id,
-            tmdbId = show.tmdbId
+            tmdbId = show.tmdbId,
+            epguidesKey = epguidesKey
         )
         val wikidata = WikidataMetaService.resolveExternalIds(
             title = show.title,
@@ -232,7 +274,8 @@ class FreeMetaGraph @Inject constructor() {
             imdbId = wikidata.imdbId ?: show.imdbId,
             tvmazeId = show.id,
             tmdbId = wikidata.tmdbId ?: show.tmdbId,
-            wikidataId = wikidata.wikidataId
+            wikidataId = wikidata.wikidataId,
+            epguidesKey = wikidata.epguidesKey ?: epguidesKey
         )
         val similar = FreeMetaService.search(show.genres.firstOrNull() ?: show.title, limit = 15)
             .filter { it.id != show.id }
@@ -253,14 +296,15 @@ class FreeMetaGraph @Inject constructor() {
         language: ContentLanguage,
         scrapedIsAdult: Boolean? = null
     ): Pair<MetaShow, AgeRatingResult> {
+        val kitsuAdult = show.contentRating?.let { KitsuMetaService.isAdultFromAgeRating(it) }
         val rating = AgeRatingService.resolve(
             title = show.title,
             isMovie = show.mediaType == "movie",
             language = language,
             imdbId = ids.imdbId ?: show.imdbId,
             wikidataId = ids.wikidataId ?: show.wikidataId,
-            anilistIsAdult = show.isAdult,
-            idMal = show.idMal,
+            anilistIsAdult = AgeRatingResolver.mergeIsAdult(show.isAdult, kitsuAdult),
+            idMal = ids.idMal ?: show.idMal,
             scrapedIsAdult = scrapedIsAdult
         )
         val isAdult = AgeRatingResolver.mergeIsAdult(show.isAdult, rating.isAdult)
