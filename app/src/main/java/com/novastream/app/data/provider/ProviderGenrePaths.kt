@@ -39,6 +39,13 @@ object ProviderGenrePaths {
         // FR
         "wiflix" to Config(listOf("/serie-en-streaming/{genre}", "/genre/{genre}")),
         "frenchstream" to Config(listOf("/{genre}", "/s-tv/{genre}", "/genre/{genre}")),
+        // EN FMHY
+        "hydrahd" to Config(listOf("/series/{genre}", "/movie/{genre}", "/genre/{genre}")),
+        "cinezo" to Config(listOf("/genre/{genre}", "/search/{genre}")),
+        "showsst" to Config(listOf("/genre/{genre}", "/?s={genre}")),
+        "phantomflix" to Config(listOf("/watch/{genre}", "/genre/{genre}")),
+        "flixer" to Config(listOf("/movie/{genre}", "/genre/{genre}")),
+        "pressplay" to Config(listOf("/watch/{genre}", "/genre/{genre}")),
         "frembed" to Config(listOf("/tv-show/{genre}", "/genre/{genre}")),
         "voirfilms" to Config(listOf("/genre/{genre}", "/film/{genre}")),
         "nekosama" to Config(listOf("/genre/{genre}", "/animes-{genre}")),

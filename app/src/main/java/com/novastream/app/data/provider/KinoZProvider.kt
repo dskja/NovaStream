@@ -138,9 +138,13 @@ class KinoZProvider(
         if (name.isBlank()) emptyList()
         else {
             val base = activeBaseUrl()
-            val encoded = name.replace(" ", "%20")
-            val path = if (page <= 0) "/Genre/$encoded" else "/Genre/$encoded?page=${page + 1}"
-            parseKinoZSeriesList(fetchUrl(base + path))
+            val paths = ProviderGenrePaths.pathsForPage(id, name, page)
+            var results = emptyList<Series>()
+            for (path in paths) {
+                results = parseKinoZSeriesList(fetchUrl("$base$path"))
+                if (results.isNotEmpty()) break
+            }
+            results
         }
     }
 
