@@ -17,7 +17,8 @@ object EpisodeMetaMerger {
                     ?: meta.title.ifBlank { ep.title },
                 thumbnailUrl = ep.thumbnailUrl ?: meta.imageUrl,
                 summary = ep.summary?.takeIf { it.isNotBlank() } ?: meta.summary?.takeIf { it.isNotBlank() },
-                airdate = ep.airdate ?: meta.airdate
+                airdate = ep.airdate ?: meta.airdate,
+                runtime = ep.runtime ?: meta.runtime?.takeIf { it > 0 }
             )
         }
     }

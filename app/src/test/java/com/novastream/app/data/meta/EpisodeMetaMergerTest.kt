@@ -68,6 +68,16 @@ class EpisodeMetaMergerTest {
         assertEquals("2008-01-20", merged[0].airdate)
     }
 
+    @Test
+    fun merge_fillsRuntimeFromMeta() {
+        val eps = listOf(ep(1, "Episode 1"))
+        val meta = listOf(
+            MetaEpisode(id = "1", season = 1, number = 1, title = "Pilot", runtime = 47)
+        )
+        val merged = EpisodeMetaMerger.merge(eps, meta, season = 1)
+        assertEquals(47, merged[0].runtime)
+    }
+
     private fun ep(number: Int, title: String, thumbnailUrl: String? = null) = Episode(
         number = number,
         title = title,

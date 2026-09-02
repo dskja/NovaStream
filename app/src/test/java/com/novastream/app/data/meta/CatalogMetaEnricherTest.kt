@@ -1,5 +1,7 @@
 package com.novastream.app.data.meta
 
+import com.novastream.app.data.db.ContentDao
+import com.novastream.app.data.db.ContentEntity
 import com.novastream.app.data.model.Series
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,7 +10,14 @@ import org.junit.Test
 
 class CatalogMetaEnricherTest {
 
-    private val enricher = CatalogMetaEnricher(FreeMetaGraph())
+    private val enricher = CatalogMetaEnricher(FreeMetaGraph(), FakeContentDao())
+
+    private class FakeContentDao : ContentDao {
+        override suspend fun upsert(entity: ContentEntity) {}
+        override suspend fun findByCanonicalKeyExcluding(canonicalKey: String, excludeProviderId: String) =
+            emptyList<ContentEntity>()
+        override suspend fun findByProviderSlug(providerId: String, slug: String): ContentEntity? = null
+    }
 
     @Test
     fun applyEnrichment_mergesIdsAndIsAdult() {

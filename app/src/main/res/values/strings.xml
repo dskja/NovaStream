@@ -257,6 +257,8 @@
     <string name="detail_watched_count_fmt">%1$d gesehen (%2$d%%)</string>
     <string name="detail_runtime_fmt">%1$d Min.</string>
     <string name="detail_rating_source_fmt">Quelle: %1$s</string>
+    <string name="detail_official_site">Offizielle Website</string>
+    <string name="detail_episode_runtime_fmt">%1$d Min.</string>
     <string name="detail_season_label_fmt">Staffel %1$d</string>
     <string name="detail_seasons_header">Staffeln</string>
     <string name="detail_episodes_header">Episoden</string>

@@ -41,7 +41,12 @@ object AnimeMetaAggregator {
             ShikimoriMetaService.animeById(id)?.let { merged = mergeShows(merged, it) }
         }
         if (merged.idMal == null && merged.anilistId != null) {
-            // AniList often has idMal — already in parseMedia if we fetch full media
+            AniListMetaService.mediaById(merged.anilistId)?.let { fromAni ->
+                if (fromAni.idMal != null) merged = mergeShows(merged, fromAni)
+            }
+        }
+        if (merged.idMal == null && merged.shikimoriId != null) {
+            merged = mergeShows(merged, MetaShow(id = merged.id, title = merged.title, idMal = merged.shikimoriId))
         }
         return merged
     }

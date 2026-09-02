@@ -4,9 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.db.ContentDao
-import com.novastream.app.data.db.ContentEntity
 import com.novastream.app.data.db.WatchProgress
 import com.novastream.app.data.meta.AgeRatingResolver
+import com.novastream.app.data.meta.ContentMappingWriter
 import com.novastream.app.data.meta.EpisodeMetaMerger
 import com.novastream.app.data.meta.ExternalIds
 import com.novastream.app.data.meta.FreeMetaGraph
@@ -152,6 +152,23 @@ class DetailViewModel @Inject constructor(
     private var loadedProviderId: String? = null
     private var metaTvmazeId: String? = null
     private var metaEpguidesKey: String? = null
+    private var metaIdMal: Int? = null
+
+    private fun clearMetaState() = _state.update {
+        it.copy(
+            metaCast = emptyList(),
+            metaRating = null,
+            contentRating = null,
+            contentRatingSource = null,
+            metaRuntime = null,
+            metaNetwork = null,
+            officialSite = null,
+            imdbId = null,
+            trailerUrl = null,
+            relatedTitles = emptyList(),
+            alsoOnProviders = emptyList()
+        )
+    }
 
     init {
         viewModelScope.launch {
@@ -188,10 +205,13 @@ class DetailViewModel @Inject constructor(
                             series = null,
                             seasons = emptyList(),
                             selectedSeasonIndex = 0,
-                            seasonError = null,
-                            relatedTitles = emptyList()
+                            seasonError = null
                         )
                     }
+                    clearMetaState()
+                    metaTvmazeId = null
+                    metaEpguidesKey = null
+                    metaIdMal = null
                     load()
                 }
             }
@@ -275,6 +295,7 @@ class DetailViewModel @Inject constructor(
                         val firstWithEps = seasons.indexOfFirst { it.episodes.isNotEmpty() }
                         if (firstWithEps >= 0) {
                             _state.update { it.copy(selectedSeasonIndex = firstWithEps) }
+                            viewModelScope.launch { enrichLoadedSeasons() }
                         } else if (seasons.isNotEmpty()) {
                             _state.update { it.copy(selectedSeasonIndex = 0) }
                             loadSeasonEpisodes(seasons.first().number)
@@ -463,20 +484,15 @@ class DetailViewModel @Inject constructor(
             tmdbId = ids.tmdbId ?: meta.tmdbId
         )
         val providerId = ActiveProvider.id
-        ContentEntity.fromExternalIds(
-            slug = series.id,
-            providerId = providerId,
-            contentType = if (series.isMovie) ContentEntity.TYPE_MOVIE else ContentEntity.TYPE_TV,
-            imdbId = ids.imdbId,
-            tvmazeId = ids.tvmazeId,
-            anilistId = ids.anilistId,
-            wikidataId = ids.wikidataId,
-            tmdbId = ids.tmdbId,
-            idMal = ids.idMal
-        )?.let { contentDao.upsert(it) }
+        ContentMappingWriter.persist(
+            contentDao,
+            series.copy(providerId = providerId),
+            enrichment
+        )
 
         metaTvmazeId = ids.tvmazeId ?: meta.tvmazeId
         metaEpguidesKey = ids.epguidesKey ?: meta.epguidesKey
+        metaIdMal = ids.idMal ?: meta.idMal
 
         val alsoOn = enrichment.canonicalKey?.let { key ->
             contentDao.findByCanonicalKeyExcluding(key, providerId)
@@ -525,16 +541,34 @@ class DetailViewModel @Inject constructor(
                 alsoOnProviders = alsoOn
             )
         }
+        enrichLoadedSeasons()
     }
 
-    private suspend fun enrichEpisodesWithMeta(eps: List<Episode>, seasonNum: Int): List<Episode> {
+    private suspend fun enrichLoadedSeasons() {
+        val current = _state.value
+        val series = current.series ?: return
+        val updated = current.seasons.map { season ->
+            if (season.episodes.isEmpty()) season
+            else season.copy(episodes = enrichEpisodesWithMeta(season.episodes, season.number, series))
+        }
+        if (updated != current.seasons) {
+            _state.update { it.copy(seasons = updated) }
+        }
+    }
+
+    private suspend fun enrichEpisodesWithMeta(
+        eps: List<Episode>,
+        seasonNum: Int,
+        series: Series? = null
+    ): List<Episode> {
         if (eps.isEmpty()) return eps
-        val series = _state.value.series ?: return eps
+        val resolvedSeries = series ?: _state.value.series ?: return eps
         val metaEps = freeMetaGraph.episodesForSeason(
-            title = series.title,
-            tvmazeId = metaTvmazeId ?: series.tvmazeId,
+            title = resolvedSeries.title,
+            tvmazeId = metaTvmazeId ?: resolvedSeries.tvmazeId,
             epguidesKey = metaEpguidesKey,
-            season = seasonNum
+            season = seasonNum,
+            idMal = metaIdMal
         )
         return EpisodeMetaMerger.merge(eps, metaEps, seasonNum)
     }

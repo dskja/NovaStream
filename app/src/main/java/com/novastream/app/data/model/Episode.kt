@@ -10,7 +10,8 @@ data class Episode(
     val episodeUrl: String = "",    // z.B. /serie/breaking-bad/staffel-1/episode-1
     val thumbnailUrl: String? = null, // Episoden-Thumbnail
     val summary: String? = null,
-    val airdate: String? = null
+    val airdate: String? = null,
+    val runtime: Int? = null
 ) {
     /** True wenn diese Episode mindestens einen Hoster hat. */
     val hasHosters: Boolean get() = hosters.isNotEmpty()

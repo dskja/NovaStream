@@ -1,5 +1,6 @@
 package com.novastream.app.data.meta
 
+import com.novastream.app.data.db.ContentDao
 import com.novastream.app.data.model.Series
 import com.novastream.app.data.provider.ContentLanguage
 import javax.inject.Inject
@@ -8,7 +9,8 @@ import javax.inject.Singleton
 /** Enriches visible catalog/search rows with cached free metadata (posters, IDs, isAdult). */
 @Singleton
 class CatalogMetaEnricher @Inject constructor(
-    private val freeMetaGraph: FreeMetaGraph
+    private val freeMetaGraph: FreeMetaGraph,
+    private val contentDao: ContentDao
 ) {
 
     suspend fun enrichList(
@@ -31,6 +33,7 @@ class CatalogMetaEnricher @Inject constructor(
         preferAnime: Boolean = false
     ): Series = try {
         val enrichment = freeMetaGraph.enrichBySeries(series, preferAnime, language) ?: return series
+        ContentMappingWriter.persist(contentDao, series, enrichment)
         applyEnrichment(series, enrichment)
     } catch (_: Exception) {
         series

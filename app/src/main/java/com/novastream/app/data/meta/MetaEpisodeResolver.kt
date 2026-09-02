@@ -28,7 +28,8 @@ object MetaEpisodeResolver {
         title: String,
         tvmazeId: String? = null,
         epguidesKey: String? = null,
-        season: Int? = null
+        season: Int? = null,
+        idMal: Int? = null
     ): List<MetaEpisode> = withContext(Dispatchers.IO) {
         if (!tvmazeId.isNullOrBlank()) {
             val fromTvmaze = runCatching {
@@ -39,7 +40,19 @@ object MetaEpisodeResolver {
         }
         val key = epguidesKey?.takeIf { it.isNotBlank() }
             ?: EpguidesMetaService.guessKeyFromTitle(title)
-        runCatching { EpguidesMetaService.episodes(key, season) }.getOrDefault(emptyList())
+        val fromEpguides = runCatching { EpguidesMetaService.episodes(key, season) }.getOrDefault(emptyList())
+        if (fromEpguides.isNotEmpty()) return@withContext fromEpguides
+        if (idMal != null && idMal > 0) {
+            val fromJikan = runCatching { JikanMetaService.episodes(idMal) }.getOrDefault(emptyList())
+            if (fromJikan.isNotEmpty()) {
+                return@withContext if (season != null && season != 1) {
+                    fromJikan.filter { it.season == season }
+                } else {
+                    fromJikan
+                }
+            }
+        }
+        emptyList()
     }
 
     suspend fun resolveEpguidesKey(title: String): String? {

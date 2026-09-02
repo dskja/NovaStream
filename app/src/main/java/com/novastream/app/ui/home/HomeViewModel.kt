@@ -418,21 +418,26 @@ class HomeViewModel @Inject constructor(
                     }.mapNotNull { it.await() }
                 }
                 if (ActiveProvider.id != expectedProvider) return@launch
-                val action = genreRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()
-                val comedy = genreRows.find {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val preferAnime = ActiveProvider.isAniWorld
+                val enrichedRows = genreRows.map { (genre, list) ->
+                    genre to catalogMetaEnricher.enrichList(list, language, preferAnime, limit = 16)
+                }
+                val action = enrichedRows.find { it.first.slug.contains("action", true) }?.second.orEmpty()
+                val comedy = enrichedRows.find {
                     it.first.slug.contains("comedy", true) || it.first.slug.contains("komödie", true)
                 }?.second.orEmpty()
-                val drama = genreRows.find { it.first.slug.contains("drama", true) }?.second.orEmpty()
-                val scifi = genreRows.find {
+                val drama = enrichedRows.find { it.first.slug.contains("drama", true) }?.second.orEmpty()
+                val scifi = enrichedRows.find {
                     it.first.slug.contains("science", true) || it.first.slug.contains("fantasy", true)
                 }?.second.orEmpty()
                 _state.update {
                     it.copy(
-                        genreRows = genreRows,
-                        action = action,
-                        comedy = comedy,
-                        drama = drama,
-                        scifi = scifi
+                        genreRows = enrichedRows,
+                        action = KidsContentFilter.filterSeries(action, kidsMode),
+                        comedy = KidsContentFilter.filterSeries(comedy, kidsMode),
+                        drama = KidsContentFilter.filterSeries(drama, kidsMode),
+                        scifi = KidsContentFilter.filterSeries(scifi, kidsMode)
                     )
                 }
             } catch (e: Exception) {

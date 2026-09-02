@@ -130,4 +130,39 @@ object JikanMetaService {
             null
         }
     }
+
+    /** Episode list for an anime (MAL id). Episodes are mapped to season 1. */
+    suspend fun episodes(malId: Int, maxPages: Int = 4): List<MetaEpisode> = withContext(Dispatchers.IO) {
+        if (malId <= 0) return@withContext emptyList()
+        val result = mutableListOf<MetaEpisode>()
+        var page = 1
+        repeat(maxPages.coerceIn(1, 10)) {
+            val json = get("$BASE/anime/$malId/episodes?page=$page") ?: return@repeat
+            val root = JSONObject(json)
+            val data = root.optJSONArray("data") ?: return@repeat
+            val pagination = root.optJSONObject("pagination")
+            val perPage = (pagination?.optInt("items", data.length()) ?: data.length()).coerceAtLeast(1)
+            val pageOffset = (page - 1) * perPage
+            for (i in 0 until data.length()) {
+                parseEpisode(data.getJSONObject(i), pageOffset + i + 1)?.let { result.add(it) }
+            }
+            val hasNext = pagination?.optBoolean("has_next_page", false) == true
+            if (!hasNext || data.length() == 0) return@withContext result
+            page++
+        }
+        result
+    }
+
+    fun parseEpisode(obj: JSONObject, number: Int): MetaEpisode? {
+        val title = obj.optString("title").takeIf { it.isNotBlank() && it != "null" } ?: return null
+        val aired = obj.optString("aired").takeIf { it.isNotBlank() && it != "null" }
+        val malEpId = obj.optInt("mal_id", -1)
+        return MetaEpisode(
+            id = if (malEpId > 0) "mal-ep-$malEpId" else "mal-ep-$number",
+            season = 1,
+            number = number,
+            title = title,
+            airdate = aired
+        )
+    }
 }

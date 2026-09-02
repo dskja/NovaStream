@@ -83,6 +83,10 @@ object KitsuMetaService {
         val ageRating = attrs.optString("ageRating").takeIf { it.isNotBlank() && it != "null" }
         val isAdult = isAdultFromAgeRating(ageRating)
         val startDate = attrs.optString("startDate").takeIf { it.isNotBlank() && it != "null" }
+        val idMal = attrs.optInt("malId", -1).takeIf { it > 0 }
+            ?: attrs.optString("malId").toIntOrNull()?.takeIf { it > 0 }
+        val runtime = attrs.optInt("episodeLength", -1).takeIf { it > 0 }
+        val officialSite = attrs.optString("url").takeIf { it.isNotBlank() && it != "null" }
         val relData = node.optJSONObject("relationships")
             ?.optJSONObject("categories")
             ?.optJSONArray("data")
@@ -106,7 +110,10 @@ object KitsuMetaService {
             backdropUrl = cover,
             seasonCount = attrs.optInt("episodeCount", -1).takeIf { it > 0 },
             kitsuId = id,
+            idMal = idMal,
             mediaType = "anime",
+            runtime = runtime,
+            officialSite = officialSite,
             isAdult = isAdult,
             contentRating = ageRating,
             contentRatingSource = if (ageRating != null) "kitsu" else null

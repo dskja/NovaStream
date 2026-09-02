@@ -143,8 +143,9 @@ class FreeMetaGraph @Inject constructor() {
         title: String,
         tvmazeId: String? = null,
         epguidesKey: String? = null,
-        season: Int
-    ): List<MetaEpisode> = MetaEpisodeResolver.episodes(title, tvmazeId, epguidesKey, season)
+        season: Int,
+        idMal: Int? = null
+    ): List<MetaEpisode> = MetaEpisodeResolver.episodes(title, tvmazeId, epguidesKey, season, idMal)
 
     suspend fun similar(show: MetaShow, limit: Int = 20): List<MetaShow> {
         if (show.similar.isNotEmpty()) return show.similar.take(limit)

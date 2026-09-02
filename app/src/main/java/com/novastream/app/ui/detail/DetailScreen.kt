@@ -450,20 +450,34 @@ private fun DetailContent(
                             .padding(horizontal = 16.dp, vertical = 10.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.SmartDisplay,
-                                contentDescription = null,
-                                tint = Primary,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            Icon(Icons.Default.SmartDisplay, null, tint = Primary, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.detail_watch_trailer),
-                                color = TextPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.labelLarge
-                            )
+                            Text(stringResource(R.string.detail_watch_trailer), color = Primary, fontWeight = FontWeight.SemiBold)
                         }
+                    }
+                }
+                state.officialSite?.takeIf { it.isNotBlank() }?.let { site ->
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BgSurfaceElevated)
+                            .clickable {
+                                val url = if (site.startsWith("http")) site else "https://$site"
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url)
+                                )
+                                context.startActivity(intent)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.detail_official_site),
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
                     }
                 }
                 series.description?.let { desc ->
@@ -490,7 +504,8 @@ private fun DetailContent(
                 }
                 // Free metadata (TVMaze) pills
                 if (series.genres.isNotEmpty() || state.metaRating != null || state.contentRating != null ||
-                    state.metaRuntime != null || state.metaNetwork != null || state.imdbId != null
+                    state.metaRuntime != null || state.metaNetwork != null || state.imdbId != null ||
+                    !series.status.isNullOrBlank()
                 ) {
                     Spacer(Modifier.height(12.dp))
                     Row(
@@ -501,8 +516,20 @@ private fun DetailContent(
                         state.contentRating?.let { StatPill(it) }
                         state.metaRuntime?.let { StatPill(stringResource(R.string.detail_runtime_fmt, it)) }
                         series.year?.let { StatPill(it) }
+                        series.status?.takeIf { it.isNotBlank() }?.let { StatPill(it) }
                         state.metaNetwork?.let { StatPill(it) }
-                        state.imdbId?.let { StatPill(it) }
+                        state.imdbId?.let { imdb ->
+                            StatPill(
+                                text = imdb,
+                                onClick = {
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse("https://www.imdb.com/title/$imdb/")
+                                    )
+                                    context.startActivity(intent)
+                                }
+                            )
+                        }
                     }
                     state.contentRatingSource?.takeIf { it.isNotBlank() }?.let { source ->
                         Spacer(Modifier.height(6.dp))
@@ -1121,8 +1148,19 @@ private fun PremiumEpisodeRow(
             )
             episode.airdate?.takeIf { it.isNotBlank() }?.let { date ->
                 Spacer(Modifier.height(2.dp))
+                val runtimeLabel = episode.runtime?.takeIf { it > 0 }?.let {
+                    stringResource(R.string.detail_episode_runtime_fmt, it)
+                }
                 Text(
-                    date,
+                    if (runtimeLabel != null) "$date · $runtimeLabel" else date,
+                    color = TextTertiary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 11.sp
+                )
+            } ?: episode.runtime?.takeIf { it > 0 }?.let { mins ->
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    stringResource(R.string.detail_episode_runtime_fmt, mins),
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 11.sp
@@ -1206,13 +1244,13 @@ private fun formatRemaining(progress: WatchProgress): Int {
 }
 
 @Composable
-private fun StatPill(text: String) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(BgSurfaceElevated)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
+private fun StatPill(text: String, onClick: (() -> Unit)? = null) {
+    val modifier = Modifier
+        .clip(RoundedCornerShape(12.dp))
+        .background(BgSurfaceElevated)
+        .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        .padding(horizontal = 12.dp, vertical = 6.dp)
+    Box(modifier) {
         Text(
             text,
             color = TextSecondary,
