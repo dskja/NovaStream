@@ -59,7 +59,7 @@ class FilmPalastProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val home = fetchUrl(base)
+        val home = mirror.requireCatalogHtml(fetchPage = { fetchUrl(base) }, fallbackUrl = "$base/")
         val serien = fetchUrl("$base/serien/view")
         val moviesHtml = fetchUrl("$base/movies/new").ifBlank { fetchUrl("$base/movies") }
         val merged = linkedMapOf<String, Series>()
@@ -170,8 +170,15 @@ class FilmPalastProvider(
 
     // ─── Networking ─────────────────────────────────────────────────────────
 
-    private suspend fun searchFilmPalast(query: String): String = withContext(Dispatchers.IO) {
+    private suspend fun searchFilmPalast(query: String): String {
         val base = activeBaseUrl()
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val getHtml = fetchUrl("$base/search?headerSearchText=$encoded")
+        if (getHtml.isNotBlank() && !ProviderHttp.isChallenge(getHtml)) return getHtml
+        return searchFilmPalastPost(query, base)
+    }
+
+    private suspend fun searchFilmPalastPost(query: String, base: String): String = withContext(Dispatchers.IO) {
         val body = FormBody.Builder()
             .add("headerSearchText", query)
             .build()

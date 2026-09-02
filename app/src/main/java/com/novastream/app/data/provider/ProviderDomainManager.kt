@@ -23,9 +23,9 @@ object ProviderDomainManager {
             "https://s.to"
         ),
         "wiflix" to listOf(
+            "https://wiflix.voto/",
             "https://flemmix.team/",
             "https://ww1.wiflix-adresses.fun/",
-            "https://wiflix.voto/",
             "https://wiflix.top/"
         ),
         "frenchstream" to listOf(
@@ -46,8 +46,8 @@ object ProviderDomainManager {
             "https://frembed.life/"
         ),
         "megakino" to listOf(
-            "https://megakino.ms",
             "https://megakino6.com",
+            "https://megakino.ms",
             "https://megakino8.com",
             "https://megakino2.com",
             "https://megakino.how"
@@ -233,9 +233,9 @@ object ProviderDomainManager {
             "https://showsst.to/"
         ),
         "phantomflix" to listOf(
+            "https://phantomflix.net/",
             "https://phantomflix.co/",
-            "https://phantomflix.tv/",
-            "https://phantomflix.net/"
+            "https://phantomflix.tv/"
         ),
         "pressplay" to listOf(
             "https://pressplay.top/",

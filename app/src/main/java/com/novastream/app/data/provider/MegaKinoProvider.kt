@@ -29,7 +29,7 @@ import java.util.regex.Pattern
 class MegaKinoProvider(
     override val id: String = "megakino",
     override val displayName: String = "MegaKino",
-    override val baseUrl: String = "https://megakino.ms",
+    override val baseUrl: String = "https://megakino6.com",
     override val supportsSeries: Boolean = true,
     override val supportsMovies: Boolean = true,
     private val appContext: Context? = null
@@ -54,7 +54,11 @@ class MegaKinoProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        parseMegaKinoSeriesList(fetchUrl(base)).map { it.copy(providerId = id) }
+        val html = mirror.requireCatalogHtml(
+            fetchPage = { fetchUrl(base) },
+            fallbackUrl = "$base/"
+        )
+        parseMegaKinoSeriesList(html).map { it.copy(providerId = id) }
     }
 
     override suspend fun loadMovies(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {

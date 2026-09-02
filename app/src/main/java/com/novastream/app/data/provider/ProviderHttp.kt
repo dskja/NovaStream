@@ -33,7 +33,18 @@ object ProviderHttp {
             lower.contains("/stream/") ||
             lower.contains("/title/") ||
             lower.contains("/movie") ||
+            lower.contains("/tv-show") ||
+            lower.contains("/tv/") ||
+            lower.contains("/pelicula") ||
+            lower.contains("/film/") ||
+            lower.contains("/filme") ||
+            lower.contains("/serietv") ||
+            lower.contains("/watch/") ||
             lower.contains("/anime/") ||
+            lower.contains("/titles/") ||
+            lower.contains("/play/") ||
+            lower.contains("/doramas-online/") ||
+            lower.contains("/serial-online/") ||
             lower.contains("<article") ||
             lower.contains("og:title")
         if (hasCatalogSignals && html.length > 1_500) return false
@@ -52,12 +63,28 @@ object ProviderHttp {
         return false
     }
 
+    /** Accept-Language header tuned to provider catalog language. */
+    fun acceptLanguageHeader(providerId: String? = null): String {
+        val lang = providerId?.let { ProviderRegistry.contentLanguageOf(it) } ?: ContentLanguage.EN
+        return when (lang) {
+            ContentLanguage.DE -> "de-DE,de;q=0.9,en;q=0.8"
+            ContentLanguage.FR -> "fr-FR,fr;q=0.9,en;q=0.8"
+            ContentLanguage.ES -> "es-ES,es;q=0.9,en;q=0.8"
+            ContentLanguage.IT -> "it-IT,it;q=0.9,en;q=0.8"
+            ContentLanguage.PL -> "pl-PL,pl;q=0.9,en;q=0.8"
+            ContentLanguage.AR -> "ar,en;q=0.8"
+            ContentLanguage.MULTI -> "en-US,en;q=0.9,de;q=0.8"
+            ContentLanguage.EN -> "en-US,en;q=0.9"
+        }
+    }
+
     /** Fetch HTML with optional in-memory cache. */
     suspend fun fetch(
         url: String,
         referer: String? = null,
         useCache: Boolean = true,
-        webViewFallback: Boolean = false
+        webViewFallback: Boolean = false,
+        providerId: String? = null
     ): String {
         if (useCache) {
             cacheMutex.withLock {
@@ -68,7 +95,7 @@ object ProviderHttp {
             }
         }
 
-        var html = fetchNetwork(url, referer)
+        var html = fetchNetwork(url, referer, providerId)
         if (webViewFallback && (html.isBlank() || isChallenge(html))) {
             html = CaptchaWebViewFetcher.fetchHtml(url)
         }
@@ -90,11 +117,12 @@ object ProviderHttp {
     suspend fun resolveWorkingBase(
         candidates: List<String>,
         contentNeedle: String = "/title/",
-        webViewFallback: Boolean = true
+        webViewFallback: Boolean = true,
+        providerId: String? = null
     ): String? {
         for (candidate in candidates) {
             val base = candidate.trimEnd('/')
-            val html = fetch(base + "/", referer = base + "/", webViewFallback = webViewFallback)
+            val html = fetch(base + "/", referer = base + "/", webViewFallback = webViewFallback, providerId = providerId)
             if (html.isNotBlank() && !isChallenge(html)) {
                 if (contentNeedle.isBlank() || html.contains(contentNeedle, ignoreCase = true)) {
                     return base
@@ -136,14 +164,14 @@ object ProviderHttp {
         null
     }
 
-    private suspend fun fetchNetwork(url: String, referer: String?): String = withContext(Dispatchers.IO) {
+    private suspend fun fetchNetwork(url: String, referer: String?, providerId: String? = null): String = withContext(Dispatchers.IO) {
         val ref = referer ?: url.toHttpUrlOrNull()?.let { "${it.scheme}://${it.host}/" } ?: url
         val req = Request.Builder()
             .url(url)
             .header("User-Agent", NovaStreamConfig.USER_AGENT)
             .header("Referer", ref)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-            .header("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
+            .header("Accept-Language", acceptLanguageHeader(providerId))
             .build()
         try {
             NetworkModule.okHttpClient.newCall(req).execute().use { resp ->

@@ -57,24 +57,24 @@ class MirrorSupport(
             val useWebView = webViewFallback && attempt > 0
             var fetchUrl = url
             var fetchRef = ref
-            var html = ProviderHttp.fetch(fetchUrl, referer = fetchRef, webViewFallback = useWebView)
+            var html = ProviderHttp.fetch(fetchUrl, referer = fetchRef, webViewFallback = useWebView, providerId = providerId)
             if (shouldRetryMirror(html)) {
                 val refreshed = activeBase(forceRefresh = true)
                 if (refreshed != base && url.startsWith(base)) {
                     fetchUrl = url.replace(base, refreshed)
                     fetchRef = "$refreshed/"
-                    html = ProviderHttp.fetch(fetchUrl, referer = fetchRef, webViewFallback = useWebView)
+                    html = ProviderHttp.fetch(fetchUrl, referer = fetchRef, webViewFallback = useWebView, providerId = providerId)
                 }
             }
             if (html.isNotBlank() && !ProviderHttp.isChallenge(html)) return html
         }
-        return ProviderHttp.fetch(url, referer = ref, webViewFallback = webViewFallback)
+        return ProviderHttp.fetch(url, referer = ref, webViewFallback = webViewFallback, providerId = providerId)
     }
 
     /** For sites with reCAPTCHA (e.g. Burning Series): OkHttp first, then WebView. */
     suspend fun fetchWithCaptcha(url: String): String {
         val base = activeBase()
-        val http = ProviderHttp.fetch(url, referer = "$base/", webViewFallback = false)
+        val http = ProviderHttp.fetch(url, referer = "$base/", webViewFallback = false, providerId = providerId)
         if (http.isNotBlank() && !ProviderHttp.isChallenge(http)) return http
         val web = CaptchaWebViewFetcher.fetchHtml(url)
         if (web.isNotBlank()) return web
@@ -82,7 +82,7 @@ class MirrorSupport(
             val refreshed = activeBase(forceRefresh = true)
             if (refreshed != base && url.startsWith(base)) {
                 val retryUrl = url.replace(base, refreshed)
-                val retryHttp = ProviderHttp.fetch(retryUrl, referer = "$refreshed/", webViewFallback = false)
+                val retryHttp = ProviderHttp.fetch(retryUrl, referer = "$refreshed/", webViewFallback = false, providerId = providerId)
                 if (retryHttp.isNotBlank() && !ProviderHttp.isChallenge(retryHttp)) return retryHttp
                 return CaptchaWebViewFetcher.fetchHtml(retryUrl).ifBlank { retryHttp }
             }

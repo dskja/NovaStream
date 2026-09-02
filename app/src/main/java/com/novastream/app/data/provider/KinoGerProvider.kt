@@ -61,7 +61,8 @@ class KinoGerProvider(
         }
     }
 
-    private val hosterResolver get() = HosterResolver(baseUrl = mirror.parseBase())
+    private suspend fun hosterResolverActive(): HosterResolver =
+        HosterResolver(baseUrl = activeBaseUrl())
 
     override val supportsMovies: Boolean = true
     override val catalogHint: String? = ProviderCatalogHints.forId(id)
@@ -143,7 +144,7 @@ class KinoGerProvider(
     }
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> = runCatchingProvider {
-        hosterResolver.resolve(hoster.name, hoster.redirectUrl)
+        hosterResolverActive().resolve(hoster.name, hoster.redirectUrl)
     }
 
     override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> =
@@ -157,19 +158,16 @@ class KinoGerProvider(
 
     /** Lädt die Detail-Seite mit thread-safe LRU Caching. */
     private suspend fun fetchDetailPage(slug: String): String {
-        // Cache hit (thread-safe)
         synchronized(cacheLock) {
             detailCache[slug]?.let { return it }
         }
-        // Cache miss - lade
-        var html = api().raw("stream/$slug.html")
+        val base = activeBaseUrl()
+        var html = mirror.fetch("$base/stream/$slug.html")
         if (html.isBlank() || ProviderHttp.isChallenge(html)) {
-            html = api().raw("series/$slug.html")
+            html = mirror.fetch("$base/series/$slug.html")
         }
-        // Nur cachen wenn HTML nicht leer ist
-        if (html.isNotBlank()) {
+        if (html.isNotBlank() && !ProviderHttp.isChallenge(html)) {
             synchronized(cacheLock) {
-                // Double-check: anderer Thread könnte bereits gecacht haben
                 if (detailCache[slug] == null) {
                     detailCache[slug] = html
                 }

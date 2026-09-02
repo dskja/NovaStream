@@ -71,7 +71,7 @@ object InternationalSiteProfiles {
     val wiflix = SiteProfile(
         id = "wiflix",
         displayName = "Wiflix",
-        baseUrl = "https://flemmix.team",
+        baseUrl = "https://wiflix.voto",
         homePath = "/",
         searchPath = "/?s={query}",
         seriesLinkSelector = "a[href*=serie-en-streaming/], a[href*=vf/]",

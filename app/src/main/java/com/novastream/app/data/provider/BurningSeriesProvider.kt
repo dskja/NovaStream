@@ -101,12 +101,11 @@ class BurningSeriesProvider(
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val url = if (episode.episodeUrl.startsWith("http")) {
-            episode.episodeUrl
-        } else if (episode.episodeUrl.startsWith("/")) {
-            base + episode.episodeUrl
-        } else {
-            "$base/serie/${episode.slug}/${episode.season}/${episode.number}"
+        val url = when {
+            episode.episodeUrl.startsWith("http") -> episode.episodeUrl
+            episode.episodeUrl.isNotBlank() && episode.episodeUrl.startsWith("/") -> base + episode.episodeUrl
+            episode.episodeUrl.isNotBlank() -> "$base/${episode.episodeUrl.trimStart('/')}"
+            else -> "$base/serie/${episode.slug}/${episode.season}/${episode.number}"
         }
         val html = fetchUrl(url)
         parseBsHosters(html)

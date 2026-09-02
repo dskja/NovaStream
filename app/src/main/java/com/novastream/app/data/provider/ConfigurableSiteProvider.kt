@@ -293,7 +293,7 @@ open class ConfigurableSiteProvider(
 
     private suspend fun fetchNetwork(url: String): String {
         val base = activeBaseUrl()
-        return mirror?.fetch(url) ?: ProviderHttp.fetch(url, referer = "$base/", webViewFallback = true)
+        return mirror?.fetch(url) ?: ProviderHttp.fetch(url, referer = "$base/", webViewFallback = true, providerId = profile.id)
     }
 
     private suspend fun postSearch(query: String): String = withContext(Dispatchers.IO) {

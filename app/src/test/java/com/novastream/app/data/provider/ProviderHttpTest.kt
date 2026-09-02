@@ -29,12 +29,21 @@ class ProviderHttpTest {
     }
 
     @Test
-    fun `real catalog with stream links is not challenge`() {
+    fun `intl catalog signals are not challenge`() {
         val html = buildString {
-            repeat(50) {
-                append("""<article><a href="/stream/movie-$it">Movie $it</a><meta property="og:title" content="Test"/></article>""")
+            repeat(40) {
+                append("""<a href="/pelicula/inception-$it">Inception</a>""")
             }
+            append("<meta property=\"og:title\" content=\"Cuevana\"/>")
         }
         assertFalse(ProviderHttp.isChallenge(html))
+    }
+
+    @Test
+    fun acceptLanguageHeader_matchesProviderLanguage() {
+        assertTrue(ProviderHttp.acceptLanguageHeader("wiflix").startsWith("fr-FR"))
+        assertTrue(ProviderHttp.acceptLanguageHeader("filmyonline").startsWith("pl-PL"))
+        assertTrue(ProviderHttp.acceptLanguageHeader("serienstream").startsWith("de-DE"))
+        assertTrue(ProviderHttp.acceptLanguageHeader("cinezo").startsWith("en-US"))
     }
 }

@@ -66,7 +66,12 @@ class KinoZProvider(
     // ─── Provider Interface ─────────────────────────────────────────────────
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
-        parseKinoZSeriesList(fetchUrl(activeBaseUrl()))
+        val base = activeBaseUrl()
+        val html = mirror.requireCatalogHtml(
+            fetchPage = { fetchUrl(base) },
+            fallbackUrl = "$base/"
+        )
+        parseKinoZSeriesList(html)
     }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {

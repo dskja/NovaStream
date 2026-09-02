@@ -58,8 +58,12 @@ class StreamKisteProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        var html = fetchUrl("$base/serien")
-        if (html.isBlank()) html = fetchUrl(base)
+        val html = mirror.requireCatalogHtml(
+            fetchPage = {
+                fetchUrl("$base/serien").ifBlank { fetchUrl(base) }
+            },
+            fallbackUrl = "$base/"
+        )
         parseStreamKisteSeriesList(html).map { it.copy(isMovie = false, providerId = id) }
     }
 

@@ -104,9 +104,15 @@ class AniWorldProvider(
 
     override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         val base = activeBaseUrl()
-        val home = parseSeriesListAniWorld(fetchUrl(base))
-        var popularHtml = fetchUrl("$base/beliebte-animes")
-        if (popularHtml.isBlank()) popularHtml = fetchUrl("$base/animes")
+        val homeHtml = mirror.requireCatalogHtml(
+            fetchPage = { mirror.fetch(base) },
+            fallbackUrl = "$base/"
+        )
+        val home = parseSeriesListAniWorld(homeHtml)
+        var popularHtml = mirror.fetch("$base/beliebte-animes")
+        if (popularHtml.isBlank() || ProviderHttp.isChallenge(popularHtml)) {
+            popularHtml = mirror.fetch("$base/animes")
+        }
         val popular = parseSeriesListAniWorld(popularHtml)
         tagAll((home + popular).distinctBy { it.id })
     }
