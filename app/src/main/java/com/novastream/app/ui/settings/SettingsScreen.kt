@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.DataSaverOn
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
@@ -71,6 +72,8 @@ import com.novastream.app.ui.provider.ProviderLanguageSectionHeader
 import com.novastream.app.util.LocaleManager
 import com.novastream.app.util.findActivity
 import com.novastream.app.data.repository.WatchRepository
+import com.novastream.app.sync.BackupRestoreManager
+import com.novastream.app.sync.CloudSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -121,8 +124,10 @@ private val PREFERRED_LANGUAGES = listOf("Deutsch", "Englisch", "Ger-Sub", "Eng-
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val watchRepo: WatchRepository,
-    private val appSettings: AppSettings,
-    private val providerController: ProviderController
+    val appSettings: AppSettings,
+    val providerController: ProviderController,
+    private val backupRestoreManager: BackupRestoreManager,
+    private val cloudSyncManager: CloudSyncManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -223,9 +228,9 @@ class SettingsViewModel @Inject constructor(
                     showUnknownProviderCleanup = false,
                     unknownProviderRowCount = 0,
                     message = if (removed > 0) {
-                        "$removed Einträge mit unbekanntem Provider entfernt"
+                        context.getString(R.string.settings_unknown_cleanup_removed, removed)
                     } else {
-                        "Keine unbekannten Provider-Einträge gefunden"
+                        context.getString(R.string.settings_unknown_cleanup_none)
                     }
                 )
             }
@@ -283,6 +288,12 @@ class SettingsViewModel @Inject constructor(
     fun showUrlError() {
         _state.update { it.copy(message = context.getString(R.string.settings_url_error)) }
     }
+
+    suspend fun exportBackupToFile(): java.io.File = backupRestoreManager.exportToFile()
+
+    suspend fun pushCloudSync(): CloudSyncManager.SyncResult = cloudSyncManager.pushToRemote()
+
+    suspend fun pullCloudSync(): CloudSyncManager.SyncResult = cloudSyncManager.pullFromRemote()
 
     fun setProvider(providerId: String) {
         viewModelScope.launch {
@@ -370,7 +381,11 @@ class SettingsViewModel @Inject constructor(
 
 @Composable
 fun SettingsScreen(
-    onOpenMarketplace: () -> Unit = {}
+    onOpenMarketplace: () -> Unit = {},
+    onOpenDownloads: () -> Unit = {},
+    onOpenPlayback: () -> Unit = {},
+    onOpenAppearance: () -> Unit = {},
+    onOpenAdvanced: () -> Unit = {}
 ) {
     val vm: SettingsViewModel = hiltViewModel()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -463,6 +478,34 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsSectionHeader(stringResource(R.string.settings_categories))
+            SettingsNavigationRow(
+                icon = Icons.Default.PlayCircle,
+                title = stringResource(R.string.settings_playback),
+                subtitle = stringResource(R.string.settings_playback_sub),
+                onClick = onOpenPlayback
+            )
+            SettingsNavigationRow(
+                icon = Icons.Default.Palette,
+                title = stringResource(R.string.settings_design),
+                subtitle = stringResource(R.string.settings_design_sub),
+                onClick = onOpenAppearance
+            )
+            SettingsNavigationRow(
+                icon = Icons.Default.Download,
+                title = stringResource(R.string.settings_open_downloads),
+                subtitle = stringResource(R.string.settings_open_downloads_sub),
+                onClick = onOpenDownloads
+            )
+            SettingsNavigationRow(
+                icon = Icons.Default.Stream,
+                title = stringResource(R.string.settings_advanced),
+                subtitle = stringResource(R.string.settings_advanced_sub),
+                onClick = onOpenAdvanced
+            )
+
+            Spacer(Modifier.height(8.dp))
+
             // Section: Streaming Provider
             SettingsSectionHeader(stringResource(R.string.settings_streaming_provider))
             SettingsNavigationRow(
@@ -520,359 +563,8 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Section: Wiedergabe
-            SettingsSectionHeader(stringResource(R.string.settings_playback))
-
-            // Autoplay toggle
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.PlayCircle, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_autoplay_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_autoplay_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Switch(
-                    checked = state.autoplayNext,
-                    onCheckedChange = { vm.setAutoplayNext(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Primary,
-                        checkedTrackColor = Primary.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = BgSurfaceElevated
-                    )
-                )
-            }
-
-            // Skip Intro button toggle
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_skip_intro_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_skip_intro_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Switch(
-                    checked = state.skipIntroButton,
-                    onCheckedChange = { vm.setSkipIntroButton(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Primary,
-                        checkedTrackColor = Primary.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = BgSurfaceElevated
-                    )
-                )
-            }
-
-            SettingsDropdownRow(
-                icon = Icons.Default.HighQuality,
-                title = stringResource(R.string.settings_preferred_hoster_title),
-                subtitle = stringResource(R.string.settings_preferred_hoster_subtitle),
-                selectedValue = state.preferredHoster,
-                options = PREFERRED_HOSTERS,
-                onSelect = { vm.setPreferredHoster(it) }
-            )
-
-            SettingsDropdownRow(
-                icon = Icons.Default.Language,
-                title = stringResource(R.string.settings_preferred_language_title),
-                subtitle = stringResource(R.string.settings_preferred_language_subtitle),
-                selectedValue = state.preferredLanguage,
-                options = PREFERRED_LANGUAGES,
-                onSelect = { vm.setPreferredLanguage(it) }
-            )
-
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.DataSaverOn, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_data_saver_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_data_saver_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Switch(
-                    checked = state.dataSaverMode,
-                    onCheckedChange = { vm.setDataSaverMode(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Primary,
-                        checkedTrackColor = Primary.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = BgSurfaceElevated
-                    )
-                )
-            }
-
-            // Playback Speed selector
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Speed, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_playback_speed_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_playback_speed_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Text(
-                    "${state.playbackSpeed}x",
-                    color = Primary,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-            // Speed options
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                    val selected = kotlin.math.abs(state.playbackSpeed - speed) < 0.01f
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) Primary.copy(alpha = 0.15f) else BgSurface)
-                            .clickable { vm.setPlaybackSpeed(speed) }
-                            .padding(vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "${speed}x",
-                            color = if (selected) Primary else TextTertiary,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Section: Design
-            SettingsSectionHeader(stringResource(R.string.settings_design))
-
-            SettingsDropdownRow(
-                icon = Icons.Default.Language,
-                title = stringResource(R.string.settings_ui_language_title),
-                subtitle = stringResource(R.string.settings_ui_language_subtitle),
-                selectedValue = LocaleManager.localeDisplayName(state.uiLocale),
-                options = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
-                    .map { LocaleManager.localeDisplayName(it) },
-                onSelect = { label ->
-                    val tag = (listOf(LocaleManager.SYSTEM_LOCALE) + LocaleManager.supportedUiLocales)
-                        .first { LocaleManager.localeDisplayName(it) == label }
-                    if (tag != state.uiLocale) {
-                        vm.setUiLocale(tag)
-                        context.findActivity()?.recreate()
-                    }
-                }
-            )
-            SettingsDropdownRow(
-                icon = Icons.Default.Stream,
-                title = stringResource(R.string.settings_content_language_title),
-                subtitle = stringResource(R.string.settings_content_language_subtitle),
-                selectedValue = com.novastream.app.data.provider.ProviderLanguageManager
-                    .getLanguageDisplayName(ContentLanguage.fromTag(state.contentLanguageTag)),
-                options = ContentLanguage.entries.filter { it != ContentLanguage.MULTI }
-                    .map { com.novastream.app.data.provider.ProviderLanguageManager.getLanguageDisplayName(it) },
-                onSelect = { label ->
-                    val tag = ContentLanguage.entries.filter { it != ContentLanguage.MULTI }
-                        .first {
-                            com.novastream.app.data.provider.ProviderLanguageManager.getLanguageDisplayName(it) == label
-                        }.tag
-                    vm.setContentLanguage(tag)
-                }
-            )
-
-            // Performance mode toggle
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Speed, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_performance_mode_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_performance_mode_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Switch(
-                    checked = state.performanceMode,
-                    onCheckedChange = { vm.setPerformanceMode(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Primary,
-                        checkedTrackColor = Primary.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = BgSurfaceElevated
-                    )
-                )
-            }
-
-            // Reduce motion toggle
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Speed, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_reduce_motion_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_reduce_motion_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Switch(
-                    checked = state.reduceMotion,
-                    onCheckedChange = { vm.setReduceMotion(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Primary,
-                        checkedTrackColor = Primary.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = BgSurfaceElevated
-                    )
-                )
-            }
-
-            // Dynamic Color toggle
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(BgSurface),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Palette, contentDescription = null, tint = Primary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_dynamic_color_title), style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(stringResource(R.string.settings_dynamic_color_subtitle), style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-                }
-                Switch(
-                    checked = state.dynamicColor,
-                    onCheckedChange = { vm.setDynamicColor(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Primary,
-                        checkedTrackColor = Primary.copy(alpha = 0.3f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = BgSurfaceElevated
-                    )
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            SettingsUltraSections(appSettings = remember { AppSettings(context) })
-
-            Spacer(Modifier.height(8.dp))
-
-            // Section: Datenverwaltung
-            SettingsSectionHeader(stringResource(R.string.settings_data_management))
-
-            SettingsItem(
-                icon = Icons.Default.PlayCircle,
-                title = stringResource(R.string.settings_clear_continue_title),
-                subtitle = stringResource(R.string.settings_clear_continue_subtitle),
-                onClick = {
-                    pendingActionTitle = "Weitersehen leeren?"
-                    pendingAction = { vm.clearContinueWatching() }
-                }
-            )
-            SettingsItem(
-                icon = Icons.Default.CleaningServices,
-                title = stringResource(R.string.settings_clear_completed_title),
-                subtitle = stringResource(R.string.settings_clear_completed_subtitle),
-                onClick = {
-                    pendingActionTitle = "Abgeschlossene Episoden entfernen?"
-                    pendingAction = { vm.clearCompleted() }
-                }
-            )
-            SettingsItem(
-                icon = Icons.Default.DeleteSweep,
-                title = stringResource(R.string.settings_clear_watchlist_title),
-                subtitle = stringResource(R.string.settings_clear_watchlist_subtitle),
-                onClick = {
-                    pendingActionTitle = "Watchlist leeren?"
-                    pendingAction = { vm.clearWatchlist() }
-                }
-            )
-
-            Spacer(Modifier.height(24.dp))
-
             // Section: Updates
-            SettingsSectionHeader("App-Updates")
+            SettingsSectionHeader(stringResource(R.string.settings_updates))
             val update = state.updateInfo
             Box(
                 Modifier
@@ -898,17 +590,26 @@ fun SettingsScreen(
                         Column(Modifier.weight(1f)) {
                             Text(
                                 when {
-                                    state.updateChecking -> "Prüfe auf Updates…"
-                                    update?.isNewer == true -> "Update verfügbar: v${update.latestVersion}"
-                                    update != null -> "Aktuell: v${update.currentVersion}"
-                                    else -> "Nach Updates suchen"
+                                    state.updateChecking -> stringResource(R.string.settings_update_checking)
+                                    update?.isNewer == true -> stringResource(
+                                        R.string.settings_update_available,
+                                        update.latestVersion
+                                    )
+                                    update != null -> stringResource(
+                                        R.string.settings_update_current,
+                                        update.currentVersion
+                                    )
+                                    else -> stringResource(R.string.settings_update_search)
                                 },
                                 color = TextPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 15.sp
                             )
                             Text(
-                                "GitHub Releases · ${com.novastream.app.util.UpdateChecker.GITHUB_REPO}",
+                                stringResource(
+                                    R.string.settings_update_github_releases,
+                                    com.novastream.app.util.UpdateChecker.GITHUB_REPO
+                                ),
                                 color = TextTertiary,
                                 fontSize = 12.sp
                             )
@@ -928,7 +629,13 @@ fun SettingsScreen(
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary)
                             ) {
-                                Text(if (update.downloadUrl != null) "APK laden" else "Release öffnen")
+                                Text(
+                                    if (update.downloadUrl != null) {
+                                        stringResource(R.string.settings_update_download_apk)
+                                    } else {
+                                        stringResource(R.string.settings_update_open_release)
+                                    }
+                                )
                             }
                             OutlinedButton(onClick = {
                                 try {
@@ -942,7 +649,7 @@ fun SettingsScreen(
                                     vm.showUrlError()
                                 }
                             }) {
-                                Text("Changelog")
+                                Text(stringResource(R.string.settings_update_changelog))
                             }
                         }
                         update.releaseNotes?.take(280)?.let { notes ->
@@ -956,7 +663,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
 
             // Section: Über NovaStream
-            SettingsSectionHeader("Über NovaStream")
+            SettingsSectionHeader(stringResource(R.string.settings_about))
 
             // Premium App Info Card
             Box(
@@ -1024,7 +731,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(16.dp))
                     // Description
                     Text(
-                        "Ein moderner Android Streaming-Client mit Continue Watching, Watchlist, Multi-Hoster Support und DNS-over-HTTPS.",
+                        stringResource(R.string.settings_about_tagline),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                         lineHeight = 20.sp
@@ -1049,43 +756,42 @@ fun SettingsScreen(
             // Clickable Links
             ClickableSettingsItem(
                 icon = Icons.Default.Code,
-                title = "Quellcode",
+                title = stringResource(R.string.settings_source_code),
                 subtitle = "github.com/dskja/NovaStream",
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.BugReport,
-                title = "Fehler melden",
-                subtitle = "Issue auf GitHub erstellen",
+                title = stringResource(R.string.settings_report_bug),
+                subtitle = stringResource(R.string.settings_report_bug_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream/issues/new") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Star,
-                title = "Sterne vergeben",
-                subtitle = "Repo auf GitHub bewerten",
+                title = stringResource(R.string.settings_star_repo),
+                subtitle = stringResource(R.string.settings_star_repo_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Gavel,
-                title = "Lizenz",
-                subtitle = "MIT License - ansehen",
+                title = stringResource(R.string.settings_license),
+                subtitle = stringResource(R.string.settings_license_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream/blob/main/LICENSE") { vm.showUrlError() } }
             )
             ClickableSettingsItem(
                 icon = Icons.Default.Security,
-                title = "Datenschutz",
-                subtitle = "Keine Daten werden gesammelt",
+                title = stringResource(R.string.settings_privacy),
+                subtitle = stringResource(R.string.settings_privacy_sub),
                 onClick = { openUrl(context, "https://github.com/dskja/NovaStream#privacy") { vm.showUrlError() } }
             )
 
             Spacer(Modifier.height(24.dp))
 
-            // Section: Entwickler
-            SettingsSectionHeader("Entwickler")
+            SettingsSectionHeader(stringResource(R.string.settings_developer))
             ClickableSettingsItem(
                 icon = Icons.Default.Code,
                 title = "dskja",
-                subtitle = "GitHub Profil",
+                subtitle = stringResource(R.string.settings_github_profile),
                 onClick = { openUrl(context, "https://github.com/dskja") { vm.showUrlError() } }
             )
 
@@ -1097,20 +803,24 @@ fun SettingsScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Made with ", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.settings_made_with), color = TextTertiary, style = MaterialTheme.typography.bodySmall)
                     Icon(Icons.Default.Favorite, null, tint = Primary, modifier = Modifier.size(12.dp))
                     Text(" by dskja", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "NovaStream ist ein inoffizieller Client.\nNur für Bildungszwecke. Verwendung auf eigene Verantwortung.",
+                    stringResource(R.string.settings_client_disclaimer),
                     color = TextTertiary,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Version ${com.novastream.app.BuildConfig.VERSION_NAME} · Build ${com.novastream.app.BuildConfig.VERSION_CODE}",
+                    stringResource(
+                        R.string.settings_version_build_fmt,
+                        com.novastream.app.BuildConfig.VERSION_NAME,
+                        com.novastream.app.BuildConfig.VERSION_CODE
+                    ),
                     color = TextTertiary,
                     style = MaterialTheme.typography.labelSmall
                 )
@@ -1131,22 +841,22 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { vm.dismissUnknownProviderCleanup() },
             title = {
-                Text("Alte Einträge bereinigen?", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_unknown_cleanup_title), color = TextPrimary, fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
-                    "${state.unknownProviderRowCount} Watchlist- oder Fortschritts-Einträge stammen von vor dem Provider-Update (providerId „unknown“). Möchtest du sie entfernen?",
+                    stringResource(R.string.settings_unknown_cleanup_message, state.unknownProviderRowCount),
                     color = TextSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { vm.cleanupUnknownProviderRows() }) {
-                    Text("Entfernen", color = Primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.confirm), color = Primary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { vm.dismissUnknownProviderCleanup() }) {
-                    Text("Behalten", color = TextTertiary)
+                    Text(stringResource(R.string.settings_keep), color = TextTertiary)
                 }
             },
             containerColor = BgSurface,
@@ -1356,7 +1066,7 @@ private fun ProviderCapabilityMatrix(
 }
 
 @Composable
-private fun SettingsDropdownRow(
+internal fun SettingsDropdownRow(
     icon: ImageVector,
     title: String,
     subtitle: String,
@@ -1543,7 +1253,7 @@ private fun StatCard(
 }
 
 @Composable
-private fun SettingsItem(
+internal fun SettingsItem(
     icon: ImageVector,
     title: String,
     subtitle: String,

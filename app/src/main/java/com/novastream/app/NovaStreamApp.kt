@@ -9,6 +9,7 @@ import coil.memory.MemoryCache
 import com.novastream.app.data.api.NetworkModule
 import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.provider.ProviderController
+import com.novastream.app.data.provider.ProviderRegistry
 import com.novastream.app.util.VoeWebViewResolver
 import com.novastream.app.util.CaptchaWebViewFetcher
 import com.novastream.app.data.repository.CatalogCachePurgeWorker
@@ -17,12 +18,12 @@ import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import com.novastream.app.util.AppContext
 import com.novastream.app.util.LocaleManager
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import com.novastream.app.util.PrefsCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @HiltAndroidApp
@@ -30,18 +31,13 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     @Inject lateinit var database: NovaStreamDatabase
     @Inject lateinit var providerController: ProviderController
+    @Inject lateinit var downloadHelper: com.novastream.app.download.DownloadManagerHelper
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun attachBaseContext(base: Context) {
-        val localeTag = runBlocking {
-            try {
-                com.novastream.app.data.prefs.AppSettings(base).uiLocale.first()
-            } catch (_: Exception) {
-                LocaleManager.SYSTEM_LOCALE
-            }
-        }
-        super.attachBaseContext(LocaleManager.wrap(base, localeTag))
+        ProviderRegistry.bindContext(base)
+        super.attachBaseContext(LocaleManager.wrap(base, PrefsCache.uiLocale(base)))
     }
 
     override fun onCreate() {
@@ -49,24 +45,41 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
         AppContext.init(this)
         com.novastream.app.telemetry.PlaySuccessTracker.init(this)
         com.novastream.app.download.DownloadForegroundService.ensureChannel(this)
-        // Set VoeWebViewResolver context for VOE hoster resolution
+        appScope.launch {
+            runCatching { downloadHelper.resumeDownloads() }
+        }
+        runCatching { com.novastream.app.cast.CastHelper.get(this) }
         VoeWebViewResolver.setContext(this)
         CaptchaWebViewFetcher.setContext(this)
-        providerController.startObserving(appScope)
-        // Cleanup: Entferne abgeschlossene Episoden die älter als 30 Tage sind
+
+        // Sync preference cache + build provider registry off the main thread.
+        appScope.launch {
+            try {
+                val settings = com.novastream.app.data.prefs.AppSettings(this@NovaStreamApp)
+                PrefsCache.setUiLocale(this@NovaStreamApp, settings.uiLocale.first())
+                PrefsCache.setContentLanguage(this@NovaStreamApp, settings.contentLanguage.first())
+                ProviderRegistry.ensureBuilt()
+                providerController.startObserving(this)
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.e("NovaStreamApp", "Provider registry warmup failed", e)
+                }
+            }
+        }
+
         appScope.launch {
             try {
                 val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
                 val count = database.watchProgressDao().deleteOldCompleted(cutoff)
-                if (com.novastream.app.BuildConfig.DEBUG && count > 0) {
+                if (BuildConfig.DEBUG && count > 0) {
                     android.util.Log.i("NovaStreamApp", "Cleaned up $count old completed episodes")
                 }
             } catch (e: Exception) {
-                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("NovaStreamApp", "Cleanup failed", e)
+                if (BuildConfig.DEBUG) android.util.Log.w("NovaStreamApp", "Cleanup failed", e)
             }
         }
         appScope.launch {
-            NovaStreamRepository.get(this@NovaStreamApp).purgeExpiredCache()
+            runCatching { NovaStreamRepository.get(this@NovaStreamApp).purgeExpiredCache() }
         }
         CatalogCachePurgeWorker.schedule(this)
     }
@@ -79,8 +92,8 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
 
     override fun onLowMemory() {
         super.onLowMemory()
-        // Clear Coil memory cache on low memory
         coilSingleton?.memoryCache?.clear()
+        CaptchaWebViewFetcher.clear()
     }
 
     private var coilSingleton: ImageLoader? = null
@@ -106,13 +119,13 @@ class NovaStreamApp : Application(), ImageLoaderFactory {
             }
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.30)  // 30% of app memory for image cache
+                    .maxSizePercent(0.30)
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(500L * 1024 * 1024)  // 500MB disk cache
+                    .maxSizeBytes(500L * 1024 * 1024)
                     .build()
             }
             .build().also { coilSingleton = it }

@@ -12,6 +12,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import com.novastream.app.data.provider.ContentLanguage
+import com.novastream.app.util.PrefsCache
 import com.novastream.app.util.LocaleManager
 
 /**
@@ -124,10 +125,12 @@ class AppSettings(private val context: Context) {
     }
 
     suspend fun setUiLocale(localeTag: String) {
+        PrefsCache.setUiLocale(context, localeTag)
         context.dataStore.edit { it[UI_LOCALE] = localeTag }
     }
 
     suspend fun setContentLanguage(tag: String) {
+        PrefsCache.setContentLanguage(context, tag)
         context.dataStore.edit { it[CONTENT_LANGUAGE] = tag }
     }
 

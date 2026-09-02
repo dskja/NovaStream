@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -63,6 +64,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val android.content.Context.dataStore by preferencesDataStore("search_prefs")
 private val RECENT_SEARCHES_KEY = stringPreferencesKey("recent_searches")
@@ -73,6 +75,7 @@ data class SearchUiState(
     val loading: Boolean = false,
     val results: List<com.novastream.app.data.model.Series> = emptyList(),
     val error: String? = null,
+    val trendingError: String? = null,
     val recentSearches: List<String> = emptyList(),
     val trending: List<com.novastream.app.data.model.Series> = emptyList()
 )
@@ -118,6 +121,7 @@ class SearchViewModel @Inject constructor(
                                 results = emptyList(),
                                 trending = emptyList(),
                                 error = null,
+                                trendingError = null,
                                 loading = false
                             )
                         }
@@ -138,17 +142,23 @@ class SearchViewModel @Inject constructor(
         val expected = ActiveProvider.id
         trendingJob = viewModelScope.launch {
             try {
-                when (val res = repo.loadPopular()) {
+                when (val res = repo.loadHomeCatalog()) {
                     is NovaStreamRepository.RepoResult.Success -> {
                         if (ActiveProvider.id == expected) {
-                            _state.update { it.copy(trending = res.data.take(20)) }
+                            val trending = res.data.trending.ifEmpty { res.data.popular }
+                            _state.update { it.copy(trending = trending.take(20), trendingError = null) }
                         }
                     }
                     else -> {
-                        when (val home = repo.loadHome()) {
+                        when (val popular = repo.loadPopular()) {
                             is NovaStreamRepository.RepoResult.Success -> {
                                 if (ActiveProvider.id == expected) {
-                                    _state.update { it.copy(trending = home.data.take(20)) }
+                                    _state.update { it.copy(trending = popular.data.take(20), trendingError = null) }
+                                }
+                            }
+                            is NovaStreamRepository.RepoResult.Error -> {
+                                if (ActiveProvider.id == expected) {
+                                    _state.update { it.copy(trendingError = popular.message) }
                                 }
                             }
                             else -> {}
@@ -159,14 +169,18 @@ class SearchViewModel @Inject constructor(
                 if (com.novastream.app.BuildConfig.DEBUG) {
                     android.util.Log.w("SearchVM", "loadTrending failed", e)
                 }
+                _state.update {
+                    it.copy(trendingError = com.novastream.app.util.ErrorMapper.toUserMessage(e))
+                }
             }
         }
     }
 
     fun onQueryChange(q: String) {
-        val trimmed = q.trim().take(100)
-        _state.update { it.copy(query = trimmed, error = null) }
+        val limited = q.take(100)
+        _state.update { it.copy(query = limited, error = null) }
         searchJob?.cancel()
+        val trimmed = limited.trim()
         if (trimmed.isBlank()) {
             _state.update { it.copy(results = emptyList(), loading = false) }
             return
@@ -180,7 +194,7 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
             currentCoroutineContext().ensureActive()
-            if (_state.value.query != trimmed) return@launch
+            if (_state.value.query.trim() != trimmed) return@launch
             if (ActiveProvider.id != expectedProvider) return@launch
             when (val res = repo.search(trimmed)) {
                 is NovaStreamRepository.RepoResult.Success -> {
@@ -227,6 +241,12 @@ class SearchViewModel @Inject constructor(
             }
         }
     }
+
+    suspend fun ensureProvider(providerId: String) {
+        if (providerId.isNotBlank() && providerId != ActiveProvider.id) {
+            providerController.setActiveProvider(providerId)
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -245,9 +265,14 @@ fun SearchScreen(
     val useGlobal = globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE
     val displayResults = if (useGlobal) globalState.results else state.results
     val displayLoading = if (useGlobal) globalState.loading else state.loading
-    val displayError = if (useGlobal) globalState.error else state.error
+    val displayError = when {
+        state.query.isBlank() -> null
+        useGlobal -> globalState.error
+        else -> state.error
+    }
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     androidx.compose.runtime.LaunchedEffect(state.query.isEmpty()) {
         if (state.query.isEmpty()) {
@@ -279,7 +304,7 @@ fun SearchScreen(
                 onClick = {
                     globalVm.setContentLanguage(contentLanguage)
                     globalVm.setScope(GlobalSearchScope.CONTENT_LANGUAGE)
-                    globalVm.search(state.query)
+                    globalVm.onQueryChange(state.query)
                 },
                 label = {
                     Text(stringResource(com.novastream.app.R.string.search_scope_global, contentLanguage.tag.uppercase()))
@@ -312,7 +337,7 @@ fun SearchScreen(
                 value = state.query,
                 onValueChange = {
                     vm.onQueryChange(it)
-                    if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) globalVm.search(it)
+                    if (globalState.scope == GlobalSearchScope.CONTENT_LANGUAGE) globalVm.onQueryChange(it)
                 },
                 placeholder = { Text(stringResource(com.novastream.app.R.string.search_placeholder), color = TextTertiary) },
                 singleLine = true,
@@ -339,7 +364,11 @@ fun SearchScreen(
                     Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .clickable { vm.onQueryChange(""); focusManager.clearFocus() },
+                        .clickable {
+                            vm.onQueryChange("")
+                            if (useGlobal) globalVm.onQueryChange("")
+                            focusManager.clearFocus()
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -397,7 +426,12 @@ fun SearchScreen(
                                 Row(
                                     Modifier
                                         .fillMaxWidth()
-                                        .clickable { vm.onQueryChange(search) }
+                                        .clickable {
+                                            vm.onQueryChange(search)
+                                            if (search.trim().length >= 2) {
+                                                globalVm.onQueryChange(search)
+                                            }
+                                        }
                                         .padding(horizontal = 20.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -407,15 +441,21 @@ fun SearchScreen(
                                 }
                             }
                         }
+                        if (state.trendingError != null) {
+                            Text(
+                                state.trendingError ?: "",
+                                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                         // Trending section
                         if (state.trending.isNotEmpty()) {
                             SectionHeader(stringResource(R.string.search_trending), modifier = Modifier.padding(top = 8.dp))
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 130.dp),
-                                contentPadding = PaddingValues(12.dp, bottom = 80.dp),
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.height(((state.trending.size / 2 + 1) * 280).dp)
+                                modifier = Modifier.padding(bottom = 80.dp)
                             ) {
                                 items(state.trending, key = { it.id }) { s ->
                                     SeriesPosterCard(s, onClick = { onSeriesClick(s.id) })
@@ -428,7 +468,7 @@ fun SearchScreen(
                     }
                 }
                 displayResults.isEmpty() && state.query.isNotBlank() -> PremiumEmpty(
-                    if (ActiveProvider.isBurningSeries) {
+                    if (!useGlobal && ActiveProvider.isBurningSeries) {
                         stringResource(com.novastream.app.R.string.search_bs_blocked)
                     } else {
                         stringResource(com.novastream.app.R.string.search_no_results, state.query)
@@ -441,10 +481,15 @@ fun SearchScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(displayResults, key = { it.id }) { s ->
+                    items(displayResults, key = { "${it.providerId}:${it.id}" }) { s ->
                         SeriesPosterCard(s, onClick = {
                             vm.saveRecentSearch(state.query)
-                            onSeriesClick(s.id)
+                            scope.launch {
+                                if (useGlobal && !s.providerId.isNullOrBlank()) {
+                                    vm.ensureProvider(s.providerId)
+                                }
+                                onSeriesClick(s.id)
+                            }
                         })
                     }
                 }

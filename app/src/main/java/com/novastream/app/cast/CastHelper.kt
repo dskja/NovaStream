@@ -30,8 +30,9 @@ class CastHelper(context: Context) {
         castContext?.sessionManager?.currentCastSession?.isConnected == true
 
     fun loadOnCast(player: CastPlayer, url: String, title: String) {
+        val secureUrl = com.novastream.app.util.MediaUrls.secureUrl(url)
         val item = MediaItem.Builder()
-            .setUri(url)
+            .setUri(secureUrl)
             .setMediaMetadata(
                 androidx.media3.common.MediaMetadata.Builder()
                     .setTitle(title)

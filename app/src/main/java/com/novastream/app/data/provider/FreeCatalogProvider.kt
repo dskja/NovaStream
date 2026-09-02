@@ -26,7 +26,7 @@ class FreeCatalogProvider(
 ) : StreamingProvider {
 
     override val supportsMovies: Boolean = false
-    override val catalogHint: String = "Tausende Serien via TVMaze"
+    override val catalogHint: String? = ProviderCatalogHints.forId(id)
     override val availableGenres: List<com.novastream.app.data.model.Genre> = listOf(
         com.novastream.app.data.model.Genre("Action", "Action"),
         com.novastream.app.data.model.Genre("Comedy", "Comedy"),
@@ -36,30 +36,24 @@ class FreeCatalogProvider(
         com.novastream.app.data.model.Genre("Thriller", "Thriller")
     )
 
-    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadHome(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         coroutineScope {
             val region = ContentRegionResolver.currentTvmazeRegion()
             val scheduleDef = async { FreeMetaService.schedule(region) }
             val catalogDef = async { FreeMetaService.catalogPage(0) }
             (scheduleDef.await() + catalogDef.await()).distinctBy { it.id }.map { mapShow(it) }
         }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun search(query: String): StreamingProvider.ProviderResult<List<Series>> {
-        if (query.trim().isBlank()) return StreamingProvider.ProviderResult.Error("Leere Suche")
-        return runCatching {
+        guardSearchQuery(query)?.let { return it }
+        return runCatchingProvider {
             FreeMetaService.search(query.trim()).map { mapShow(it) }
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
     }
 
     override suspend fun loadSeriesDetail(slug: String): StreamingProvider.ProviderResult<Pair<Series, List<Season>>> =
-        runCatching {
+        runCatchingProvider {
             val show = FreeMetaService.show(slug)
                 ?: FreeMetaService.enrichByTitle(slug.replace('-', ' '))
                 ?: error("Serie nicht gefunden")
@@ -79,13 +73,10 @@ class FreeCatalogProvider(
                 )
             }
             mapShow(show) to seasons
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
 
     override suspend fun loadSeason(slug: String, season: Int): StreamingProvider.ProviderResult<List<Episode>> =
-        runCatching {
+        runCatchingProvider {
             val show = FreeMetaService.show(slug) ?: error("Serie nicht gefunden")
             FreeMetaService.episodes(slug)
                 .filter { it.season == season }
@@ -99,13 +90,10 @@ class FreeCatalogProvider(
                         thumbnailUrl = ep.imageUrl
                     )
                 }
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
 
     override suspend fun loadHosters(episode: Episode): StreamingProvider.ProviderResult<List<HosterLink>> =
-        runCatching {
+        runCatchingProvider {
             val imdb = extractImdb(episode)
                 ?: FreeMetaService.show(episode.slug)?.imdbId
                 ?: error("Keine IMDb-ID – Embeds nicht möglich")
@@ -116,13 +104,10 @@ class FreeCatalogProvider(
                 isMovie = false,
                 tmdbId = extractTmdb(episode.slug)
             )
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
 
     override suspend fun resolveHoster(hoster: HosterLink): StreamingProvider.ProviderResult<List<StreamSource>> =
-        runCatching {
+        runCatchingProvider {
             when {
                 hoster.name.contains("VidSrc", true) || hoster.redirectUrl.contains("vidsrc") ->
                     EmbedStreamResolver.resolveByImdb(
@@ -135,41 +120,32 @@ class FreeCatalogProvider(
                     }
                 else -> com.novastream.app.util.HosterResolver().resolve(hoster.name, hoster.redirectUrl)
             }
-        }.fold(
-            onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-            onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-        )
+        }
 
-    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatching {
-        FreeMetaService.catalogPage(0)
-            .filter { show ->
-                show.genres.any { it.equals(genre, true) } ||
-                    show.genres.any { it.contains(genre, true) }
-            }
-            .map { mapShow(it) }
-            .ifEmpty {
-                FreeMetaService.search(genre).map { mapShow(it) }
-            }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    override suspend fun loadGenre(genre: String): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
+        if (genre.trim().isBlank()) emptyList()
+        else {
+            FreeMetaService.catalogPage(0)
+                .filter { show ->
+                    show.genres.any { it.equals(genre, true) } ||
+                        show.genres.any { it.contains(genre, true) }
+                }
+                .map { mapShow(it) }
+                .ifEmpty {
+                    FreeMetaService.search(genre).map { mapShow(it) }
+                }
+        }
+    }
 
-    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadNewest(): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         FreeMetaService.schedule(ContentRegionResolver.currentTvmazeRegion()).map { mapShow(it) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     override suspend fun loadPopular(): StreamingProvider.ProviderResult<List<Series>> = loadHome()
 
-    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatching {
+    override suspend fun loadCatalogPage(page: Int): StreamingProvider.ProviderResult<List<Series>> = runCatchingProvider {
         FreeMetaService.catalogPage(page.coerceAtLeast(0)).map { mapShow(it) }
-    }.fold(
-        onSuccess = { StreamingProvider.ProviderResult.Success(it) },
-        onFailure = { StreamingProvider.ProviderResult.Error(com.novastream.app.util.ErrorMapper.toUserMessage(it), it) }
-    )
+    }
 
     private fun extractImdb(episode: Episode): String? {
         val url = episode.episodeUrl

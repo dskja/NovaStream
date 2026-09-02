@@ -79,10 +79,11 @@ object ContentLanguageGenres {
         provider: StreamingProvider,
         contentLanguage: ContentLanguage
     ): List<Genre> {
+        ProviderGenres.forId(provider.id).takeIf { it.isNotEmpty() }?.let { return it }
         if (provider.availableGenres.isNotEmpty()) return provider.availableGenres
         val lang = when {
             contentLanguage != ContentLanguage.MULTI -> contentLanguage
-            else -> ProviderRegistry.contentLanguageOf(provider.id)
+            else -> ProviderGenres.contentLanguageOf(provider.id)
         }
         return forLanguage(lang)
     }
