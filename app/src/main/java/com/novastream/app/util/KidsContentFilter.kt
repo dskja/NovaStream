@@ -51,6 +51,12 @@ object KidsContentFilter {
         )
     }
 
+    fun filterDownloads(list: List<com.novastream.app.data.db.DownloadEntity>, kidsMode: Boolean): List<com.novastream.app.data.db.DownloadEntity> =
+        if (!kidsMode) list else list.filter { isKidsSafeDownload(it) }
+
+    fun isKidsSafeDownload(item: com.novastream.app.data.db.DownloadEntity): Boolean =
+        !isBlockedForKidsPlayback(item.slug, item.title, item.episodeTitle)
+
     fun isKidsSafe(series: Series): Boolean {
         if (series.isAdult == true) return false
         if (isBlockedTitle(series.title) || isBlockedTitle(series.originalTitle.orEmpty())) return false

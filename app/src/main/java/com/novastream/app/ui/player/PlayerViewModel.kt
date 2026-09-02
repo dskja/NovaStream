@@ -3,7 +3,12 @@ package com.novastream.app.ui.player
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.novastream.app.data.meta.CatalogMetaEnricher
+import com.novastream.app.data.meta.MetaEnrichmentCache
 import com.novastream.app.data.model.Episode
+import com.novastream.app.data.model.Series
+import com.novastream.app.data.provider.ActiveProvider
+import com.novastream.app.data.provider.ContentLanguage
 import com.novastream.app.data.model.HosterLink
 import com.novastream.app.data.model.StreamSource
 import com.novastream.app.data.prefs.AppSettings
@@ -31,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -104,7 +110,8 @@ class PlayerViewModel @Inject constructor(
     private val appSettings: AppSettings,
     private val downloadHelper: DownloadManagerHelper,
     private val playbackRequestStore: PlaybackRequestStore,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val catalogMetaEnricher: CatalogMetaEnricher
 ) : ViewModel() {
 
     private val slug: String = run {
@@ -232,16 +239,37 @@ class PlayerViewModel @Inject constructor(
         adjacentEpisodesJob = viewModelScope.launch { loadAdjacentEpisodesFromSeason() }
     }
 
+    private suspend fun isKidsSafeForPlayback(): Boolean {
+        val stub = Series(
+            id = slug,
+            title = seriesTitle,
+            isMovie = isMovie,
+            providerId = ActiveProvider.id
+        )
+        MetaEnrichmentCache.get(MetaEnrichmentCache.cacheKey(stub))?.let { cached ->
+            return KidsContentFilter.isKidsSafe(catalogMetaEnricher.applyEnrichment(stub, cached))
+        }
+        val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+        val enriched = catalogMetaEnricher.enrichOne(stub, language, ActiveProvider.isAniWorld)
+        return KidsContentFilter.isKidsSafe(enriched)
+    }
+
     private fun load() {
         _state.update { it.copy(loading = true, error = null, hosterFallbackNotice = null) }
         viewModelScope.launch {
-            if (profileManager.getActiveProfile().isKids &&
-                KidsContentFilter.isBlockedForKidsPlayback(slug, seriesTitle, title)
-            ) {
-                _state.update {
-                    it.copy(loading = false, error = context.getString(R.string.kids_content_blocked))
+            if (profileManager.getActiveProfile().isKids) {
+                if (KidsContentFilter.isBlockedForKidsPlayback(slug, seriesTitle, title)) {
+                    _state.update {
+                        it.copy(loading = false, error = context.getString(R.string.kids_content_blocked))
+                    }
+                    return@launch
                 }
-                return@launch
+                if (!isKidsSafeForPlayback()) {
+                    _state.update {
+                        it.copy(loading = false, error = context.getString(R.string.kids_content_blocked))
+                    }
+                    return@launch
+                }
             }
 
             if (!downloadId.isNullOrBlank()) {

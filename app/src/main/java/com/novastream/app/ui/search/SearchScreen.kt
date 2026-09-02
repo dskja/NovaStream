@@ -42,6 +42,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.novastream.app.R
+import com.novastream.app.data.meta.CatalogMetaEnricher
+import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -62,6 +64,7 @@ import com.novastream.app.ui.theme.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -87,7 +90,10 @@ class SearchViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repo: NovaStreamRepository,
     private val providerController: ProviderController,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val freeMetaGraph: FreeMetaGraph,
+    private val catalogMetaEnricher: CatalogMetaEnricher,
+    private val appSettings: AppSettings
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
@@ -222,15 +228,16 @@ class SearchViewModel @Inject constructor(
             when (val res = repo.search(trimmed)) {
                 is NovaStreamRepository.RepoResult.Success -> {
                     if (ActiveProvider.id != expectedProvider) return@launch
+                    val providerResults = res.data
+                        .filter { it.providerId == null || it.providerId == expectedProvider }
+                        .map { it.copy(providerId = expectedProvider) }
+                    val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                    val preferAnime = trimmed.contains("anime", ignoreCase = true) || ActiveProvider.isAniWorld
+                    val merged = mergeWithFreeMeta(trimmed, listOf(expectedProvider to providerResults), language, preferAnime)
                     _state.update {
                         it.copy(
                             loading = false,
-                            results = KidsContentFilter.filterSeries(
-                                res.data.filter {
-                                    it.providerId == null || it.providerId == expectedProvider
-                                },
-                                kidsMode
-                            ),
+                            results = KidsContentFilter.filterSeries(merged, kidsMode),
                             error = null
                         )
                     }
@@ -272,6 +279,23 @@ class SearchViewModel @Inject constructor(
         if (providerId.isNotBlank() && providerId != ActiveProvider.id) {
             providerController.setActiveProvider(providerId)
         }
+    }
+
+    private suspend fun mergeWithFreeMeta(
+        query: String,
+        providerResults: List<Pair<String, List<com.novastream.app.data.model.Series>>>,
+        language: ContentLanguage,
+        preferAnime: Boolean
+    ): List<com.novastream.app.data.model.Series> {
+        val metaSeries = freeMetaGraph.search(query, preferAnime = preferAnime, limit = 12)
+            .map { show ->
+                val stub = freeMetaGraph.toSeries(show, "free-meta")
+                catalogMetaEnricher.enrichOne(stub, language, preferAnime)
+            }
+        val combined = if (metaSeries.isNotEmpty()) {
+            providerResults + ("free-meta" to metaSeries)
+        } else providerResults
+        return SearchResultAggregator.aggregate(combined)
     }
 }
 

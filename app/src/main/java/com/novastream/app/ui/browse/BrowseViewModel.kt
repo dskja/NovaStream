@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.meta.CatalogMetaEnricher
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -60,7 +61,8 @@ class BrowseViewModel @Inject constructor(
     private val repo: NovaStreamRepository,
     private val providerController: ProviderController,
     private val appSettings: AppSettings,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val catalogMetaEnricher: CatalogMetaEnricher
 ) : ViewModel() {
     private val _state = MutableStateFlow(BrowseUiState(loading = true))
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
@@ -319,9 +321,12 @@ class BrowseViewModel @Inject constructor(
     private suspend fun publishItems(reset: Boolean, page: Int, hasMore: Boolean) {
         val filter = _state.value.contentFilter
         val sort = _state.value.sort
+        val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+        val preferAnime = ActiveProvider.isAniWorld
         val items = withContext(Dispatchers.Default) {
             val sorted = applySort(applyContentFilter(allItems, filter), sort)
-            KidsContentFilter.filterSeries(sorted, kidsMode)
+            val enriched = catalogMetaEnricher.enrichList(sorted, language, preferAnime, limit = 36)
+            KidsContentFilter.filterSeries(enriched, kidsMode)
         }
         _state.update { current ->
             current.copy(

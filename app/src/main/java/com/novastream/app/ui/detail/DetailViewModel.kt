@@ -476,6 +476,20 @@ class DetailViewModel @Inject constructor(
             freeMetaGraph.toSeries(similarShow, providerId)
         }
 
+        if (profileManager.getActiveProfile().isKids && !KidsContentFilter.isKidsSafe(enriched)) {
+            _state.update {
+                it.copy(
+                    series = null,
+                    seasons = emptyList(),
+                    error = appContext.getString(R.string.kids_content_blocked),
+                    metaCast = emptyList(),
+                    relatedTitles = emptyList(),
+                    alsoOnProviders = emptyList()
+                )
+            }
+            return
+        }
+
         _state.update {
             it.copy(
                 series = enriched,

@@ -1,5 +1,6 @@
 package com.novastream.app.ui.search
 
+import com.novastream.app.data.meta.AgeRatingResolver
 import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.model.Series
 import java.text.Normalizer
@@ -28,10 +29,10 @@ object SearchResultAggregator {
         }
         return buckets.values
             .map { entries ->
-                val best = entries.maxByOrNull { scoreSeries(it.second) }?.second ?: return@map null
-                val tagged = best.copy(
+                val merged = mergeSeriesFields(entries.map { it.second })
+                val tagged = merged.copy(
                     providerId = entries.first().first,
-                    title = best.title.ifBlank { entries.first().second.title }
+                    title = merged.title.ifBlank { entries.first().second.title }
                 )
                 AggregatedResult(
                     series = tagged,
@@ -39,8 +40,34 @@ object SearchResultAggregator {
                     score = entries.maxOf { scoreSeries(it.second) }
                 )
             }
-            .filterNotNull()
             .sortedByDescending { it.score }
+    }
+
+    fun mergeSeriesFields(entries: List<Series>): Series {
+        if (entries.isEmpty()) throw IllegalArgumentException("entries must not be empty")
+        if (entries.size == 1) return entries.first()
+        var merged = entries.maxByOrNull { scoreSeries(it) } ?: entries.first()
+        var mergedIsAdult: Boolean? = merged.isAdult
+        for (candidate in entries) {
+            if (candidate === merged) continue
+            mergedIsAdult = AgeRatingResolver.mergeIsAdult(mergedIsAdult, candidate.isAdult)
+            merged = merged.copy(
+                imdbId = merged.imdbId ?: candidate.imdbId,
+                tvmazeId = merged.tvmazeId ?: candidate.tvmazeId,
+                anilistId = merged.anilistId ?: candidate.anilistId,
+                tmdbId = merged.tmdbId ?: candidate.tmdbId,
+                canonicalKey = merged.canonicalKey ?: candidate.canonicalKey,
+                coverUrl = merged.coverUrl ?: candidate.coverUrl,
+                backdropUrl = merged.backdropUrl ?: candidate.backdropUrl,
+                description = merged.description?.takeIf { it.isNotBlank() } ?: candidate.description,
+                genres = if (merged.genres.isEmpty()) candidate.genres else merged.genres,
+                year = merged.year ?: candidate.year,
+                rating = merged.rating ?: candidate.rating,
+                status = merged.status ?: candidate.status,
+                originalTitle = merged.originalTitle ?: candidate.originalTitle
+            )
+        }
+        return merged.copy(isAdult = mergedIsAdult)
     }
 
     fun dedupeKey(series: Series): String = metaGraph.dedupeKeyForSeries(series)

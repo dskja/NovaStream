@@ -180,6 +180,7 @@ class FreeCatalogProvider(
             tvmazeId = show.id.takeIf { it.all(Char::isDigit) },
             anilistId = show.anilistId
         ).canonicalKey(),
-        originalTitle = show.title
+        originalTitle = show.title,
+        isAdult = show.isAdult
     )
 }

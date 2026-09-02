@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novastream.app.data.network.ScrapeLimiter
+import com.novastream.app.data.meta.CatalogMetaEnricher
 import com.novastream.app.data.meta.FreeMetaGraph
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -43,7 +44,8 @@ data class GlobalSearchUiState(
 class GlobalSearchViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val profileManager: ProfileManager,
-    private val freeMetaGraph: FreeMetaGraph
+    private val freeMetaGraph: FreeMetaGraph,
+    private val catalogMetaEnricher: CatalogMetaEnricher
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GlobalSearchUiState())
@@ -156,8 +158,12 @@ class GlobalSearchViewModel @Inject constructor(
     ): List<com.novastream.app.data.model.Series> {
         val preferAnime = query.contains("anime", ignoreCase = true) ||
             ActiveProvider.isAniWorld
+        val language = _state.value.contentLanguage
         val metaSeries = freeMetaGraph.search(query, preferAnime = preferAnime, limit = 15)
-            .map { freeMetaGraph.toSeries(it, "free-meta") }
+            .map { show ->
+                val stub = freeMetaGraph.toSeries(show, "free-meta")
+                catalogMetaEnricher.enrichOne(stub, language, preferAnime)
+            }
         val combined = if (metaSeries.isNotEmpty()) {
             providerResults + ("free-meta" to metaSeries)
         } else providerResults

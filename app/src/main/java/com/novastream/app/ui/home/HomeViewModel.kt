@@ -7,6 +7,7 @@ import com.novastream.app.data.db.WatchlistItem
 import com.novastream.app.data.model.Genre
 import com.novastream.app.data.model.LatestEpisode
 import com.novastream.app.data.model.Series
+import com.novastream.app.data.meta.CatalogMetaEnricher
 import com.novastream.app.data.prefs.AppSettings
 import com.novastream.app.data.provider.ActiveProvider
 import com.novastream.app.data.provider.ContentLanguage
@@ -71,7 +72,8 @@ class HomeViewModel @Inject constructor(
     private val watchRepo: WatchRepository,
     private val appSettings: AppSettings,
     private val providerController: ProviderController,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val catalogMetaEnricher: CatalogMetaEnricher
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState(loading = true))
@@ -302,6 +304,14 @@ class HomeViewModel @Inject constructor(
                             if (!performanceMode) {
                                 loadGenreRowsDeferred(provider, expectedProvider)
                             }
+                            enrichCatalogInBackground(
+                                expectedProvider = expectedProvider,
+                                hero = processed.hero,
+                                popular = processed.popular,
+                                newest = processed.newest,
+                                trending = processed.trending,
+                                movies = processed.movies
+                            )
                             latestDef?.let { deferred ->
                                 launch {
                                     val latest = deferred.await().okList()
@@ -343,6 +353,40 @@ class HomeViewModel @Inject constructor(
                         showProviderHealthWarning = true
                     )
                 }
+            }
+        }
+    }
+
+    private fun enrichCatalogInBackground(
+        expectedProvider: String,
+        hero: List<Series>,
+        popular: List<Series>,
+        newest: List<Series>,
+        trending: List<Series>,
+        movies: List<Series>
+    ) {
+        viewModelScope.launch {
+            try {
+                val language = ContentLanguage.fromTag(appSettings.contentLanguage.first())
+                val preferAnime = ActiveProvider.isAniWorld
+                val enrichedHero = catalogMetaEnricher.enrichList(hero, language, preferAnime, limit = 8)
+                val enrichedPopular = catalogMetaEnricher.enrichList(popular, language, preferAnime, limit = 24)
+                val enrichedNewest = catalogMetaEnricher.enrichList(newest, language, preferAnime, limit = 24)
+                val enrichedTrending = catalogMetaEnricher.enrichList(trending, language, preferAnime, limit = 20)
+                val enrichedMovies = catalogMetaEnricher.enrichList(movies, language, preferAnime, limit = 24)
+                if (ActiveProvider.id != expectedProvider) return@launch
+                _state.update {
+                    it.copy(
+                        hero = KidsContentFilter.filterSeries(enrichedHero, kidsMode),
+                        popular = KidsContentFilter.filterSeries(enrichedPopular, kidsMode),
+                        newest = KidsContentFilter.filterSeries(enrichedNewest, kidsMode),
+                        trending = KidsContentFilter.filterSeries(enrichedTrending, kidsMode),
+                        movies = KidsContentFilter.filterSeries(enrichedMovies, kidsMode)
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (com.novastream.app.BuildConfig.DEBUG) android.util.Log.w("HomeVM", "catalog enrich failed", e)
             }
         }
     }

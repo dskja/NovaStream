@@ -32,6 +32,7 @@ import com.novastream.app.data.db.DownloadEntity
 import com.novastream.app.data.db.DownloadStatus
 import com.novastream.app.download.DownloadManagerHelper
 import com.novastream.app.profile.ProfileManager
+import com.novastream.app.util.KidsContentFilter
 import com.novastream.app.ui.components.PremiumEmpty
 import com.novastream.app.ui.components.PremiumLoading
 import com.novastream.app.ui.theme.*
@@ -71,7 +72,9 @@ class DownloadsViewModel @Inject constructor(
                 }
                 .collect { (profileId, items) ->
                     val bytes = downloadHelper.getStorageUsedBytes(profileId)
-                    _state.update { it.copy(loading = false, items = items, storageBytes = bytes) }
+                    val isKids = profileManager.getActiveProfile().isKids
+                    val safeItems = KidsContentFilter.filterDownloads(items, isKids)
+                    _state.update { it.copy(loading = false, items = safeItems, storageBytes = bytes) }
                 }
         }
     }

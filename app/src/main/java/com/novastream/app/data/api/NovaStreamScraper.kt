@@ -114,7 +114,8 @@ object NovaStreamScraper {
                     title = cleanTitle(title),
                     coverUrl = cover,
                     backdropUrl = backdrop,
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
@@ -227,12 +228,14 @@ object NovaStreamScraper {
                 ?: a.attr("title").ifBlank { null }?.substringBefore(" stream")
                 ?: a.text().trim().ifBlank { slugToTitle(slug) }
             if (title.length < 2) continue
+            val container = a.closest("article, .card, .item, li, div, figure") ?: a.parent() ?: a
             out.add(
                 Series(
                     id = slug,
                     title = cleanTitle(title),
                     coverUrl = findCoverInContainer(a.parent() ?: a, doc),
-                    detailUrl = "/serie/$slug"
+                    detailUrl = "/serie/$slug",
+                    isAdult = cardAdultFlag(container)
                 )
             )
         }
