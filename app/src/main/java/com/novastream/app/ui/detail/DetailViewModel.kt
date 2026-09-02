@@ -554,7 +554,8 @@ class DetailViewModel @Inject constructor(
                                     episode = ep.number,
                                     coverUrl = series.coverUrl,
                                     source = source,
-                                    profileId = profileId
+                                    profileId = profileId,
+                                    isMovie = series.isMovie
                                 )
                                 downloadHelper.resumeDownloads()
                                 _state.update { it.copy(downloading = false, downloadMessage = "detail_download_started") }

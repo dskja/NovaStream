@@ -88,7 +88,8 @@ class DownloadManagerHelper @Inject constructor(
         episode: Int,
         coverUrl: String?,
         source: StreamSource,
-        profileId: String = ProfileEntity.DEFAULT_ID
+        profileId: String = ProfileEntity.DEFAULT_ID,
+        isMovie: Boolean = false
     ): String {
         require(source.isPlayable) { "Stream URL not playable" }
         val id = DownloadEntity.key(profileId, providerId, slug, season, episode)
@@ -106,7 +107,8 @@ class DownloadManagerHelper @Inject constructor(
             streamUrl = secureUrl,
             mimeType = source.mimeType,
             hosterName = source.hoster,
-            status = DownloadStatus.QUEUED
+            status = DownloadStatus.QUEUED,
+            isMovie = isMovie
         )
         downloadDao.upsert(entity)
 

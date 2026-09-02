@@ -383,6 +383,18 @@
     <string name="settings_sync_backup">Sync &amp; Backup</string>
     <string name="settings_export_backup">Backup exportieren (JSON)</string>
     <string name="settings_export_done">Backup gespeichert: %1$s</string>
+    <string name="settings_import_backup">Backup importieren (JSON)</string>
+    <string name="settings_import_backup_sub">Watchlist, Fortschritt und Profile wiederherstellen</string>
+    <string name="settings_import_backup_done">Import: %1$d Profile, %2$d Watchlist, %3$d Fortschritt</string>
+    <string name="settings_import_backup_failed">Backup-Import fehlgeschlagen</string>
+    <string name="settings_profile_change_pin">PIN ändern</string>
+    <string name="settings_profile_change_pin_title">PIN für %1$s</string>
+    <string name="settings_profile_pin_new_or_empty">Neue PIN (leer = entfernen)</string>
+    <string name="settings_profile_pin_updated">PIN aktualisiert</string>
+    <string name="settings_profile_delete">Profil löschen</string>
+    <string name="settings_profile_delete_title">Profil löschen?</string>
+    <string name="settings_profile_delete_message">„%1$s“ und alle zugehörigen Daten (Watchlist, Downloads, Fortschritt) werden gelöscht.</string>
+    <string name="settings_profile_deleted">Profil „%1$s“ gelöscht</string>
     <string name="settings_sync_url">Sync URL (WebDAV/REST)</string>
     <string name="settings_sync_key">Geräte-Key (optional)</string>
     <string name="settings_sync_push">Hochladen</string>

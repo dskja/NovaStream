@@ -6,10 +6,10 @@ import com.novastream.app.data.db.NovaStreamDatabase
 import com.novastream.app.data.db.ProfileEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Multi-profile manager with PIN protection (v13).
+ * Multi-profile manager with PIN protection (PBKDF2, v14+).
  */
 class ProfileManager(
     private val context: Context,
@@ -17,6 +17,7 @@ class ProfileManager(
     private val downloadHelper: DownloadManagerHelper? = null
 ) {
     private val profileDao = db.profileDao()
+    private val pinFailures = ConcurrentHashMap<String, PinFailureState>()
 
     fun observeProfiles(): Flow<List<ProfileEntity>> = profileDao.observeAll()
 
@@ -40,7 +41,7 @@ class ProfileManager(
         val profile = ProfileEntity(
             profileId = id,
             displayName = name,
-            pinHash = pin?.let { hashPin(it) },
+            pinHash = pin?.takeIf { it.isNotBlank() }?.let { PinHasher.hash(it) },
             isKids = isKids
         )
         profileDao.upsert(profile)
@@ -49,14 +50,29 @@ class ProfileManager(
 
     suspend fun switchProfile(profileId: String, pin: String? = null): Boolean {
         val profile = profileDao.getById(profileId) ?: return false
-        if (profile.requiresPin && hashPin(pin.orEmpty()) != profile.pinHash) return false
+        if (profile.requiresPin) {
+            if (isPinLocked(profileId)) return false
+            if (!PinHasher.verify(pin.orEmpty(), profile.pinHash)) {
+                recordPinFailure(profileId)
+                return false
+            }
+            clearPinFailures(profileId)
+            if (PinHasher.shouldUpgrade(profile.pinHash)) {
+                profileDao.upsert(profile.copy(pinHash = PinHasher.hash(pin.orEmpty())))
+            }
+        }
         profileDao.setActive(profileId)
         return true
     }
 
     suspend fun setPin(profileId: String, pin: String?) {
         val profile = profileDao.getById(profileId) ?: return
-        profileDao.upsert(profile.copy(pinHash = pin?.let { hashPin(it) }))
+        profileDao.upsert(
+            profile.copy(
+                pinHash = pin?.takeIf { it.isNotBlank() }?.let { PinHasher.hash(it) }
+            )
+        )
+        clearPinFailures(profileId)
     }
 
     suspend fun deleteProfile(profileId: String) {
@@ -69,11 +85,41 @@ class ProfileManager(
             db.downloadDao().deleteForProfile(profileId)
         }
         profileDao.delete(profileId)
+        clearPinFailures(profileId)
         ensureDefaultProfile()
+        if (profileDao.getActive() == null) {
+            profileDao.setActive(ProfileEntity.DEFAULT_ID)
+        }
     }
 
-    private fun hashPin(pin: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        return digest.digest(pin.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun isPinLocked(profileId: String): Boolean {
+        val state = pinFailures[profileId] ?: return false
+        if (System.currentTimeMillis() - state.windowStartMs > PIN_WINDOW_MS) {
+            pinFailures.remove(profileId)
+            return false
+        }
+        return state.failures >= MAX_PIN_FAILURES
+    }
+
+    private fun recordPinFailure(profileId: String) {
+        val now = System.currentTimeMillis()
+        pinFailures.compute(profileId) { _, existing ->
+            if (existing == null || now - existing.windowStartMs > PIN_WINDOW_MS) {
+                PinFailureState(failures = 1, windowStartMs = now)
+            } else {
+                existing.copy(failures = existing.failures + 1)
+            }
+        }
+    }
+
+    private fun clearPinFailures(profileId: String) {
+        pinFailures.remove(profileId)
+    }
+
+    private data class PinFailureState(val failures: Int, val windowStartMs: Long)
+
+    companion object {
+        private const val MAX_PIN_FAILURES = 5
+        private const val PIN_WINDOW_MS = 5 * 60 * 1000L
     }
 }

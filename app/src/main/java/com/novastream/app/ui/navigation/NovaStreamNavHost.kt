@@ -339,7 +339,7 @@ fun NovaStreamNavHost(deepLinkSlug: String? = null) {
                                 title = item.episodeTitle,
                                 seriesTitle = item.title,
                                 coverUrl = item.coverUrl,
-                                isMovie = item.slug.startsWith("movie"),
+                                isMovie = item.isMovie,
                                 downloadId = item.downloadId
                             )
                         )

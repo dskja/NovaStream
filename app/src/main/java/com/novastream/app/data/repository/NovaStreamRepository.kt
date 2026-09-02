@@ -79,7 +79,11 @@ class NovaStreamRepository private constructor(
     suspend fun clearCacheForProvider(providerId: String) {
         try {
             cacheDao?.deleteForProvider(providerId)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w("NovaStreamRepo", "clearCacheForProvider failed: $providerId", e)
+            }
+        }
     }
 
     suspend fun loadHome(): RepoResult<List<Series>> =
@@ -393,7 +397,11 @@ class NovaStreamRepository private constructor(
         try {
             cacheDao?.deleteExpired()
             evictLruIfNeeded()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w("NovaStreamRepo", "purgeExpiredCache failed", e)
+            }
+        }
     }
 
     suspend fun evictLruIfNeeded() {
@@ -406,7 +414,11 @@ class NovaStreamRepository private constructor(
                 dao.delete(entry.cacheKey)
                 total -= entry.payload.length
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w("NovaStreamRepo", "evictLruIfNeeded failed", e)
+            }
+        }
     }
 
     private suspend fun <T> coalesceNetwork(key: String, block: suspend () -> RepoResult<T>): RepoResult<T> =
@@ -557,7 +569,11 @@ class NovaStreamRepository private constructor(
                 )
             )
             evictLruIfNeeded()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            if (com.novastream.app.BuildConfig.DEBUG) {
+                android.util.Log.w("NovaStreamRepo", "putCached failed: $key", e)
+            }
+        }
     }
 
     private suspend fun <T> withRetry(

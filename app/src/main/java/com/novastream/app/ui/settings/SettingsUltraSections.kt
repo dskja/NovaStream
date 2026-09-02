@@ -1,5 +1,7 @@
 package com.novastream.app.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -37,6 +39,34 @@ fun SettingsUltraSections(
     var profileJson by remember { mutableStateOf("") }
     var epgUrl by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val json = input.bufferedReader().readText()
+                    when (val result = vm.importBackupFromJson(json, merge = true)) {
+                        is com.novastream.app.sync.BackupRestoreManager.ImportResult.Success ->
+                            statusMessage = context.getString(
+                                R.string.settings_import_backup_done,
+                                result.profileCount,
+                                result.watchlistCount,
+                                result.progressCount
+                            )
+                        is com.novastream.app.sync.BackupRestoreManager.ImportResult.Error ->
+                            statusMessage = result.message
+                    }
+                } ?: run {
+                    statusMessage = context.getString(R.string.settings_import_backup_failed)
+                }
+            } catch (e: Exception) {
+                statusMessage = e.message ?: context.getString(R.string.settings_import_backup_failed)
+            }
+        }
+    }
 
     LaunchedEffect(appSettings) {
         m3uUrl = appSettings.userM3uUrl.first()
@@ -111,6 +141,9 @@ fun SettingsUltraSections(
             val file = vm.exportBackupToFile()
             statusMessage = context.getString(R.string.settings_export_done, file.name)
         }
+    }
+    SettingsAction(stringResource(R.string.settings_import_backup), stringResource(R.string.settings_import_backup_sub)) {
+        importBackupLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
     }
     OutlinedTextField(
         value = syncUrl,

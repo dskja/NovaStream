@@ -291,6 +291,9 @@ class SettingsViewModel @Inject constructor(
 
     suspend fun exportBackupToFile(): java.io.File = backupRestoreManager.exportToFile()
 
+    suspend fun importBackupFromJson(json: String, merge: Boolean = true): BackupRestoreManager.ImportResult =
+        backupRestoreManager.importFromJson(json, merge)
+
     suspend fun pushCloudSync(): CloudSyncManager.SyncResult = cloudSyncManager.pushToRemote()
 
     suspend fun pullCloudSync(): CloudSyncManager.SyncResult = cloudSyncManager.pullFromRemote()

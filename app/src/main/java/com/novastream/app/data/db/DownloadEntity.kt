@@ -36,7 +36,8 @@ data class DownloadEntity(
     val localPath: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isMovie: Boolean = false
 ) {
     val progressPercent: Int
         get() = if (contentLength <= 0L) 0

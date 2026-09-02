@@ -13,6 +13,9 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles ORDER BY createdAt ASC")
     fun observeAll(): Flow<List<ProfileEntity>>
 
+    @Query("SELECT * FROM profiles ORDER BY createdAt ASC")
+    suspend fun getAllOnce(): List<ProfileEntity>
+
     @Query("SELECT * FROM profiles WHERE isActive = 1 LIMIT 1")
     suspend fun getActive(): ProfileEntity?
 
