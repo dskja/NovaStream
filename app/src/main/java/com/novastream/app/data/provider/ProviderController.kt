@@ -22,7 +22,7 @@ class ProviderController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val catalogCacheDao: CatalogCacheDao
 ) {
-    private val _activeProviderId = MutableStateFlow(ProviderManager.defaultProviderId)
+    private val _activeProviderId = MutableStateFlow(ProviderRegistry.DEFAULT_PROVIDER_ID)
     val activeProviderId: StateFlow<String> = _activeProviderId.asStateFlow()
 
     private val _isSwitching = MutableStateFlow(false)
@@ -44,6 +44,10 @@ class ProviderController @Inject constructor(
     }
 
     private fun syncFromStore(providerId: String) {
+        if (!ProviderRegistry.isBuilt()) {
+            _activeProviderId.value = providerId
+            return
+        }
         ActiveProvider.setById(providerId)
         _activeProviderId.value = providerId
     }

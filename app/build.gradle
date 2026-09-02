@@ -74,6 +74,10 @@ android {
             }
         }
     }
+
+    sourceSets {
+        test.assets.srcDirs += "$projectDir/schemas"
+    }
 }
 
 dependencies {

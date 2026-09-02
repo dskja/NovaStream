@@ -39,7 +39,8 @@ suspend fun <T> StreamingProvider.runCatchingProvider(
 /** Standard localized error for blank search queries (no health penalty). */
 fun StreamingProvider.emptySearchError(): StreamingProvider.ProviderResult<Nothing> =
     StreamingProvider.ProviderResult.Error(
-        AppContext.get().getString(com.novastream.app.R.string.error_empty_search)
+        AppContext.getOrNull()?.getString(com.novastream.app.R.string.error_empty_search)
+            ?: "Search query is empty"
     )
 
 /** Returns [emptySearchError] when [query] is blank, otherwise null. */

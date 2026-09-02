@@ -5,9 +5,11 @@ import com.novastream.app.provider.SiteProfileImporter
 
 /**
  * Central registry for all streaming providers with language tags and capability metadata.
- * Dynamic-URL providers receive [Context] via [initialize] from Hilt [com.novastream.app.di.ProviderModule].
+ * Dynamic-URL providers receive [Context] via [bindContext] / [initialize].
  */
 object ProviderRegistry {
+
+    const val DEFAULT_PROVIDER_ID: String = "serienstream"
 
     @Volatile
     private var entriesCache: List<RegisteredProvider>? = null
@@ -15,27 +17,47 @@ object ProviderRegistry {
     @Volatile
     private var initializedContext: Context? = null
 
+    private val buildLock = Any()
+
     /**
-     * Must run before any code reads [providers] (e.g. from [ProviderController] via Hilt).
-     * [NovaStreamApp.attachBaseContext] calls this early; Hilt [com.novastream.app.di.ProviderModule] repeats safely.
+     * Lightweight context bind for [attachBaseContext] — no provider instantiation.
      */
-    fun initialize(context: Context) {
+    fun bindContext(context: Context) {
         val appCtx = context.applicationContext
         synchronized(this) {
-            if (initializedContext === appCtx && entriesCache != null) return
+            if (initializedContext === appCtx) return
             initializedContext = appCtx
             SiteProfileImporter.bindContext(appCtx)
-            entriesCache = buildRegistry(appCtx)
         }
+    }
+
+    /**
+     * Ensures the full provider list is built. Safe to call from any thread; builds at most once.
+     */
+    fun ensureBuilt() {
+        if (entriesCache != null) return
+        synchronized(buildLock) {
+            if (entriesCache != null) return
+            entriesCache = buildRegistry(initializedContext)
+        }
+    }
+
+    fun isBuilt(): Boolean = entriesCache != null
+
+    /**
+     * Idempotent full init — [bindContext] plus [ensureBuilt].
+     */
+    fun initialize(context: Context) {
+        bindContext(context)
+        ensureBuilt()
     }
 
     private val builtInEntries: List<RegisteredProvider>
         get() {
             entriesCache?.let { return it }
-            synchronized(this) {
+            synchronized(buildLock) {
                 entriesCache?.let { return it }
-                // Ephemeral fallback if something reads the registry before initialize() — never cache without context.
-                return buildRegistry(initializedContext)
+                return buildRegistry(initializedContext).also { entriesCache = it }
             }
         }
 
@@ -44,7 +66,9 @@ object ProviderRegistry {
 
     val providers: List<StreamingProvider> get() = allEntries().map { it.provider }
 
-    val defaultProvider: StreamingProvider get() = builtInEntries.first().provider
+    val defaultProvider: StreamingProvider
+        get() = builtInEntries.firstOrNull { it.provider.id == DEFAULT_PROVIDER_ID }?.provider
+            ?: builtInEntries.first().provider
 
     fun allRegistered(): List<RegisteredProvider> = allEntries()
 

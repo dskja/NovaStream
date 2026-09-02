@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DownloadEntity::class,
         ProfileEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class NovaStreamDatabase : RoomDatabase() {
@@ -263,7 +263,8 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                 db.execSQL(
                     """
                     INSERT INTO watchlist_new (itemKey, profileId, providerId, slug, title, coverUrl, isMovie, addedAt)
-                    SELECT 'default|' || itemKey, 'default', providerId, slug, title, coverUrl, isMovie, addedAt FROM watchlist
+                    SELECT 'default|' || providerId || '|' || slug, 'default', providerId, slug, title, coverUrl, isMovie, addedAt
+                    FROM watchlist
                     """.trimIndent()
                 )
                 db.execSQL("DROP TABLE watchlist")
@@ -299,7 +300,8 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                         season, episode, episodeTitle, positionMs, durationMs, isMovie, updatedAt
                     )
                     SELECT
-                        'default|' || episodeKey, 'default', providerId, slug, seriesTitle, coverUrl,
+                        'default|' || providerId || '|' || slug || '-' || season || '-' || episode,
+                        'default', providerId, slug, seriesTitle, coverUrl,
                         season, episode, episodeTitle, positionMs, durationMs, isMovie, updatedAt
                     FROM watch_progress
                     """.trimIndent()
@@ -314,6 +316,32 @@ abstract class NovaStreamDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Repair keys from a buggy v11 migration that prefixed old itemKey/episodeKey values.
+                db.execSQL(
+                    """
+                    UPDATE watchlist
+                    SET itemKey = profileId || '|' || providerId || '|' || slug
+                    WHERE itemKey LIKE '%|%|%'
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    UPDATE watch_progress
+                    SET episodeKey = profileId || '|' || providerId || '|' || slug || '-' || season || '-' || episode
+                    WHERE episodeKey LIKE '%|%|%'
+                    """.trimIndent()
+                )
+            }
+        }
+
+        internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+            MIGRATION_11_12
+        )
+
         fun get(context: Context): NovaStreamDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -321,15 +349,8 @@ abstract class NovaStreamDatabase : RoomDatabase() {
                     NovaStreamDatabase::class.java,
                     "novastream.db"
                 )
-                    .addMigrations(
-                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11
-                    )
-                    .apply {
-                        if (com.novastream.app.BuildConfig.DEBUG) {
-                            fallbackToDestructiveMigration()
-                        }
-                    }
+                    .addMigrations(*ALL_MIGRATIONS)
+                    .fallbackToDestructiveMigration()
                     .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .build().also { INSTANCE = it }
             }
